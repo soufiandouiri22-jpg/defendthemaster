@@ -211,7 +211,7 @@ end
 function AbilityBar.start()
 	local gui = UiStyle.screen("AbilityBar", player:WaitForChild("PlayerGui"))
 	local width = #KEYS * (SLOT + GAP) + GAP
-	local _, inner = UiStyle.panel(
+	local outer, inner = UiStyle.panel(
 		gui,
 		UDim2.fromOffset(width + 10, GAP + SLOT + 8 + PILL + GAP + 10),
 		UDim2.new(0.5, 0, 1, -18),
@@ -219,6 +219,7 @@ function AbilityBar.start()
 		16,
 		5
 	)
+	UiStyle.shrink(outer, UiStyle.BottomScale)
 	inner.Name = "Panel"
 
 	for i, key in KEYS do

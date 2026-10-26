@@ -173,7 +173,9 @@ end
 
 -- The bottom left: portrait, level, health and XP.
 local function buildPlayer(gui: ScreenGui): () -> ()
-	local _, inner = UiStyle.panel(gui, UDim2.fromOffset(560, 178), UDim2.new(0, 24, 1, -22), Vector2.new(0, 1), 18, 6)
+	local outer, inner =
+		UiStyle.panel(gui, UDim2.fromOffset(560, 178), UDim2.new(0, 24, 1, -22), Vector2.new(0, 1), 18, 6)
+	UiStyle.shrink(outer, UiStyle.BottomScale)
 	local frame, back = UiStyle.panel(inner, UDim2.fromOffset(150, 150), UDim2.fromOffset(4, 8), nil, 14, 5)
 	frame.Name = "Portrait"
 	UiStyle.gradient(back, Color3.fromRGB(246, 214, 160), Color3.fromRGB(200, 150, 96))

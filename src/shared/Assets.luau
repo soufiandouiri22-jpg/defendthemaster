@@ -16,4 +16,6 @@ return {
 	HudScoreboard = "rbxassetid://135647770824642",
 	-- The arena from straight above (Play, camera 380 studs up), MAP_REACH studs from the centre to the edge.
 	HudMinimap = "rbxassetid://113866338742572",
+	-- The match music, a seamless loop (Art/Music/determined_pursuit_loop.wav, uploaded by Tools/upload_audio.py).
+	Music = "rbxassetid://97712677913218",
 }

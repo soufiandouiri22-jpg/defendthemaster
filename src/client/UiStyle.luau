@@ -47,6 +47,16 @@ function UiStyle.scaled(gui: ScreenGui)
 	end
 end
 
+-- The blocks along the bottom (the hero's panel, the ability bar) at this share of their drawn size.
+UiStyle.BottomScale = 0.76
+
+-- Draws `frame` at `scale` of its size, round its anchor point.
+function UiStyle.shrink(frame: GuiObject, scale: number)
+	local s = Instance.new("UIScale")
+	s.Scale = scale
+	s.Parent = frame
+end
+
 function UiStyle.screen(name: string, parent: Instance, order: number?): ScreenGui
 	local gui = Instance.new("ScreenGui")
 	gui.Name = name
