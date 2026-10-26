@@ -256,8 +256,9 @@ end
 
 -- The ring as in the first version and design 01: a low podium wall round the sand with banners, wall braziers and
 -- doorways; behind it the stands, tiers of seats rising to a walk at the top; there the outer arcade with brazier
--- columns, and red canopies on posts leaning out over the top tiers.
-local function buildRing(map: Folder)
+-- columns, and red canopies on posts leaning out over the top tiers. Each doorway's spot on the sand, facing the centre,
+-- goes into `doors` under the team whose half it is on.
+local function buildRing(map: Folder, doors: { [string]: { CFrame } })
 	local wallFolder = folder(map, "ArenaWall")
 	local standsFolder = folder(map, "Stands")
 	local upperFolder = folder(map, "Upper")
@@ -323,6 +324,8 @@ local function buildRing(map: Folder)
 				local doorScale = byHeight("wall_door", wallSize.Y - 0.8)
 				local doorDepth = kitSize("wall_door").Z * doorScale
 				kit(wallFolder, "wall_door", ring(angle, R - doorDepth / 2 + 0.4), doorScale)
+				local team = if polar(angle, 1).Z > 0 then "Blue" else "Red"
+				table.insert(doors[team], ring(angle, R - doorDepth - 2))
 			end
 			if i % 2 == 0 and not behindBackwall(joint) then
 				local bracket = kitSize("wall_brazier") * byHeight("wall_brazier", 4.2)
@@ -435,6 +438,8 @@ export type Base = {
 	throne: CFrame,
 	spawn: CFrame,
 	home: Vector3,
+	-- The middle of the dais' front, on the sand.
+	front: Vector3,
 	pads: { CFrame },
 	-- Where a hero stands to buy at each of the base's armory stalls.
 	shops: { CFrame },
@@ -525,6 +530,7 @@ local function buildBase(map: Folder, team: string): Base
 		throne = seatTop * CFrame.new(0, SEATED_ROOT * Config.Master.Scale, 0),
 		spawn = at(0, DAIS_HEIGHT, throneBack - throneDepth / 2 - 4 * s),
 		home = at(0, 0, daisDepth / 2).Position,
+		front = base.Position,
 		pads = pads,
 		shops = shops,
 	}
@@ -640,8 +646,12 @@ export type Layout = {
 	masterSpawn: { [string]: CFrame },
 	thrones: { [string]: CFrame },
 	masterHome: { [string]: Vector3 },
+	-- The middle of each throne room's dais front, on the sand.
+	daisFront: { [string]: Vector3 },
 	-- Each team's two armory stalls, as the spot a hero stands to buy.
 	shops: { [string]: { CFrame } },
+	-- The spots on the sand before each team's two doorways, facing the centre, where its minions come out.
+	minionDoors: { [string]: { CFrame } },
 	map: Folder,
 }
 
@@ -655,24 +665,27 @@ function ColosseumBuilder.build(): Layout
 
 	local map = Instance.new("Folder")
 	map.Name = "Map"
-	buildFloor(map)
-	buildRing(map)
-	buildCentre(map)
-	buildCover(map)
 	local layout: Layout = {
 		spawnPads = {},
 		masterSpawn = {},
 		thrones = {},
 		masterHome = {},
+		daisFront = {},
 		shops = {},
+		minionDoors = { Blue = {}, Red = {} },
 		map = map,
 	}
+	buildFloor(map)
+	buildRing(map, layout.minionDoors)
+	buildCentre(map)
+	buildCover(map)
 	for _, team in Config.TeamOrder do
 		local base = buildBase(map, team)
 		layout.spawnPads[team] = base.pads
 		layout.masterSpawn[team] = base.spawn
 		layout.thrones[team] = base.throne
 		layout.masterHome[team] = base.home
+		layout.daisFront[team] = base.front
 		layout.shops[team] = base.shops
 	end
 	scatterRubble(map)
