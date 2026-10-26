@@ -60,7 +60,7 @@ Config.Heroes = {
 			FaceAccessory = "97583676955915",
 			-- The face accessory is a mask round the whole head, so the head under it is hidden.
 			HideHead = true,
-			Skin = Color3.fromRGB(234, 192, 160),
+			Skin = Color3.fromRGB(20, 20, 22),
 		},
 	},
 }
