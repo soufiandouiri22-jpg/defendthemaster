@@ -1,0 +1,33 @@
+{
+	"name": "DefendTheMaster",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"$ignoreUnknownInstances": true,
+			"Shared": {
+				"$path": "src/shared"
+			}
+		},
+		"ServerScriptService": {
+			"$ignoreUnknownInstances": true,
+			"Server": {
+				"$path": "src/server"
+			}
+		},
+		"StarterPlayer": {
+			"$ignoreUnknownInstances": true,
+			"StarterPlayerScripts": {
+				"$ignoreUnknownInstances": true,
+				"Client": {
+					"$path": "src/client"
+				}
+			}
+		},
+		"ServerStorage": {
+			"$ignoreUnknownInstances": true
+		},
+		"Workspace": {
+			"$ignoreUnknownInstances": true
+		}
+	}
+}
