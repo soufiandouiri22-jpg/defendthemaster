@@ -46,6 +46,27 @@ Config.Minions = {
 	},
 }
 
+-- The heroes. Each looks like a Roblox R15 avatar put together from catalog items (Docs/Third_Party.md): a classic
+-- shirt and pants, hair, a face accessory, and one skin colour on every body part. Faces come from the catalog too: R15
+-- heads are dynamic heads, on which a Decal face does not render. Until the draft exists every player plays
+-- `DefaultHero`, and comes back on a spawn pad `RespawnTime` seconds after dying.
+Config.Heroes = {
+	Shadowren = {
+		Role = "Assassin",
+		Look = {
+			Shirt = 13403820292,
+			Pants = 10703036251,
+			HairAccessory = "123654118197750",
+			FaceAccessory = "97583676955915",
+			-- The face accessory is a mask round the whole head, so the head under it is hidden.
+			HideHead = true,
+			Skin = Color3.fromRGB(234, 192, 160),
+		},
+	},
+}
+Config.DefaultHero = "Shadowren"
+Config.RespawnTime = 5
+
 Config.Teams = {
 	Blue = {
 		Name = "Blue",
