@@ -25,70 +25,134 @@ local MAP_REACH = Config.Arena.Radius + 36
 local MAP_SIZE = 270
 local MAP_RING = 9
 
-local function hex(colour: Color3): string
-	return "#" .. colour:ToHex()
+-- The top, measured off design 05: each Master's bar under its team's crown at the ends, the score board in the middle
+-- with the clock on the dark tab under it (Assets.HudScoreboard, drawn by Tools/ui_textures.py with BOARD_* its size).
+local BOARD_WIDTH, BOARD_HEIGHT, TAB_HEIGHT, BOARD_PAD = 672, 88, 48, 4
+local BOARD_TOP = 20
+local BAR_HEIGHT, BAR_MIDDLE, BAR_GAP = 52, 97, 34
+local CROWN_X, CROWN_Y = 62, 88
+local SCORE_GAP = 92
+local TOP_BAR_MIN = 420
+
+local TOP_COLOURS = {
+	Blue = {
+		fill = Color3.fromRGB(14, 144, 250),
+		shine = Color3.fromRGB(110, 192, 248),
+		ink = Color3.fromRGB(22, 138, 238),
+		edge = Color3.fromRGB(10, 40, 96),
+		crown = Assets.HudCrownBlue,
+	},
+	Red = {
+		fill = Color3.fromRGB(234, 42, 36),
+		shine = Color3.fromRGB(248, 116, 104),
+		ink = Color3.fromRGB(232, 42, 34),
+		edge = Color3.fromRGB(92, 12, 8),
+		crown = Assets.HudCrownRed,
+	},
+}
+
+-- A Master's bar as in design 05: a light gold rim, a black line inside it, a dark grey track and a glossy fill.
+local function masterBar(parent: Frame, team: string, left: boolean): Frame
+	local colours = TOP_COLOURS[team]
+	local rim = UiStyle.frame(
+		parent,
+		UDim2.new(0.5, -(BOARD_WIDTH / 2 + BAR_GAP + CROWN_X), 0, BAR_HEIGHT),
+		if left then UDim2.fromOffset(CROWN_X, BAR_MIDDLE) else UDim2.new(1, -CROWN_X, 0, BAR_MIDDLE),
+		if left then Vector2.new(0, 0.5) else Vector2.new(1, 0.5)
+	)
+	rim.Name = team .. "Master"
+	UiStyle.corner(rim, 14)
+	UiStyle.gradient(rim, Color3.fromRGB(254, 220, 162), Color3.fromRGB(198, 150, 90))
+	UiStyle.stroke(rim, Color3.fromRGB(62, 38, 16), 1.5)
+	local track = UiStyle.frame(rim, UDim2.new(1, -12, 1, -12), UDim2.fromOffset(6, 6))
+	track.BackgroundColor3 = Color3.fromRGB(51, 50, 48)
+	UiStyle.corner(track, 9)
+	UiStyle.stroke(track, Color3.fromRGB(14, 12, 10), 3)
+	local fill = UiStyle.frame(track, UDim2.fromScale(1, 1))
+	fill.Name = "Fill"
+	if not left then
+		fill.AnchorPoint = Vector2.new(1, 0)
+		fill.Position = UDim2.fromScale(1, 0)
+	end
+	UiStyle.corner(fill, 9)
+	local gloss = UiStyle.gradient(fill, colours.shine, colours.fill)
+	gloss.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, colours.shine),
+		ColorSequenceKeypoint.new(0.16, colours.shine:Lerp(colours.fill, 0.5)),
+		ColorSequenceKeypoint.new(0.26, colours.fill),
+		ColorSequenceKeypoint.new(1, colours.fill:Lerp(Color3.new(0, 0, 0), 0.06)),
+	})
+
+	local crown = Instance.new("ImageLabel")
+	crown.Name = team .. "Crown"
+	crown.BackgroundTransparency = 1
+	crown.Image = colours.crown
+	crown.Size = UDim2.fromOffset(100, 94)
+	crown.AnchorPoint = Vector2.new(0.5, 0.5)
+	crown.Position = if left then UDim2.fromOffset(CROWN_X, CROWN_Y) else UDim2.new(1, -CROWN_X, 0, CROWN_Y)
+	crown.ZIndex = 3
+	crown.Parent = parent
+	return fill
 end
 
--- The top: the Masters' bars under their crowns, the score and the clock.
+local function scoreText(parent: Instance, team: string?, align: Enum.TextXAlignment, x: number): TextLabel
+	local colours = team and TOP_COLOURS[team]
+	local label = UiStyle.text(
+		parent,
+		"",
+		58,
+		if colours then colours.ink else Color3.fromRGB(50, 28, 12),
+		colours and colours.edge
+	)
+	if colours then
+		(label:FindFirstChildOfClass("UIStroke") :: UIStroke).Thickness = 3
+	end
+	label.TextXAlignment = align
+	label.AnchorPoint = Vector2.new(if align == Enum.TextXAlignment.Right then 1 else 0, 0.5)
+	label.Size = UDim2.fromOffset(if colours then 240 else 170, 66)
+	label.Position = UDim2.new(0.5, x, 0, BOARD_PAD + BOARD_HEIGHT / 2)
+	label.ZIndex = 3
+	return label
+end
+
 local function buildTop(gui: Frame): () -> ()
-	local bars = {}
+	local fills = {}
 	for i, team in Config.TeamOrder do
-		local left = i == 1
-		local colour, dark = C[team], C[team .. "Dark"]
-		local bar = UiStyle.bar(
-			gui,
-			UDim2.fromOffset(470, 44),
-			if left then UDim2.fromOffset(84, 30) else UDim2.new(1, -84, 0, 30),
-			colour:Lerp(Color3.new(1, 1, 1), 0.2),
-			colour:Lerp(dark, 0.35),
-			if left then Vector2.zero else Vector2.new(1, 0),
-			not left
-		)
-		bar.frame.Name = team .. "Master"
-		local crown = Instance.new("ImageLabel")
-		crown.Name = team .. "Crown"
-		crown.BackgroundTransparency = 1
-		crown.Image = Assets.HudCrown
-		crown.ImageColor3 = colour
-		crown.Size = UDim2.fromOffset(100, 85)
-		crown.AnchorPoint = Vector2.new(0.5, 0.5)
-		crown.Position = if left then UDim2.fromOffset(78, 50) else UDim2.new(1, -78, 0, 50)
-		crown.ZIndex = 3
-		crown.Parent = gui
-		bars[team] = bar
+		fills[team] = masterBar(gui, team, i == 1)
 	end
 
-	local _, box = UiStyle.panel(gui, UDim2.fromOffset(480, 72), UDim2.new(0.5, 0, 0, 10), Vector2.new(0.5, 0), 16, 5)
-	box.Parent.ZIndex = 2
-	local score = UiStyle.text(box, "", 44, C.Ink)
-	score.RichText = true
-	score.Size = UDim2.fromScale(1, 1)
-	score.ZIndex = 3
-
-	local tab = UiStyle.frame(gui, UDim2.fromOffset(130, 44), UDim2.new(0.5, 0, 0, 76), Vector2.new(0.5, 0))
-	tab.ZIndex = 3
-	UiStyle.corner(tab, 10)
-	UiStyle.gradient(tab, Color3.fromRGB(88, 60, 38), Color3.fromRGB(48, 32, 20))
-	UiStyle.stroke(tab, C.CreamDark, 3)
-	local clock = UiStyle.text(tab, "0:00", 32, C.Cream)
-	clock.Size = UDim2.fromScale(1, 1)
-	clock.ZIndex = 4
-
+	local board = Instance.new("ImageLabel")
+	board.Name = "Score"
+	board.BackgroundTransparency = 1
+	board.Image = Assets.HudScoreboard
+	board.Size = UDim2.fromOffset(BOARD_WIDTH + 2 * BOARD_PAD, BOARD_HEIGHT + TAB_HEIGHT + 2 * BOARD_PAD)
+	board.AnchorPoint = Vector2.new(0.5, 0)
+	board.Position = UDim2.new(0.5, 0, 0, BOARD_TOP - BOARD_PAD)
+	board.ZIndex = 2
+	board.Parent = gui
 	local blue, red = Config.TeamOrder[1], Config.TeamOrder[2]
+	local blueScore = scoreText(board, blue, Enum.TextXAlignment.Right, -SCORE_GAP)
+	local versus = scoreText(board, nil, Enum.TextXAlignment.Center, -85)
+	versus.Text = "- VS -"
+	local redScore = scoreText(board, red, Enum.TextXAlignment.Left, SCORE_GAP)
+
+	local clock = UiStyle.text(board, "0:00", 36, Color3.new(1, 1, 1), Color3.fromRGB(30, 16, 6))
+	clock.AnchorPoint = Vector2.new(0.5, 0.5)
+	clock.Size = UDim2.fromOffset(160, TAB_HEIGHT)
+	clock.Position = UDim2.new(0.5, 0, 0, BOARD_PAD + BOARD_HEIGHT + TAB_HEIGHT / 2 - 3)
+	clock.ZIndex = 3
+
 	return function()
-		for team, bar in bars do
+		for team, fill in fills do
 			local max = Workspace:GetAttribute("MasterMax" .. team) or Config.Master.Health
-			bar:set((Workspace:GetAttribute("Master" .. team) or max) / max)
+			local share = math.clamp((Workspace:GetAttribute("Master" .. team) or max) / max, 0, 1)
+			fill.Size = UDim2.fromScale(share, 1)
+			fill.Visible = share > 0
 		end
-		score.Text = string.format(
-			'<font color="%s">%s %d</font> - VS - <font color="%s">%d %s</font>',
-			hex(C[blue]:Lerp(Color3.new(0, 0, 0), 0.15)),
-			string.upper(Config.Teams[blue].Name),
-			Workspace:GetAttribute("Score" .. blue) or 0,
-			hex(C[red]:Lerp(Color3.new(0, 0, 0), 0.1)),
-			Workspace:GetAttribute("Score" .. red) or 0,
-			string.upper(Config.Teams[red].Name)
-		)
+		blueScore.Text =
+			string.format("%s %d", string.upper(Config.Teams[blue].Name), Workspace:GetAttribute("Score" .. blue) or 0)
+		redScore.Text =
+			string.format("%d %s", Workspace:GetAttribute("Score" .. red) or 0, string.upper(Config.Teams[red].Name))
 		local start = Workspace:GetAttribute("MatchStart")
 		clock.Text = UiStyle.clock(if start then Workspace:GetServerTimeNow() - start else 0)
 	end
@@ -278,21 +342,27 @@ function Hud.start()
 	local playerGui = player:WaitForChild("PlayerGui")
 	local gui = UiStyle.screen("Hud", playerGui)
 	-- The top stands in the topbar's row, as far in from both ends as Roblox's buttons reach in from either, so it stays
-	-- centred: an empty ScreenGui on the topbar's safe insets measures them.
-	local top = UiStyle.frame(gui, UDim2.new(1, 0, 0, 140), UDim2.fromScale(0.5, 0), Vector2.new(0.5, 0))
+	-- centred: an empty ScreenGui on the topbar's safe insets measures them. Roblox's buttons keep their size while the
+	-- HUD scales with the screen, so where they leave too little room for bars of TOP_BAR_MIN the whole top shrinks.
+	local top = UiStyle.frame(gui, UDim2.new(1, 0, 0, 170), UDim2.fromScale(0.5, 0), Vector2.new(0.5, 0))
 	top.Name = "Top"
 	top.BackgroundTransparency = 1
+	local shrink = Instance.new("UIScale")
+	shrink.Parent = top
 	local insets = Instance.new("ScreenGui")
 	insets.Name = "HudTopInsets"
 	insets.ResetOnSpawn = false
 	insets.ScreenInsets = Enum.ScreenInsets.TopbarSafeInsets
 	insets.Parent = playerGui
 	local scale = gui:FindFirstChildOfClass("UIScale") :: UIScale
+	local needed = 2 * (CROWN_X + TOP_BAR_MIN + BAR_GAP) + BOARD_WIDTH
 	local function fit()
 		local screen = (Workspace.CurrentCamera :: Camera).ViewportSize.X
 		local left = insets.AbsolutePosition.X
 		local right = screen - left - insets.AbsoluteSize.X
-		top.Size = UDim2.new(1, -2 * math.max(left, right, 0) / scale.Scale, 0, 140)
+		local room = (screen - 2 * math.max(left, right, 0)) / scale.Scale
+		shrink.Scale = math.min(1, room / needed)
+		top.Size = UDim2.fromOffset(math.max(room, needed), 170)
 	end
 	insets:GetPropertyChangedSignal("AbsolutePosition"):Connect(fit)
 	insets:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)

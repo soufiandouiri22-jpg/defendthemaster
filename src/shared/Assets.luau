@@ -10,6 +10,10 @@ return {
 	CrosshairAlly = "rbxassetid://129075895576362",
 	HudCrown = "rbxassetid://101598854323035",
 	HudCoin = "rbxassetid://127769238687652",
+	-- The top bar of design 05 (Tools/ui_textures.py): each team's crown, and the score board with the clock's tab.
+	HudCrownBlue = "rbxassetid://127147223279087",
+	HudCrownRed = "rbxassetid://75076385558157",
+	HudScoreboard = "rbxassetid://135647770824642",
 	-- The arena from straight above (Play, camera 380 studs up), MAP_REACH studs from the centre to the edge.
 	HudMinimap = "rbxassetid://113866338742572",
 }

@@ -217,6 +217,111 @@ def crown():
     save(rgba, "hud_crown.png")
 
 
+def smin(a, b, k):
+    """A union of two distance fields with a rounded fillet of about k where they meet."""
+    h = np.clip(k - np.abs(a - b), 0, None) / k
+    return np.minimum(a, b) - h * h * k / 4
+
+
+def rounded_box(x, y, cx, cy, hx, hy, r):
+    qx, qy = np.abs(x - cx) - (hx - r), np.abs(y - cy) - (hy - r)
+    return np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) - r
+
+
+def paint(rgba, mask, colour):
+    """Lays `colour` (one colour, or one per pixel) over rgba where mask is 1."""
+    for i in range(3):
+        c = colour[..., i] if np.ndim(colour) > 1 else colour[i]
+        rgba[..., i] = rgba[..., i] * (1 - mask) + c * mask
+
+
+def rgb(*c):
+    return np.array(c, np.float32) / 255
+
+
+def polygon_sdf(x, y, points):
+    """Distance to a closed polygon (negative inside)."""
+    d = np.full(x.shape, np.inf, np.float32)
+    inside = np.zeros(x.shape, bool)
+    n = len(points)
+    for i in range(n):
+        (ax, ay), (bx, by) = points[i], points[(i + 1) % n]
+        ex, ey = bx - ax, by - ay
+        px, py = x - ax, y - ay
+        t = np.clip((px * ex + py * ey) / (ex * ex + ey * ey), 0, 1)
+        d = np.minimum(d, np.hypot(px - ex * t, py - ey * t))
+        crosses = (ay > y) != (by > y)
+        inside ^= crosses & (x < ax + (y - ay) * ex / np.where(by == ay, 1, by - ay))
+    return np.where(inside, -d, d)
+
+
+def team_crown(name, body, deep, light, line):
+    """The top bar's crown (design 05) in its team's colours: one flat body with a zigzag top of three points, balls
+    on their tips, a band under it behind a dark line, a dark outline, and light catching the upper left edges."""
+    w, h = 160, 150
+    x, y = grid(w, h)
+    side_tip, mid_tip, valley, split, foot = 38, 22, 66, 104, 138
+    left, right = 22, w - 22
+    top = [(left, split), (left, side_tip), (w * 0.35, valley), (w / 2, mid_tip), (w * 0.65, valley), (right, side_tip),
+           (right, split)]
+
+    def shape(dx, dy):
+        upper = polygon_sdf(x - dx, y - dy, top)
+        lower = rounded_box(x - dx, y - dy, w / 2, (split + foot) / 2, (right - left) / 2 + 3, (foot - split) / 2, 5)
+        balls = [np.hypot(x - dx - tx, y - dy - ty) - 11 for tx, ty in ((left, side_tip), (w / 2, mid_tip),
+                                                                         (right, side_tip))]
+        return np.minimum.reduce([upper - 2, lower] + balls)
+
+    d = shape(0, 0)
+    outline = 6
+    rgba = np.zeros(x.shape + (4,), np.float32)
+    t = np.clip((y - mid_tip) / (foot - mid_tip), 0, 1)[..., None]
+    paint(rgba, np.ones_like(x), body * (1 - t) + deep * t)
+    paint(rgba, coverage(d) * coverage(-shape(6, 6)), light)
+    paint(rgba, band(y - split, 5) * coverage(d), line)
+    for tx, ty in ((left, side_tip), (w / 2, mid_tip), (right, side_tip)):
+        ball = np.hypot(x - tx, y - ty) - 11
+        paint(rgba, coverage(ball), light)
+        paint(rgba, band(ball, 3.5) * (y > ty + 2), line)
+        paint(rgba, coverage(np.hypot(x - tx + 3.5, y - ty + 3.5) - 3.5), rgb(255, 255, 255))
+    paint(rgba, coverage(-d) * coverage(d - outline), line)
+    rgba[..., 3] = coverage(d - outline)
+    save(rgba, name)
+
+
+# The score board of design 05, in the HUD's 1080-line units: a cream board with a dark tab hanging under its middle
+# for the clock. Drawn at 1.5 times its size on screen.
+BOARD_W, BOARD_H, TAB_H = 672, 88, 48
+BOARD_K = 1.5
+
+
+def scoreboard():
+    pad = 4
+    w, h = round((BOARD_W + 2 * pad) * BOARD_K), round((BOARD_H + TAB_H + 2 * pad) * BOARD_K)
+    x, y = grid(w, h)
+    x, y = x / BOARD_K - pad, y / BOARD_K - pad
+    cx = BOARD_W / 2
+    board = rounded_box(x, y, cx, BOARD_H / 2, BOARD_W / 2, BOARD_H / 2, 18)
+    bottom = BOARD_H + TAB_H
+    slant = np.clip(y - BOARD_H, 0, None) * 0.3
+    tab = rounded_box(x + np.sign(x - cx) * slant, y, cx, (BOARD_H - 20 + bottom) / 2, 100, (bottom - BOARD_H + 20) / 2, 16)
+    d = smin(board, tab, 16)
+    outline = 3.5
+    rgba = np.zeros(x.shape + (4,), np.float32)
+    t = np.clip(y / BOARD_H, 0, 1)[..., None]
+    paint(rgba, np.ones_like(x), rgb(255, 238, 196) * (1 - t) + rgb(246, 206, 148) * t)
+    paint(rgba, band(y - 7, 2.5) * coverage(board + 6), rgb(255, 250, 232))
+    paint(rgba, coverage(board + outline) * np.clip((y - (BOARD_H - 12)) / 2, 0, 1), rgb(226, 182, 122))
+    split = BOARD_H - 3
+    below = np.clip((y - split) * 2, 0, 1)
+    tt = np.clip((y - split) / TAB_H, 0, 1)[..., None]
+    paint(rgba, below, rgb(82, 52, 26) * (1 - tt) + rgb(52, 30, 12) * tt)
+    paint(rgba, band(y - (split + 3), 2) * coverage(tab + 7), rgb(126, 86, 46))
+    paint(rgba, coverage(-d) * coverage(d - outline), rgb(58, 30, 8))
+    rgba[..., 3] = coverage(d - outline)
+    save(rgba, "hud_scoreboard.png")
+
+
 def coin():
     """The coin of the coin counter (design 05): gold with a darker rim, an inner ring and a raised crown."""
     n = 128
@@ -253,6 +358,9 @@ def coin():
 
 if __name__ == "__main__":
     crown()
+    team_crown("hud_crown_blue.png", rgb(30, 146, 246), rgb(12, 108, 214), rgb(140, 206, 255), rgb(10, 22, 44))
+    team_crown("hud_crown_red.png", rgb(236, 52, 44), rgb(186, 26, 22), rgb(255, 150, 136), rgb(44, 10, 8))
+    scoreboard()
     coin()
     disc()
     ring()
