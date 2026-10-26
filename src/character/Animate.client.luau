@@ -1,0 +1,2 @@
+-- Takes the place of Roblox's default Animate script, which would play its own walk and idle on every hero. The heroes
+-- move with their animation pack's clips instead (Client.HeroAnimator).

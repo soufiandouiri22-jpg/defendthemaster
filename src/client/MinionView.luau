@@ -226,6 +226,8 @@ local function add(root: Instance)
 			tween(d, FADE_IN, { Transparency = own })
 		end
 	end
+	-- The crosshair tells enemies from allies by it.
+	model:SetAttribute("Team", root:GetAttribute("Team"))
 	model.Parent = holder
 	views[root] = view
 	updateHealth(view)
@@ -474,6 +476,12 @@ local function step(dt: number)
 		local pose = CFrame.new(0, hop * HOP_HEIGHT, -lunge) * CFrame.Angles(-math.rad(7) * hop, 0, 0)
 		view.body.CFrame = view.cframe * pose * view.bodyOffset
 	end
+end
+
+-- The rock minion shown on the server's root part `root`, while it lives.
+function MinionView.modelOf(root: Instance): Model?
+	local view = views[root :: BasePart]
+	return if view and not view.dying then view.model else nil
 end
 
 function MinionView.start()

@@ -1,5 +1,6 @@
 -- Server entry point of Defend The Master.
 local ColosseumBuilder = require(script.ColosseumBuilder)
+local CombatService = require(script.CombatService)
 local Economy = require(script.Economy)
 local HeroService = require(script.HeroService)
 local MinionModel = require(script.MinionModel)
@@ -10,4 +11,5 @@ Economy.start()
 HeroService.start(layout)
 MinionModel.publish()
 MinionService.start(layout)
+CombatService.start()
 print("[DefendTheMaster] server started")

@@ -1,5 +1,15 @@
 -- Client entry point of Defend The Master.
+local AbilityBar = require(script.AbilityBar)
+local HeroAnimator = require(script.HeroAnimator)
+local HeroCamera = require(script.HeroCamera)
+local HeroControls = require(script.HeroControls)
+local HitFeedback = require(script.HitFeedback)
 local MinionView = require(script.MinionView)
 
 MinionView.start()
+HitFeedback.start()
+HeroAnimator.start()
+HeroCamera.start()
+AbilityBar.start()
+HeroControls.start()
 print("[DefendTheMaster] client started")

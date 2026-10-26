@@ -38,6 +38,8 @@ local SEATED_ROOT = 1.1
 -- The pad model's height, and its top as a fraction of that.
 local PAD_HEIGHT, PAD_TOP = 2.2, 0.915
 
+local LIGHT = Config.Lighting.Presets[Config.Lighting.Preset]
+
 local COLORS = {
 	Sand = Color3.fromRGB(226, 190, 132),
 	SandDark = Color3.fromRGB(214, 176, 120),
@@ -179,8 +181,8 @@ local function flame(parent: Instance, position: Vector3, size: number)
 	fire.Parent = holder
 	local light = Instance.new("PointLight")
 	light.Color = COLORS.Fire
-	light.Range = size * 6
-	light.Brightness = 1.4
+	light.Range = size * LIGHT.Flame.Range
+	light.Brightness = LIGHT.Flame.Brightness
 	light.Shadows = false
 	light.Parent = holder
 	holder.Parent = parent
@@ -536,25 +538,25 @@ local function buildBase(map: Folder, team: string): Base
 	}
 end
 
+-- The arena's light: Config.Lighting's preset.
 local function setupLighting()
-	-- A bright, sunny afternoon with saturated colours, as in the designs.
-	Lighting.ClockTime = 14.2
+	local preset = LIGHT
+	Lighting.ClockTime = preset.ClockTime
 	Lighting.GeographicLatitude = 24
-	Lighting.Brightness = 3.2
-	Lighting.Ambient = Color3.fromRGB(120, 110, 104)
-	Lighting.OutdoorAmbient = Color3.fromRGB(170, 160, 150)
-	Lighting.EnvironmentDiffuseScale = 0.8
-	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.Brightness = preset.Brightness
+	Lighting.Ambient = preset.Ambient
+	Lighting.OutdoorAmbient = preset.OutdoorAmbient
+	Lighting.ColorShift_Top = preset.ColorShiftTop
+	Lighting.EnvironmentDiffuseScale = preset.EnvironmentDiffuseScale
+	Lighting.EnvironmentSpecularScale = preset.EnvironmentSpecularScale
 	Lighting.GlobalShadows = true
-	Lighting.ShadowSoftness = 0.2
+	Lighting.ShadowSoftness = preset.ShadowSoftness
+	Lighting.ExposureCompensation = preset.Exposure
 
 	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
-	atmosphere.Density = 0.18
-	atmosphere.Offset = 0.05
-	atmosphere.Color = Color3.fromRGB(220, 230, 240)
-	atmosphere.Decay = Color3.fromRGB(150, 170, 200)
-	atmosphere.Glare = 0.2
-	atmosphere.Haze = 0.4
+	for name, value in preset.Atmosphere do
+		(atmosphere :: any)[name] = value
+	end
 	atmosphere.Parent = Lighting
 
 	local function effect(className: string, name: string): Instance
@@ -568,14 +570,14 @@ local function setupLighting()
 		return created
 	end
 	local grade = effect("ColorCorrectionEffect", "MatchGrade") :: ColorCorrectionEffect
-	grade.Saturation = 0.18
-	grade.Contrast = 0.1
-	grade.Brightness = 0.03
-	grade.TintColor = Color3.fromRGB(255, 250, 240)
+	grade.Saturation = preset.Grade.Saturation
+	grade.Contrast = preset.Grade.Contrast
+	grade.Brightness = preset.Grade.Brightness
+	grade.TintColor = preset.Grade.Tint
 	local bloom = effect("BloomEffect", "MatchBloom") :: BloomEffect
-	bloom.Intensity = 0.5
-	bloom.Size = 24
-	bloom.Threshold = 1.4
+	bloom.Intensity = preset.Bloom.Intensity
+	bloom.Size = preset.Bloom.Size
+	bloom.Threshold = preset.Bloom.Threshold
 end
 
 -- Pieces that belong on or against another piece, as "lower/upper" name pairs; every other overlap is a mistake.

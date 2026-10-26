@@ -6,6 +6,15 @@
 			"$ignoreUnknownInstances": true,
 			"Shared": {
 				"$path": "src/shared"
+			},
+			"ShadowDuelist": {
+				"$className": "Folder",
+				"ComponentPlayer": {
+					"$path": "Vendor/ShadowDuelist/Animations/Component Playback.rbxm"
+				},
+				"Rig": {
+					"$path": "Vendor/ShadowDuelist/Animations/Included Rig.rbxmx"
+				}
 			}
 		},
 		"ServerScriptService": {
@@ -20,6 +29,12 @@
 				"$ignoreUnknownInstances": true,
 				"Client": {
 					"$path": "src/client"
+				}
+			},
+			"StarterCharacterScripts": {
+				"$ignoreUnknownInstances": true,
+				"Animate": {
+					"$path": "src/character/Animate.client.luau"
 				}
 			}
 		},
