@@ -107,6 +107,14 @@ Config.Heroes = {
 		-- design 07's cards), the same for everyone who plays him; `Face` is the square round his head and shoulders, in
 		-- the image's pixels, for the HUD.
 		Portrait = { Image = "rbxassetid://71875745938433", Face = { 190, 40, 620 } },
+		-- The ability bar's icons per key (Art/Icons, cut by Tools/cut_icons.py from one Meshy sheet).
+		Icons = {
+			M1 = "rbxassetid://74233759096248",
+			M2 = "rbxassetid://81695145972830",
+			E = "rbxassetid://114127186056136",
+			R = "rbxassetid://76679849457171",
+			Dash = "rbxassetid://101991460104367",
+		},
 		Pack = "ShadowDuelist",
 		Weapons = { "DaggerRight", "DaggerLeft" },
 		Motions = {

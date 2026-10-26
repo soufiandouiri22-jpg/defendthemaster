@@ -1,7 +1,7 @@
--- The ability bar at the bottom centre (design 05): a slot per key (M1, M2, E, R, Shift) on a parchment panel, each
--- darkening from the top while its cooldown runs with the seconds left on it, and lighting up while it is held to aim.
--- Under M2, E and R a rank pill ("+", the key that raises it, the rank): with a point to spend the "+" glows, and the
--- key (1, 2, 3) or a click on the pill raises the rank through Net.Upgrade (Shared.Leveling).
+-- The ability bar at the bottom centre (design 05): a slot per key (M1, M2, E, R, Shift) on a parchment panel, with the
+-- hero's icon for it (Config.Heroes[hero].Icons) over the key, each darkening from the top while its cooldown runs with the seconds left on it, and lighting up while it is held to aim.
+-- Under M2, E and R a pill with the ability's rank as pips; with a point to spend it lights up with the key that
+-- raises it (1, 2, 3), which, or a click on the pill, raises the rank through Net.Upgrade (Shared.Leveling).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,19 +23,30 @@ local UPGRADE_KEYS = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three }
 local SLOT = 104
 local GAP = 14
 local PILL = 30
-local SLOT_TOP = Color3.fromRGB(150, 146, 140)
-local SLOT_BOTTOM = Color3.fromRGB(70, 66, 66)
+local SLOT_TOP = Color3.fromRGB(250, 238, 206)
+local SLOT_BOTTOM = Color3.fromRGB(222, 196, 146)
 
 type Slot = {
 	frame: Frame,
 	stroke: UIStroke,
 	glyph: TextLabel,
+	icon: ImageLabel,
 	shade: Frame,
 	seconds: TextLabel,
 	endsAt: number,
 	total: number,
-	plus: TextLabel?,
-	rank: TextLabel?,
+	rank: Rank?,
+}
+
+-- The pill under a slot that can be raised: its rank as three pips; with a point to spend it lights up gold, with the
+-- key that raises it on the left and a "+" on the right.
+type Rank = {
+	pill: TextButton,
+	gradient: UIGradient,
+	stroke: UIStroke,
+	pips: { Frame },
+	key: Frame,
+	plus: TextLabel,
 }
 
 local player = Players.LocalPlayer
@@ -55,11 +66,20 @@ local function slot(parent: Instance, key: string, index: number): Slot
 	frame.ClipsDescendants = true
 	UiStyle.corner(frame, 10)
 	UiStyle.gradient(frame, SLOT_TOP, SLOT_BOTTOM)
-	local edge = UiStyle.stroke(frame, C.Gold, 3)
+	local edge = UiStyle.stroke(frame, C.GoldDark, 3)
 
 	local name = LABELS[key] or key
-	local glyph = UiStyle.text(frame, name, if #name > 2 then 28 else 40, C.Cream, C.Edge)
+	-- Until the hero's icon is known, the key stands large in the slot; then small at its foot, under the icon.
+	local glyph = UiStyle.text(frame, name, if #name > 2 then 28 else 40, C.Ink, C.Cream)
 	glyph.Size = UDim2.fromScale(1, 1)
+	glyph.ZIndex = 5
+	local icon = Instance.new("ImageLabel")
+	icon.Name = "Icon"
+	icon.BackgroundTransparency = 1
+	icon.Size = UDim2.new(1, -12, 1, -12)
+	icon.Position = UDim2.fromOffset(6, 2)
+	icon.Visible = false
+	icon.Parent = frame
 
 	local shade = UiStyle.frame(frame, UDim2.fromScale(1, 0), UDim2.fromScale(0, 0))
 	shade.Name = "Cooldown"
@@ -74,6 +94,7 @@ local function slot(parent: Instance, key: string, index: number): Slot
 		frame = frame,
 		stroke = edge,
 		glyph = glyph,
+		icon = icon,
 		shade = shade,
 		seconds = seconds,
 		endsAt = 0,
@@ -90,33 +111,69 @@ local function slot(parent: Instance, key: string, index: number): Slot
 		pill.BackgroundColor3 = Color3.new(1, 1, 1)
 		pill.Parent = parent
 		UiStyle.corner(pill, PILL // 2)
-		UiStyle.gradient(pill, C.CreamDark, Color3.fromRGB(206, 178, 124))
-		UiStyle.stroke(pill, C.GoldDark, 2)
-		local plus = UiStyle.text(pill, "+", 24, C.GoldDark)
-		plus.Size = UDim2.fromOffset(30, PILL)
-		plus.Position = UDim2.fromOffset(4, -1)
-		local keyLabel = UiStyle.text(pill, tostring(upgradeIndex), 18, C.Ink)
+		local gradient = UiStyle.gradient(pill, C.CreamDark, Color3.fromRGB(206, 178, 124))
+		local stroke = UiStyle.stroke(pill, C.GoldDark, 2)
+		local pips = {}
+		for i = 1, Config.Progress.MaxRank do
+			local pip =
+				UiStyle.frame(pill, UDim2.fromOffset(13, 13), UDim2.new(0.5, (i - 2) * 19, 0.5, 0), Vector2.one / 2)
+			UiStyle.corner(pip, UDim.new(0.5, 0))
+			UiStyle.stroke(pip, C.Edge, 1.5)
+			table.insert(pips, pip)
+		end
+		local keycap = UiStyle.frame(pill, UDim2.fromOffset(22, 22), UDim2.new(0, 5, 0.5, 0), Vector2.new(0, 0.5))
+		keycap.BackgroundColor3 = C.Cream
+		UiStyle.corner(keycap, 5)
+		UiStyle.stroke(keycap, C.Edge, 1.5)
+		local keyLabel = UiStyle.text(keycap, tostring(upgradeIndex), 16, C.Ink)
 		keyLabel.Size = UDim2.fromScale(1, 1)
-		local rank = UiStyle.text(pill, "1", 18, C.Ink)
-		rank.Size = UDim2.fromOffset(30, PILL)
-		rank.Position = UDim2.new(1, -32, 0, 0)
+		local plus = UiStyle.text(pill, "+", 26, C.Cream, C.Edge)
+		plus.Size = UDim2.fromOffset(24, PILL)
+		plus.Position = UDim2.new(1, -27, 0, -1)
 		pill.Activated:Connect(function()
 			upgrade(key)
 		end)
-		s.plus, s.rank = plus, rank
+		s.rank = { pill = pill, gradient = gradient, stroke = stroke, pips = pips, key = keycap, plus = plus }
 	end
 	return s
 end
 
--- Shows the ranks, and makes the "+" glow on what can be raised.
+-- Shows the ranks, and lights up what can be raised.
 local function showRanks()
 	for _, key in Config.Progress.Upgrades do
-		local s = slots[key]
-		if s and s.plus and s.rank then
-			s.rank.Text = tostring(Leveling.rank(player, key))
+		local r = slots[key] and slots[key].rank
+		if r then
+			local rank = Leveling.rank(player, key)
+			for i, pip in r.pips do
+				pip.BackgroundColor3 = if i <= rank then Color3.fromRGB(255, 196, 48) else Color3.fromRGB(120, 96, 70)
+			end
 			local can = Leveling.canRaise(player, key)
-			s.plus.TextColor3 = if can then Color3.fromRGB(255, 200, 40) else C.GoldDark
-			s.plus.TextTransparency = if can then 0 else 0.45
+			r.key.Visible, r.plus.Visible = can, can
+			r.gradient.Color = if can
+				then ColorSequence.new(Color3.fromRGB(255, 226, 120), Color3.fromRGB(226, 150, 30))
+				else ColorSequence.new(C.CreamDark, Color3.fromRGB(206, 178, 124))
+			r.stroke.Color = if can then Color3.fromRGB(255, 244, 200) else C.GoldDark
+			r.stroke.Thickness = if can then 3 else 2
+		end
+	end
+end
+
+-- Puts the icons of `hero`'s kit in the slots.
+local function showIcons(hero: string?)
+	local icons = hero and Config.Heroes[hero] and Config.Heroes[hero].Icons or {}
+	for key, s in slots do
+		local image = icons[key]
+		s.icon.Image = image or ""
+		s.icon.Visible = image ~= nil
+		local name = LABELS[key] or key
+		if image then
+			s.glyph.TextSize = 18
+			s.glyph.Size = UDim2.new(1, 0, 0, 22)
+			s.glyph.Position = UDim2.new(0, 0, 1, -24)
+		else
+			s.glyph.TextSize = if #name > 2 then 28 else 40
+			s.glyph.Size = UDim2.fromScale(1, 1)
+			s.glyph.Position = UDim2.new()
 		end
 	end
 end
@@ -134,7 +191,7 @@ end
 function AbilityBar.aiming(key: string, on: boolean)
 	local s = slots[key]
 	if s then
-		s.stroke.Color = if on then Color3.fromRGB(255, 240, 170) else C.Gold
+		s.stroke.Color = if on then Color3.fromRGB(255, 226, 120) else C.GoldDark
 		s.stroke.Thickness = if on then 5 else 3
 	end
 end
@@ -173,6 +230,16 @@ function AbilityBar.start()
 	end)
 	player.AttributeChanged:Connect(showRanks)
 	showRanks()
+	local function added(character: Model)
+		showIcons(character:GetAttribute("Hero"))
+		character:GetAttributeChangedSignal("Hero"):Connect(function()
+			showIcons(character:GetAttribute("Hero"))
+		end)
+	end
+	player.CharacterAdded:Connect(added)
+	if player.Character then
+		added(player.Character)
+	end
 	UserInputService.InputBegan:Connect(function(input, processed)
 		local index = table.find(UPGRADE_KEYS, input.KeyCode)
 		if processed or not index then
@@ -188,7 +255,7 @@ function AbilityBar.start()
 			if left > 0 and s.total > 0 then
 				s.shade.Size = UDim2.fromScale(1, left / s.total)
 				s.seconds.Text = if left >= 1 then tostring(math.ceil(left)) else string.format("%.1f", left)
-				s.glyph.Visible = false
+				s.glyph.Visible = s.icon.Visible
 			else
 				s.shade.Size = UDim2.fromScale(1, 0)
 				s.seconds.Text = ""
