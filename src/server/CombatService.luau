@@ -121,10 +121,12 @@ local function damage(player: Player, character: Model, enemy: Enemy, amount: nu
 		humanoid:TakeDamage(amount)
 		if model:GetAttribute("Hero") then
 			ProgressService.hurt(model, player)
-			MinionService.heroAttacked(character, model)
 		end
 	else
 		model:SetAttribute("Health", math.max(0, (model:GetAttribute("Health") or 0) - amount))
+	end
+	if model:GetAttribute("Hero") or model:GetAttribute("Master") then
+		MinionService.heroAttacked(character, model)
 	end
 end
 

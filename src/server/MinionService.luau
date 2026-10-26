@@ -1,9 +1,11 @@
 -- The team minions (Config.Minions). Every wave leaves a team's two doorways and marches along a path worked out once
 -- at the start to the other team's dais, turning on the enemies that come close: the other team's minions and
 -- everything tagged "Combatant" (heroes, and the Masters with the "Master" attribute) with another "Team" attribute.
--- They pick in this order: an enemy hero who just attacked one of their heroes nearby (MinionService.heroAttacked), the
--- enemy minions, the enemy heroes, the enemy Master; the nearest first within each. Only the last hit by a player earns
--- the bounty.
+-- They go first for an enemy hero who just attacked them, or one of their heroes or their Master nearby
+-- (MinionService.heroAttacked),
+-- and otherwise for the nearest enemy, minion, hero or Master. A minion that has come to the end of its path with
+-- nobody in reach hunts: it walks to the nearest enemy left anywhere in the arena, and with none left stands on its own
+-- spot there. Only the last hit by a player earns the bounty.
 --
 -- The server moves one invisible root part per minion, ten times a second, in Workspace.Minions, with the attributes
 -- Team, Kind, Health, MaxHealth and Dead; each client shows the rock minion on it (MinionView). Attacks are sent to the
@@ -30,6 +32,10 @@ local BITE_HIT = 0.25
 local CORPSE_TIME = 1.5
 -- The turns tried, in degrees, when the way ahead is blocked.
 local DETOURS = { 0, 25, -25, 50, -50, 80, -80 }
+-- A hunting minion works out its way to its quarry again this often, in seconds.
+local HUNT_REFRESH = 2
+-- At the end of its path each minion stands on its own spot within this many studs, so a wave does not stack up.
+local END_SPREAD = 6
 
 type Stats = {
 	Health: number,
@@ -39,6 +45,15 @@ type Stats = {
 	Speed: number,
 	Bounty: number,
 	SpitSpeed: number?,
+}
+
+-- The way a minion that has come to the end of its path walks to the nearest enemy left anywhere in the arena.
+type Hunt = {
+	quarry: Target,
+	path: { Vector3 },
+	waypoint: number,
+	at: number,
+	finding: boolean,
 }
 
 type Minion = {
@@ -51,13 +66,16 @@ type Minion = {
 	health: number,
 	path: { Vector3 },
 	waypoint: number,
+	-- Its own spot round the end of its path, and whether it got there (from then on it hunts).
+	spot: Vector3,
+	arrived: boolean,
+	hunt: Hunt?,
 	target: Target?,
 	-- Where it left its path for the current chase, and until when it ignores enemies after giving one up.
 	chaseFrom: Vector3?,
 	calmUntil: number,
-	-- The enemy hero who attacked one of its heroes, and until when that hero comes first.
-	called: Model?,
-	calledUntil: number,
+	-- The enemy heroes who attacked it, one of its heroes or its Master, and until when each comes first.
+	callers: { [Model]: number },
 	nextAttack: number,
 	lastHitBy: Player?,
 	dead: boolean,
@@ -161,21 +179,27 @@ local function hurt(t: Target, amount: number)
 	end
 end
 
--- How much `m` wants `t`, 1 first: the hero it was called on, minions, heroes, the Master.
+-- How much `m` wants `t`: 1 a hero who attacked it, one of its heroes or its Master, 2 every other enemy.
 local function rankOf(m: Minion, t: Target, now: number): number
-	if isMinion(t) then
-		return 2
-	end
-	if t == m.called and now < m.calledUntil then
+	local expires = m.callers[t :: Model]
+	if expires and now < expires then
 		return 1
 	end
-	if (t :: Model):GetAttribute("Master") then
-		return 4
-	end
-	return 3
+	return 2
 end
 
--- The enemy `m` wants most within its reach, the nearest of that rank, and its rank; nil when there is none. The hero
+-- `m` turns on the hero `attacker` for CallTime seconds.
+local function call(m: Minion, attacker: Model, now: number)
+	for caller, expires in m.callers do
+		if expires <= now then
+			m.callers[caller] = nil
+		end
+	end
+	m.callers[attacker] = now + SETTINGS.CallTime
+	m.calmUntil = 0
+end
+
+-- The enemy `m` wants most within its reach, the nearest of that rank, and its rank; nil when there is none. A hero
 -- it was called on may be as far as it would chase.
 local function chooseTarget(m: Minion, combatants: { Model }, now: number): (Target?, number)
 	local best: Target? = nil
@@ -256,6 +280,67 @@ local function rejoin(m: Minion): number
 	return best
 end
 
+local findPath: (from: Vector3, to: Vector3, quiet: boolean?) -> { Vector3 }
+
+-- The enemy nearest to `m` anywhere in the arena (minion, hero or Master); nil when none is left.
+local function quarryOf(m: Minion, combatants: { Model }): Target?
+	local best: Target? = nil
+	local bestDistance = math.huge
+	for _, other in minions do
+		if other.team ~= m.team and not other.dead then
+			local distance = (other.position - m.position).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = other, distance
+			end
+		end
+	end
+	for _, model in combatants do
+		if model:GetAttribute("Team") ~= m.team and alive(model) then
+			local distance = (positionOf(model) - m.position).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = model, distance
+			end
+		end
+	end
+	return best
+end
+
+-- Walks `m` towards the nearest enemy left, round everything in the way; with none left, back to its own spot.
+local function hunt(m: Minion, combatants: { Model }, step: number, now: number)
+	local quarry = quarryOf(m, combatants)
+	if not quarry then
+		m.hunt = nil
+		walk(m, m.spot, step)
+		return
+	end
+	local h = m.hunt
+	if not h or (not h.finding and (h.quarry ~= quarry or now - h.at >= HUNT_REFRESH)) then
+		local fresh: Hunt = {
+			quarry = quarry,
+			path = if h and h.quarry == quarry then h.path else {},
+			waypoint = if h and h.quarry == quarry then h.waypoint else 1,
+			at = now,
+			finding = true,
+		}
+		m.hunt = fresh
+		local from, to = m.position, positionOf(quarry)
+		task.spawn(function()
+			local path = findPath(from, to, true)
+			fresh.path = path
+			fresh.waypoint = math.min(2, #path)
+			fresh.finding = false
+		end)
+		h = fresh
+	end
+	local route = h :: Hunt
+	local goal = route.path[route.waypoint]
+	if goal and (goal - m.position).Magnitude < 2.5 then
+		route.waypoint += 1
+		goal = route.path[route.waypoint]
+	end
+	walk(m, goal or positionOf(quarry), step)
+end
+
 local function attack(m: Minion, t: Target, gap: number, now: number)
 	m.nextAttack = now + m.stats.Interval
 	local targetInstance: Instance = if isMinion(t) then (t :: Minion).root else t :: Model
@@ -288,7 +373,9 @@ local function think(m: Minion, combatants: { Model }, now: number)
 	end
 	if now >= m.calmUntil then
 		local best, rank = chooseTarget(m, combatants, now)
-		if best and (not target or rank < rankOf(m, target, now)) then
+		-- Of the heroes it was called on, it always goes for the nearest.
+		local current = if target then rankOf(m, target, now) else math.huge
+		if best and (rank < current or (rank == 1 and current == 1)) then
 			target = best
 			if not m.chaseFrom then
 				m.chaseFrom = m.position
@@ -297,7 +384,9 @@ local function think(m: Minion, combatants: { Model }, now: number)
 	end
 	if m.target and not target then
 		m.chaseFrom = nil
-		m.waypoint = rejoin(m)
+		if not m.arrived then
+			m.waypoint = rejoin(m)
+		end
 	end
 	m.target = target
 
@@ -317,11 +406,21 @@ local function think(m: Minion, combatants: { Model }, now: number)
 		end
 		return
 	end
+	if m.arrived then
+		hunt(m, combatants, step, now)
+		return
+	end
 	local goal = m.path[m.waypoint]
 	if goal then
 		if (goal - m.position).Magnitude < 2.5 and m.waypoint < #m.path then
 			m.waypoint += 1
 			goal = m.path[m.waypoint]
+		end
+		if m.waypoint >= #m.path then
+			goal = m.spot
+			if (goal - m.position).Magnitude < 2.5 then
+				m.arrived = true
+			end
 		end
 		walk(m, goal, step)
 	end
@@ -365,6 +464,9 @@ local function spawn(team: string, kind: string, door: CFrame)
 		return
 	end
 	local stats: Stats = SETTINGS.Kinds[kind]
+	local path = paths[door]
+	local angle = math.random() * 2 * math.pi
+	local spot = path[#path] + Vector3.new(math.cos(angle), 0, math.sin(angle)) * math.sqrt(math.random()) * END_SPREAD
 	local root = Instance.new("Part")
 	root.Name = "Minion"
 	root.Anchored = true
@@ -387,13 +489,15 @@ local function spawn(team: string, kind: string, door: CFrame)
 		position = flat(door.Position),
 		facing = door.LookVector,
 		health = stats.Health,
-		path = paths[door],
+		path = path,
 		waypoint = 1,
+		spot = spot,
+		arrived = false,
+		hunt = nil,
 		target = nil,
 		chaseFrom = nil,
 		calmUntil = 0,
-		called = nil,
-		calledUntil = 0,
+		callers = {},
 		nextAttack = 0,
 		lastHitBy = nil,
 		dead = false,
@@ -417,8 +521,9 @@ local function wave(doors: { [string]: { CFrame } })
 	end
 end
 
--- The path from `from` to `to` round everything in the way, flat on the sand; a straight line if none is found.
-local function findPath(from: Vector3, to: Vector3): { Vector3 }
+-- The path from `from` to `to` round everything in the way, flat on the sand; a straight line if none is found (with
+-- a warning unless `quiet`).
+function findPath(from: Vector3, to: Vector3, quiet: boolean?): { Vector3 }
 	local path = PathfindingService:CreatePath({
 		AgentRadius = SETTINGS.Radius + 0.7,
 		AgentHeight = SETTINGS.Height,
@@ -436,19 +541,28 @@ local function findPath(from: Vector3, to: Vector3): { Vector3 }
 		end
 		return points
 	end
-	warn("[MinionService] no path from", from, "to", to, problem or path.Status)
+	if not quiet then
+		warn("[MinionService] no path from", from, "to", to, problem or path.Status)
+	end
 	return { flat(from), flat(to) }
 end
 
--- Damage to the minion whose root is `root`, from `player` (the bounty goes to the player who lands the last hit).
+-- Damage to the minion whose root is `root`, from `player` (the bounty goes to the player who lands the last hit); the
+-- minion turns on the player's hero.
 function MinionService.damage(root: BasePart, amount: number, player: Player?)
 	local m = byRoot[root]
-	if m then
-		hurtMinion(m, amount, player)
+	if not m then
+		return
+	end
+	hurtMinion(m, amount, player)
+	local attacker = player and player.Character
+	if attacker and not m.dead and attacker:GetAttribute("Team") ~= m.team then
+		call(m, attacker, os.clock())
 	end
 end
 
--- Tells the minions that the hero `attacker` hit the hero `victim`: `victim`'s minions near it turn on `attacker`.
+-- Tells the minions that the hero `attacker` hit `victim` (a hero or a Master): `victim`'s minions near it turn on
+-- `attacker`.
 function MinionService.heroAttacked(attacker: Model, victim: Model)
 	local team = victim:GetAttribute("Team")
 	if attacker:GetAttribute("Team") == team then
@@ -456,11 +570,10 @@ function MinionService.heroAttacked(attacker: Model, victim: Model)
 	end
 	local now = os.clock()
 	local at = positionOf(victim)
+	local reach = SETTINGS.CallForHelp + radiusOf(victim)
 	for _, m in minions do
-		if m.team == team and not m.dead and (m.position - at).Magnitude <= SETTINGS.CallForHelp then
-			m.called = attacker
-			m.calledUntil = now + SETTINGS.CallTime
-			m.calmUntil = 0
+		if m.team == team and not m.dead and (m.position - at).Magnitude <= reach then
+			call(m, attacker, now)
 		end
 	end
 end
