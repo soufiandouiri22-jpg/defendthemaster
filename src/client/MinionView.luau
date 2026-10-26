@@ -152,7 +152,7 @@ local function crumble(view: View)
 			Size = size,
 			CFrame = CFrame.new(centre + offset) * CFrame.Angles(rng:NextNumber(0, 6), rng:NextNumber(0, 6), 0),
 			Color = if shardPiece and crystal then crystal.Color else view.body.Color,
-			Material = if shardPiece then Enum.Material.Neon else view.body.Material,
+			Material = if shardPiece then Enum.Material.Glass else view.body.Material,
 		})
 		piece.Parent = holder
 		piece.AssemblyLinearVelocity = offset.Unit * rng:NextNumber(8, 14) + Vector3.new(0, rng:NextNumber(8, 14), 0)

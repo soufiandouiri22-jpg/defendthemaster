@@ -1,7 +1,7 @@
 -- Builds the team minions, the rock creatures of concept G (Art/Concepts/Minions/minions_concept_G_rock.jpg), from
 -- Roblox parts: a carved stone cube with bevelled, chipped edges and cracks, two block ears and four stubby feet, an
--- angry face, and glowing crystals in the team's colour on its head and in its side; the spitter's crystals are bigger
--- and light up the sand round it. The body, ears and feet are one union in the team's stone; the rest is welded on.
+-- angry face, and a cluster of glass crystals in the team's colour on its head; the spitter's is bigger. The body, ears
+-- and feet are one union in grey stone; the rest is welded on.
 -- Each model's pivot is its bottom centre and its face looks towards -Z, as the kit's pieces do. Each kind's template is
 -- built once and cloned.
 
@@ -23,11 +23,8 @@ local PUPIL = Color3.fromRGB(24, 18, 18)
 local FANG = Color3.fromRGB(240, 228, 210)
 local MOUTH = Color3.fromRGB(34, 26, 28)
 
--- Per team: the stone, and the crystals' glow.
-local STONE = {
-	Blue = Color3.fromRGB(84, 104, 140),
-	Red = Color3.fromRGB(128, 50, 38),
-}
+-- Both teams are the same grey stone; only the crystals carry the team's colour.
+local STONE = Color3.fromRGB(98, 98, 102)
 local CRYSTAL = {
 	Blue = Color3.fromRGB(40, 118, 255),
 	Red = Color3.fromRGB(255, 44, 34),
@@ -204,7 +201,7 @@ end
 
 -- One minion of `kind` for `team`, unparented, at the origin.
 local function build(team: string, kind: Kind): Model
-	local stone = STONE[team] or Config.Teams[team].DarkColor
+	local stone = STONE
 	local glow = CRYSTAL[team] or Config.Teams[team].Color
 	local spitter = kind == "Spitter"
 	local model = Instance.new("Model")
@@ -251,6 +248,14 @@ local function build(team: string, kind: Kind): Model
 	local faceLeft = centre * CFrame.new(-half.X, 0, 0) * CFrame.Angles(0, math.rad(90), 0)
 	crack(model, faceLeft, { Vector2.new(-0.9, 1.4), Vector2.new(-0.5, 0.95), Vector2.new(-0.7, 0.4) }, crackColor)
 	crack(model, faceLeft, { Vector2.new(0.5, -0.2), Vector2.new(0.9, -0.7), Vector2.new(0.75, -1.25) }, crackColor)
+	local faceRight = centre * CFrame.new(half.X, 0, 0) * CFrame.Angles(0, math.rad(-90), 0)
+	crack(model, faceRight, { Vector2.new(0.75, 1.35), Vector2.new(0.35, 0.9), Vector2.new(0.55, 0.35) }, crackColor)
+	crack(
+		model,
+		faceRight,
+		{ Vector2.new(-0.55, -0.25), Vector2.new(-0.95, -0.75), Vector2.new(-0.8, -1.2) },
+		crackColor
+	)
 	local faceBack = centre * CFrame.new(0, 0, half.Z) * CFrame.Angles(0, math.rad(180), 0)
 	crack(model, faceBack, { Vector2.new(-0.4, 1.4), Vector2.new(0.05, 0.9), Vector2.new(-0.2, 0.3) }, crackColor)
 
@@ -284,10 +289,11 @@ local function build(team: string, kind: Kind): Model
 			model
 	end
 
-	-- The crystals: a cluster on the head between the ears and one in the right side; the spitter's are bigger.
-	local grow = if spitter then 1.55 else 1.2
+	-- The crystal cluster on the head between the ears marks the team without lighting up the arena; the spitter's is
+	-- bigger.
+	local grow = if spitter then 1.35 else 1.0
 	local top = centre * CFrame.new(0, half.Y - 0.25, 0.15)
-	-- Each shard is glossy glass round a glowing core, so it has facets and light.
+	-- Each shard is coloured glass round a paler core, so it shows facets without glowing.
 	local shards, cores = {}, {}
 	for _, s in
 		{
@@ -306,24 +312,8 @@ local function build(team: string, kind: Kind): Model
 		end
 	end
 	local crystal = solid(model, "Crystal", shards, glow, Enum.Material.Glass)
-	crystal.Transparency = 0.3
-	solid(model, "CrystalCore", cores, glow:Lerp(Color3.new(1, 1, 1), 0.25), Enum.Material.Neon)
-	local side = centre * CFrame.new(half.X - 0.05, -0.1, 0.1) * CFrame.Angles(0, math.rad(90), 0)
-	local inlay = {}
-	for _, s in { { 0, 0.2, 0.55, 1.1 }, { -0.35, -0.35, 0.38, 0.75 }, { 0.32, -0.3, 0.32, 0.6 } } do
-		local at = side * CFrame.new(s[1] * grow, s[2] * grow, 0) * CFrame.Angles(0, 0, math.rad(45))
-		table.insert(
-			inlay,
-			newPart({ Size = Vector3.new(s[3] * grow, s[4] * grow, 0.2) * Vector3.new(0.75, 1, 1), CFrame = at })
-		)
-	end
-	solid(model, "SideCrystal", inlay, glow, Enum.Material.Neon)
-	local light = Instance.new("PointLight")
-	light.Color = glow
-	light.Range = if spitter then 9 else 5
-	light.Brightness = if spitter then 1.1 else 0.6
-	light.Shadows = false
-	light.Parent = crystal
+	crystal.Transparency = 0.2
+	solid(model, "CrystalCore", cores, glow:Lerp(Color3.new(1, 1, 1), 0.35), Enum.Material.Glass)
 
 	-- Only the body is anchored; everything else hangs on it, so moving the body moves the minion.
 	for _, d in model:GetDescendants() do
