@@ -8,4 +8,8 @@ return {
 	CrosshairNeutral = "rbxassetid://128336196823656",
 	CrosshairEnemy = "rbxassetid://107422997181186",
 	CrosshairAlly = "rbxassetid://129075895576362",
+	HudCrown = "rbxassetid://101598854323035",
+	HudCoin = "rbxassetid://127769238687652",
+	-- The arena from straight above (Play, camera 380 studs up), MAP_REACH studs from the centre to the edge.
+	HudMinimap = "rbxassetid://113866338742572",
 }

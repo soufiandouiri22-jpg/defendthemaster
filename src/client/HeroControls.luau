@@ -20,6 +20,7 @@ local HeroCamera = require(script.Parent.HeroCamera)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local HeroSounds = require(script.Parent.HeroSounds)
 local Indicators = require(script.Parent.Indicators)
+local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local ShadowEffects = require(script.Parent.ShadowEffects)
 
 local HeroControls = {}
@@ -226,8 +227,9 @@ local function cast(key: string)
 	end
 
 	comboUntil = 0
-	cooldowns[key] = now + kit.Cooldown
-	AbilityBar.cooldown(key, kit.Cooldown)
+	local cooldown = Leveling.cooldown(Players.LocalPlayer, key, kit.Cooldown)
+	cooldowns[key] = now + cooldown
+	AbilityBar.cooldown(key, cooldown)
 	if kit.Kind == "Dash" then
 		local from = root.Position
 		local to = HeroKit.dashEnd(from, direction, kit.Range, HeroKit.leapIgnore())

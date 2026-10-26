@@ -175,7 +175,85 @@ def crosshair(name, colour, outline, enemy=False):
     save(rgba, name)
 
 
+def crown_sdf(x, y, w, h):
+    """A crown filling a w x h box: a band with three points, each tipped with a ball (distance, negative inside)."""
+    band_top, band_bottom = h * 0.62, h * 0.9
+    left, right = w * 0.12, w * 0.88
+    d_band = np.maximum(np.maximum(left - x, x - right), np.maximum(band_top - y, y - band_bottom))
+    d = d_band
+    tips = [(w * 0.18, h * 0.24), (w * 0.5, h * 0.1), (w * 0.82, h * 0.24)]
+    for tx, ty in tips:
+        # A point from the band up to its tip, as wide at the band as a third of it.
+        half = w * 0.19
+        base_y = band_top + 2
+        k = half / (base_y - ty)
+        d_side = (np.abs(x - tx) - k * (y - ty)) / np.sqrt(1 + k * k)
+        d_point = np.maximum(np.maximum(d_side, np.maximum(ty - y, y - base_y)), np.maximum(left - x, x - right))
+        d = np.minimum(d, d_point)
+        d = np.minimum(d, np.hypot(x - tx, y - ty) - w * 0.075)
+    return d, band_top, band_bottom
+
+
+def crown():
+    """The Master's crown over his team's health bar (design 05): white and grey shading under a dark outline, so the
+    game tints it in the team's colour; a lighter band with three jewels."""
+    w, h = 160, 136
+    x, y = grid(w, h)
+    d, band_top, band_bottom = crown_sdf(x, y, w, h)
+    outline = 7
+    inside = coverage(d)
+    alpha = coverage(d - outline)
+    light = np.clip(1.0 - 0.45 * (y / h), 0, 1)
+    shade = np.where(inside > 0, light, 0.18)
+    band = (y > band_top + 4) & (y < band_bottom - 4) & (inside > 0.5)
+    shade = np.where(band, np.clip(light + 0.12, 0, 1), shade)
+    for jx in (0.3, 0.5, 0.7):
+        jewel = coverage(np.hypot(x - w * jx, y - (band_top + band_bottom) / 2) - h * 0.06)
+        shade = np.where(jewel > 0.5, 0.55, shade)
+    rgba = np.zeros(x.shape + (4,), np.float32)
+    for i in range(3):
+        rgba[..., i] = shade
+    rgba[..., 3] = alpha
+    save(rgba, "hud_crown.png")
+
+
+def coin():
+    """The coin of the coin counter (design 05): gold with a darker rim, an inner ring and a raised crown."""
+    n = 128
+    x, y = grid(n, n)
+    r = np.hypot(x - n / 2, y - n / 2)
+    edge = n / 2 - 4
+    alpha = coverage(r - edge)
+    gold = np.array((246, 196, 64), np.float32) / 255
+    deep = np.array((176, 116, 24), np.float32) / 255
+    dark = np.array((94, 56, 12), np.float32) / 255
+    light = np.clip(1.15 - 0.5 * ((x + y) / (2 * n)), 0, 1.2)
+    rgba = np.zeros(x.shape + (4,), np.float32)
+    for i in range(3):
+        rgba[..., i] = gold[i] * light
+    rim = coverage(-(r - (edge - 9)))
+    inner = band(r - (edge - 18), 3)
+    cw, ch = n * 0.5, n * 0.42
+    cd, _, _ = crown_sdf(x - (n - cw) / 2, y - (n - ch) / 2 - 2, cw, ch)
+    raised = coverage(cd)
+    raised_edge = band(cd, 3)
+    for i in range(3):
+        c = rgba[..., i]
+        c = np.where(rim > 0.5, deep[i] * light, c)
+        c = c * (1 - inner) + dark[i] * inner
+        c = c * (1 - raised) + (gold[i] * 1.12) * raised
+        c = c * (1 - raised_edge) + deep[i] * raised_edge
+        rgba[..., i] = c
+    outline = band(r - edge, 3)
+    for i in range(3):
+        rgba[..., i] = rgba[..., i] * (1 - outline) + dark[i] * outline
+    rgba[..., 3] = alpha
+    save(rgba, "hud_coin.png")
+
+
 if __name__ == "__main__":
+    crown()
+    coin()
     disc()
     ring()
     cone()

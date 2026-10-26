@@ -18,6 +18,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Economy = require(script.Parent.Economy)
+local ProgressService = require(script.Parent.ProgressService)
 
 local MinionService = {}
 
@@ -119,6 +120,7 @@ local function kill(m: Minion)
 	if killer and killer.Parent then
 		Economy.give(killer, m.stats.Bounty, "last hit on a " .. m.team .. " " .. m.kind)
 	end
+	ProgressService.minionDied(m.team, m.kind, m.root.Position, if killer and killer.Parent then killer else nil)
 	local index = table.find(minions, m)
 	if index then
 		table.remove(minions, index)

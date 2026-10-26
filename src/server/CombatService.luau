@@ -14,8 +14,10 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
+local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Motion = require(ReplicatedStorage.Shared.Motion)
 local MinionService = require(script.Parent.MinionService)
+local ProgressService = require(script.Parent.ProgressService)
 
 local CombatService = {}
 
@@ -107,6 +109,7 @@ end
 
 local function damage(player: Player, character: Model, enemy: Enemy, amount: number)
 	local target = enemy.instance
+	amount = math.round(amount)
 	hitEvent:FireAllClients(target, amount, enemy.position, player)
 	if target:IsA("BasePart") then
 		MinionService.damage(target, amount, player)
@@ -117,6 +120,7 @@ local function damage(player: Player, character: Model, enemy: Enemy, amount: nu
 	if humanoid then
 		humanoid:TakeDamage(amount)
 		if model:GetAttribute("Hero") then
+			ProgressService.hurt(model, player)
 			MinionService.heroAttacked(character, model)
 		end
 	else
@@ -169,7 +173,7 @@ local function strikeCone(
 	end
 end
 
-local function launch(player: Player, state: State, team: string, direction: Vector3, kit: any)
+local function launch(player: Player, state: State, team: string, direction: Vector3, kit: any, amount: number)
 	local root = rootOf(state.character)
 	if not root then
 		return
@@ -186,7 +190,7 @@ local function launch(player: Player, state: State, team: string, direction: Vec
 		left = kit.Range,
 		speed = kit.ProjectileSpeed,
 		width = kit.Width,
-		damage = kit.Damage,
+		damage = amount,
 	}
 	table.insert(projectiles, projectile)
 	projectileEvent:FireAllClients(projectile.id, state.character, origin, direction, kit.ProjectileSpeed, kit.Range)
@@ -240,6 +244,7 @@ local function act(player: Player, key: string, aim: Vector3)
 	end
 	local team = character:GetAttribute("Team") or "Blue"
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
+	local power = Leveling.power(player, key)
 	state.motion += 1
 
 	if kit.Kind == "Combo" then
@@ -252,13 +257,13 @@ local function act(player: Player, key: string, aim: Vector3)
 		motionEvent:FireAllClients(character, key, step)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		later(state, hit.Hit / kit.Speed, function()
-			strikeCone(player, state, team, direction, hit.Range, hit.Angle, hit.Damage)
+			strikeCone(player, state, team, direction, hit.Range, hit.Angle, hit.Damage * power)
 		end)
 		return
 	end
 
 	local length = Motion.meta(settings.Pack, kit.Motion).duration
-	state.cooldowns[key] = now + kit.Cooldown
+	state.cooldowns[key] = now + Leveling.cooldown(player, key, kit.Cooldown)
 	state.comboUntil = 0
 	if kit.Kind == "Leap" then
 		local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
@@ -275,7 +280,7 @@ local function act(player: Player, key: string, aim: Vector3)
 		later(state, kit.Land, function()
 			for _, enemy in enemiesNear(team, landing, kit.Radius) do
 				if HeroKit.inCone(landing, direction, kit.Radius, 360, enemy.position, enemy.radius) then
-					damage(player, character, enemy, kit.Damage)
+					damage(player, character, enemy, kit.Damage * power)
 				end
 			end
 		end)
@@ -302,7 +307,7 @@ local function act(player: Player, key: string, aim: Vector3)
 						and HeroKit.segmentDistance(a, b, enemy.position) <= enemy.radius + kit.Width / 2
 					then
 						struck[enemy.instance] = true
-						damage(player, character, enemy, kit.Damage)
+						damage(player, character, enemy, kit.Damage * power)
 					end
 				end
 			end)
@@ -312,7 +317,7 @@ local function act(player: Player, key: string, aim: Vector3)
 		motionEvent:FireAllClients(character, key, 0)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		later(state, kit.Release, function()
-			launch(player, state, team, direction, kit)
+			launch(player, state, team, direction, kit, kit.Damage * power)
 		end)
 	elseif kit.Kind == "Flurry" then
 		state.busyUntil = now + length
@@ -320,7 +325,7 @@ local function act(player: Player, key: string, aim: Vector3)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		for _, time in kit.Hits do
 			later(state, time, function()
-				strikeCone(player, state, team, direction, kit.Range, kit.Angle, kit.Damage)
+				strikeCone(player, state, team, direction, kit.Range, kit.Angle, kit.Damage * power)
 			end)
 		end
 	end

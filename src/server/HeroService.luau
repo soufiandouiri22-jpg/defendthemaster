@@ -9,7 +9,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Motion = require(ReplicatedStorage.Shared.Motion)
+local ProgressService = require(script.Parent.ProgressService)
 
 local HeroService = {}
 
@@ -93,12 +95,15 @@ function HeroService.start(layout: Layout)
 		character:PivotTo(pads[nextPad])
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid then
-			humanoid.MaxHealth = Config.Heroes[hero].Health
+			humanoid.MaxHealth = Leveling.maxHealth(Config.Heroes[hero].Health, Leveling.level(player))
 			humanoid.Health = humanoid.MaxHealth
 			humanoid.WalkSpeed = Config.Combat.WalkSpeed
+			-- The HUD draws every hero's bar in its team's colour instead (HeroBars).
+			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 			CollectionService:AddTag(character, "Combatant")
 			humanoid.Died:Connect(function()
 				CollectionService:RemoveTag(character, "Combatant")
+				ProgressService.heroDied(character, player, character:GetPivot().Position)
 				task.wait(Config.RespawnTime)
 				if player.Character == character then
 					spawn(player)

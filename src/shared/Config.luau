@@ -12,11 +12,41 @@ Config.Arena = {
 -- with him.
 Config.Master = {
 	Scale = 3,
+	Health = 20000,
 }
 
--- Coins: every hero starts with enough for a potion and a small first item, and earns more by last hits.
+-- Coins: every hero starts with enough for a potion and a small first item, and earns more by last hits on minions
+-- and the killing blow on an enemy hero.
 Config.Economy = {
 	StartCoins = 500,
+	HeroBounty = 150,
+}
+
+-- Levels, as in League of Legends: when an enemy dies, the heroes of the other team within `Share` studs (and its
+-- killer, wherever he is) share its XP evenly. `Steps` is the XP from each level to the next. Every level adds
+-- `Health` and `Damage` of the hero's base, and a point to spend on raising M2, E or R one rank with the keys 1, 2 and 3
+-- (`Upgrades`). A rank adds `RankDamage` to its ability's damage and takes `RankCooldown` off its cooldown; rank `n`
+-- of an ability needs the hero level `Needs[key][n]`.
+Config.Progress = {
+	MaxLevel = 10,
+	Steps = { 120, 160, 200, 240, 280, 320, 360, 400, 440 },
+	Share = 36,
+	MinionXp = { Melee = 40, Spitter = 30 },
+	HeroXp = 140,
+	HeroXpPerLevel = 25,
+	-- Damage on a hero counts for his kill this long.
+	KillCredit = 10,
+	Health = 0.08,
+	Damage = 0.04,
+	MaxRank = 3,
+	RankDamage = 0.2,
+	RankCooldown = 0.1,
+	Upgrades = { "M2", "E", "R" },
+	Needs = {
+		M2 = { 1, 2, 4 },
+		E = { 1, 2, 4 },
+		R = { 1, 6, 9 },
+	},
 }
 
 -- The team minions (concept G, rock creatures with crystals): a wave leaves both of a team's doorways on its own half every
@@ -73,6 +103,10 @@ Config.Heroes = {
 			HideHead = true,
 			Skin = Color3.fromRGB(20, 20, 22),
 		},
+		-- The hero's painted portrait (Art/Portraits, Meshy image-to-image from a screenshot of the hero in the style of
+		-- design 07's cards), the same for everyone who plays him; `Face` is the square round his head and shoulders, in
+		-- the image's pixels, for the HUD.
+		Portrait = { Image = "rbxassetid://71875745938433", Face = { 190, 40, 620 } },
 		Pack = "ShadowDuelist",
 		Weapons = { "DaggerRight", "DaggerLeft" },
 		Motions = {
