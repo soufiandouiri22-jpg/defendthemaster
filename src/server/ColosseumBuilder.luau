@@ -1,6 +1,6 @@
 -- Builds the colosseum at server start after the owner's designs 01, 02, 03 and 05 (Docs/Designs/Redesign_2026-10-26):
--- a round sand arena ringed by a low arena wall with braziers, stands, and an upper arcade with brazier columns,
--- festoons and banners; at each end the Master's throne on a dais before a backwall with the team's great banner,
+-- a round sand arena ringed by a low podium wall with banners and braziers, tiers of seats, and at their top an arcade
+-- with brazier columns and red canopies; at each end the Master's throne on a dais before a backwall with the team's great banner,
 -- between two knight statues, with four spawn pads and an armory stall; a plateau in the middle and cover along the
 -- lanes. Every piece is a Meshy model from ServerStorage.ColosseumKit (imported through Import 3D, pivot at its bottom
 -- centre, front towards -Z); only the sand floor, fire and light are Roblox's own.
@@ -20,14 +20,19 @@ local STEP = 360 / SECTIONS
 -- The thrones stand at the north and south sections, the gates east and west.
 local RED_ANGLE, BLUE_ANGLE = 90, 270
 local GATE_ANGLES = { 0, 180 }
--- Where each throne's dais front stands from the centre.
-local BASE_DISTANCE = R - 25
--- The throne room's pieces in studs (design 02); the throne fits the Master at Config.Master.Scale.
-local THRONE_HEIGHT = 12
+-- The stands' depth from the podium wall and their height at the back, and the banners' height on the podium wall.
+local STANDS_DEPTH, STANDS_HEIGHT = 36, 32
+local PODIUM_BANNER = 5.5
+-- The sections with a doorway in the podium wall, two on each side between the gates and the thrones.
+local DOOR_SECTIONS = { 4, 14, 22, 32 }
+-- The throne room (design 02) grows with the Master: its sizes and spots are given for a Master at scale 1.8 and
+-- multiplied by this.
+local THRONE_ROOM = Config.Master.Scale / 1.8
+local THRONE_HEIGHT = 12 * THRONE_ROOM
 -- The throne model's seat, as fractions of its height and of its depth from its middle (measured on the mesh).
 local THRONE_SEAT_Y, THRONE_SEAT_Z = 0.231, -0.05
-local DAIS_HEIGHT = 5
-local STATUE_HEIGHT = 21
+local DAIS_HEIGHT = 5 * THRONE_ROOM
+local STATUE_HEIGHT = 21 * THRONE_ROOM
 -- From the seat's top to a seated Master's root, per stud of his scale.
 local SEATED_ROOT = 1.1
 -- The pad model's height, and its top as a fraction of that.
@@ -67,6 +72,25 @@ local function chord(radius: number): number
 	return 2 * radius * math.sin(math.rad(STEP / 2))
 end
 
+-- The throne room's backwall stands just before the podium wall, its back corners on the wall's face: its width, and
+-- its back's distance from the centre.
+local function backwallSpan(): (number, number)
+	local width = chord(R) * 2 * THRONE_ROOM
+	return width, math.sqrt((R - 1) ^ 2 - (width / 2) ^ 2)
+end
+
+-- Whether a spot on the ring at `angle` is hidden behind a throne room's backwall.
+local function behindBackwall(angle: number): boolean
+	local width, back = backwallSpan()
+	local half = math.deg(math.atan2(width / 2, back)) + 2
+	for _, throne in { RED_ANGLE, BLUE_ANGLE } do
+		if math.abs((angle - throne + 180) % 360 - 180) < half then
+			return true
+		end
+	end
+	return false
+end
+
 local function kitPiece(name: string): Model?
 	local source = ServerStorage:FindFirstChild("ColosseumKit")
 	local piece = source and source:FindFirstChild(name)
@@ -101,6 +125,22 @@ local function kit(parent: Instance, name: string, at: CFrame, scale: number, so
 			end
 		end
 	end
+	m.Parent = parent
+	return m
+end
+
+-- A kit piece stretched to `size` studs, with its pivot (bottom centre) at `at`.
+local function stretched(parent: Instance, name: string, at: CFrame, size: Vector3): Model?
+	local piece = kitPiece(name)
+	if not piece then
+		return nil
+	end
+	local m = piece:Clone()
+	local part = m.PrimaryPart :: BasePart
+	local offset = part.PivotOffset
+	part.PivotOffset = CFrame.new(offset.Position * size / part.Size) * offset.Rotation
+	part.Size = size
+	m:PivotTo(at)
 	m.Parent = parent
 	return m
 end
@@ -168,10 +208,6 @@ local function disc(parent: Instance, center: Vector3, radius: number, thickness
 	return p
 end
 
-local function isThroneSection(angle: number): boolean
-	return angle == RED_ANGLE or angle == BLUE_ANGLE
-end
-
 -- The sand under the colosseum, with lighter and darker patches, and grass with cypresses and shrubs round it.
 local function buildFloor(map: Folder)
 	local floor = folder(map, "Floor")
@@ -180,7 +216,7 @@ local function buildFloor(map: Folder)
 	sand:SetAttribute("Floor", true)
 	disc(floor, Vector3.new(0, -0.05, 0), R + 600, 4, COLORS.Grass, Enum.Material.Grass).Name = "Grass"
 	for _ = 1, 70 do
-		local at = CFrame.new(polar(rng:NextNumber(0, 360), rng:NextNumber(R + 42, R + 150)))
+		local at = CFrame.new(polar(rng:NextNumber(0, 360), rng:NextNumber(R + 62, R + 170)))
 			* CFrame.Angles(0, rng:NextNumber(0, 6.3), 0)
 		if rng:NextNumber() < 0.55 then
 			kit(floor, "cypress", at, byHeight("cypress", rng:NextNumber(14, 24)))
@@ -188,12 +224,29 @@ local function buildFloor(map: Folder)
 			kit(floor, "shrub", at, byHeight("shrub", rng:NextNumber(3, 6)))
 		end
 	end
-	for _ = 1, 24 do
-		local a, d = rng:NextNumber(0, 360), rng:NextNumber(36, R - 14)
+	-- Each patch is three overlapping discs; no two discs may share a top where they overlap or they flicker, so the
+	-- patches keep apart and their discs lie a little above one another.
+	local patches: { Vector3 } = {}
+	for _ = 1, 400 do
+		if #patches == 24 then
+			break
+		end
+		local at = polar(rng:NextNumber(0, 360), rng:NextNumber(36, R - 14))
+		local clear = true
+		for _, other in patches do
+			if (other - at).Magnitude < 30 then
+				clear = false
+				break
+			end
+		end
+		if not clear then
+			continue
+		end
+		table.insert(patches, at)
 		local tone = if rng:NextNumber() < 0.5 then COLORS.SandDark else COLORS.SandLight
-		for _ = 1, 3 do
-			local offset = Vector3.new(rng:NextNumber(-6, 6), 0.04, rng:NextNumber(-6, 6))
-			local patch = disc(floor, polar(a, d) + offset, rng:NextNumber(3, 8), 0.1, tone, Enum.Material.Sand)
+		for k = 1, 3 do
+			local offset = Vector3.new(rng:NextNumber(-6, 6), 0.06 * k, rng:NextNumber(-6, 6))
+			local patch = disc(floor, at + offset, rng:NextNumber(3, 8), 0.1, tone, Enum.Material.Sand)
 			patch.CanCollide = false
 			patch.CanQuery = false
 			patch.CastShadow = false
@@ -201,8 +254,9 @@ local function buildFloor(map: Folder)
 	end
 end
 
--- The ring: the arena wall with braziers on its face, the stands behind it, and on the stands' back the upper arcade
--- with brazier columns, festoons and banners in the colour of the half they hang over (design 05).
+-- The ring as in the first version and design 01: a low podium wall round the sand with banners, wall braziers and
+-- doorways; behind it the stands, tiers of seats rising to a walk at the top; there the outer arcade with brazier
+-- columns, and red canopies on posts leaning out over the top tiers.
 local function buildRing(map: Folder)
 	local wallFolder = folder(map, "ArenaWall")
 	local standsFolder = folder(map, "Stands")
@@ -211,68 +265,69 @@ local function buildRing(map: Folder)
 	local wallScale = byWidth("arena_wall", chord(R) + 0.6)
 	local wallSize = kitSize("arena_wall") * wallScale
 
-	-- The stands are as wide as a section at their back, so neighbours close up there and overlap at the front.
-	local standsFront = R + wallSize.Z + 0.5
-	local standsSize = kitSize("stands")
-	local standsScale = 0
-	do
-		local w = chord(standsFront)
-		for _ = 1, 8 do
-			w = chord(standsFront + standsSize.Z * w / standsSize.X)
-		end
-		standsScale = w / standsSize.X
-	end
-	local standsDepth = standsSize.Z * standsScale
-	local standsHeight = standsSize.Y * standsScale
-	local standsBack = standsFront + standsDepth
+	-- The stands are the kit's flight of stairs stretched into tiers of seats, as wide as a section at their back so
+	-- neighbours close up there.
+	local standsFront = R + wallSize.Z - 0.5
+	local standsBack = standsFront + STANDS_DEPTH
+	local standsSize = Vector3.new(chord(standsBack) + 0.4, STANDS_HEIGHT, STANDS_DEPTH)
 
-	-- The arcade stands on the stands' back wall, flush with its back.
-	local arcadeSize = kitSize("arcade_upper")
-	local arcadeScale = byWidth("arcade_upper", chord(standsBack) + 0.4)
-	local arcadeDepth = arcadeSize.Z * arcadeScale
-	local arcadeHeight = arcadeSize.Y * arcadeScale
-	local arcadeMiddle = standsBack - arcadeDepth / 2
-	local arcadeTop = standsHeight + arcadeHeight
+	-- The arcade, two to a section, on the walk at the stands' back.
+	local arcadeScale = byWidth("arcade_upper", chord(standsBack) / 2 + 0.3)
+	local arcadeSize = kitSize("arcade_upper") * arcadeScale
+	local arcadeMiddle = standsBack - arcadeSize.Z / 2
+	local arcadeTop = STANDS_HEIGHT + arcadeSize.Y
+
+	local canopyScale = byWidth("canopy", chord(standsBack - arcadeSize.Z) + 0.2)
+	local canopySize = kitSize("canopy") * canopyScale
 
 	for i = 0, SECTIONS - 1 do
 		local angle = i * STEP
+		local joint = angle + STEP / 2
 		local gate = table.find(GATE_ANGLES, angle) ~= nil
 		if gate then
 			local gateScale = byWidth("gate", chord(R + 6) + 0.6)
 			kit(wallFolder, "gate", ring(angle, R + kitSize("gate").Z * gateScale / 2), gateScale)
-		elseif not isThroneSection(angle) then
+		else
 			kit(wallFolder, "arena_wall", ring(angle, R + wallSize.Z / 2), wallScale)
 		end
-		kit(standsFolder, "stands", ring(angle, standsFront + standsDepth / 2), standsScale)
-		kit(upperFolder, "arcade_upper", ring(angle, arcadeMiddle, standsHeight), arcadeScale)
+		stretched(standsFolder, "stairs", ring(angle, standsFront + STANDS_DEPTH / 2), standsSize)
 
-		-- At every joint a brazier column on the arcade's top, two festoons across the section's front.
-		local joint = angle + STEP / 2
-		brazier(upperFolder, "column_brazier", ring(joint, arcadeMiddle, arcadeTop), 9)
-		local festoonWidth = chord(arcadeMiddle) / 2 - 0.6
-		local festoonScale = byWidth("festoon", festoonWidth)
-		local festoonHeight = kitSize("festoon").Y * festoonScale
-		for _, side in { -1, 1 } do
-			local at = ring(angle, standsBack - arcadeDepth - 0.4, arcadeTop - festoonHeight - 1.2)
-				* CFrame.new(side * festoonWidth / 2, 0, 0)
-			kit(upperFolder, "festoon", at, festoonScale, false)
+		for _, side in { -0.25, 0.25 } do
+			kit(upperFolder, "arcade_upper", ring(angle + side * STEP, arcadeMiddle, STANDS_HEIGHT), arcadeScale)
 		end
+		brazier(upperFolder, "column_brazier", ring(joint, arcadeMiddle, arcadeTop), 7)
+		kit(
+			upperFolder,
+			"canopy",
+			ring(angle, standsBack - arcadeSize.Z - canopySize.Z / 2, STANDS_HEIGHT),
+			canopyScale,
+			false
+		)
 
-		-- A banner on every third joint of the arcade, and wall braziers on the arena wall between the gates.
-		if i % 3 == 1 then
-			local team = if polar(joint, 1).Z > 0 then "blue" else "red"
-			local bannerScale = byHeight("banner_" .. team, 15)
-			kit(
-				upperFolder,
-				"banner_" .. team,
-				ring(joint, standsBack - arcadeDepth - 0.8, standsHeight + 3),
-				bannerScale,
-				false
-			)
-		end
-		if i % 2 == 0 and not gate and not isThroneSection(angle) then
-			local bracket = kitSize("wall_brazier") * byHeight("wall_brazier", 4.2)
-			brazier(wallFolder, "wall_brazier", ring(joint, R - bracket.Z / 2 + 0.3, 2.4), 4.2)
+		-- On the podium wall's face: a banner in the colour of its half on every third section, a doorway on four,
+		-- and wall braziers at the joints between them; none behind a throne room.
+		if not gate and not behindBackwall(angle) then
+			local face = R - 0.2
+			if i % 3 == 0 then
+				local team = if polar(angle, 1).Z > 0 then "blue" else "red"
+				local bannerScale = byHeight("banner_" .. team, PODIUM_BANNER)
+				local bannerDepth = kitSize("banner_" .. team).Z * bannerScale
+				kit(
+					wallFolder,
+					"banner_" .. team,
+					ring(angle, face - bannerDepth / 2, wallSize.Y - PODIUM_BANNER - 0.4),
+					bannerScale,
+					false
+				)
+			elseif table.find(DOOR_SECTIONS, i) then
+				local doorScale = byHeight("wall_door", wallSize.Y - 0.8)
+				local doorDepth = kitSize("wall_door").Z * doorScale
+				kit(wallFolder, "wall_door", ring(angle, R - doorDepth / 2 + 0.4), doorScale)
+			end
+			if i % 2 == 0 and not behindBackwall(joint) then
+				local bracket = kitSize("wall_brazier") * byHeight("wall_brazier", 4.2)
+				brazier(wallFolder, "wall_brazier", ring(joint, R - bracket.Z / 2 + 0.3, 2.4), 4.2)
+			end
 		end
 	end
 
@@ -331,7 +386,7 @@ local function buildCover(map: Folder)
 		kit(cover, "pillar_whole", ring(if side == 1 then 0 else 180, 96), byHeight("pillar_whole", 15))
 		kit(cover, "cover_ruin", ring(if side == 1 then 30 else 150, 98), byWidth("cover_ruin", 16))
 		kit(cover, "cover_ruin", ring(if side == 1 then -30 else 210, 98), byWidth("cover_ruin", 16))
-		for _, z in { -60, 60 } do
+		for _, z in { -48, 48 } do
 			kit(
 				cover,
 				"cover_blocks",
@@ -340,14 +395,39 @@ local function buildCover(map: Folder)
 			)
 		end
 	end
-	for _ = 1, 10 do
+end
+
+-- Rubble strewn over the sand, a few studs clear of everything else placed on it.
+local function scatterRubble(map: Folder)
+	local taken: { { at: Vector3, radius: number } } = {}
+	for _, name in { "Centre", "Cover", "BlueBase", "RedBase" } do
+		for _, m in (map:FindFirstChild(name) :: Folder):GetChildren() do
+			if m:IsA("Model") then
+				local cf, size = m:GetBoundingBox()
+				table.insert(taken, { at = cf.Position * Vector3.new(1, 0, 1), radius = math.max(size.X, size.Z) / 2 })
+			end
+		end
+	end
+	local cover = map:FindFirstChild("Cover") :: Folder
+	local placed = 0
+	for _ = 1, 400 do
+		if placed == 10 then
+			break
+		end
 		local at = polar(rng:NextNumber(0, 360), rng:NextNumber(34, R - 30))
-		kit(
-			cover,
-			"rubble",
-			CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, 6.3), 0),
-			byWidth("rubble", rng:NextNumber(3, 5))
-		)
+		local width = rng:NextNumber(3, 5)
+		local clear = true
+		for _, t in taken do
+			if (t.at - at).Magnitude < t.radius + width / 2 + 3 then
+				clear = false
+				break
+			end
+		end
+		if clear then
+			kit(cover, "rubble", CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, 6.3), 0), byWidth("rubble", width))
+			table.insert(taken, { at = at, radius = width / 2 })
+			placed += 1
+		end
 	end
 end
 
@@ -356,55 +436,64 @@ export type Base = {
 	spawn: CFrame,
 	home: Vector3,
 	pads: { CFrame },
-	shop: CFrame,
+	-- Where a hero stands to buy at each of the base's armory stalls.
+	shops: { CFrame },
 }
 
 -- One team's end (design 02): the dais and throne in the team's colour before a backwall with its great banner,
--- knight statues, braziers, cypresses and shrubs, the four spawn pads (design 03) and the armory stall.
+-- knight statues, braziers, cypresses and shrubs, the four spawn pads (design 03) and the armory stall. The throne
+-- room is laid out from the backwall forward; `at` places from the dais' front middle, `back` away from the centre.
 local function buildBase(map: Folder, team: string): Base
 	local suffix = if team == "Blue" then "_blue" else ""
 	local bannerName = if team == "Blue" then "banner_blue" else "banner_red"
-	local z = if team == "Blue" then BASE_DISTANCE else -BASE_DISTANCE
-	local base = CFrame.lookAt(Vector3.new(0, 0, z), Vector3.zero)
 	local area = folder(map, team .. "Base")
+	local s = THRONE_ROOM
+
+	local backWidth, backBack = backwallSpan()
+	local backScale = byWidth("backwall", backWidth)
+	local backDepth = kitSize("backwall").Z * backScale
+	local daisScale = byHeight("dais" .. suffix, DAIS_HEIGHT)
+	local daisDepth = kitSize("dais" .. suffix).Z * daisScale
+	local daisFront = backBack - backDepth - 1 - daisDepth
+
+	local sign = if team == "Blue" then 1 else -1
+	local base = CFrame.lookAt(Vector3.new(0, 0, sign * daisFront), Vector3.zero)
 	local function at(x: number, y: number, back: number): CFrame
 		return base * CFrame.new(x, y, back)
 	end
+	local backFront = daisDepth + 1
 
-	local daisScale = byHeight("dais" .. suffix, DAIS_HEIGHT)
-	local daisDepth = kitSize("dais" .. suffix).Z * daisScale
+	-- The backwall stands before the podium wall and carries the great banner.
+	kit(area, "backwall", at(0, 0, backFront + backDepth / 2), backScale)
+	local bannerScale = byHeight(bannerName, 22 * s)
+	kit(area, bannerName, at(0, 7 * s, backFront - kitSize(bannerName).Z * bannerScale / 2 - 0.2), bannerScale, false)
+
 	kit(area, "dais" .. suffix, at(0, 0, daisDepth / 2), daisScale)
 	local throneScale = byHeight("throne" .. suffix, THRONE_HEIGHT)
 	local throneDepth = kitSize("throne" .. suffix).Z * throneScale
-	local throneBack = daisDepth - throneDepth / 2 - 2
+	local throneBack = daisDepth - throneDepth / 2 - 2 * s
 	kit(area, "throne" .. suffix, at(0, DAIS_HEIGHT, throneBack), throneScale)
-
-	-- The backwall closes the ring behind the throne and carries the great banner.
-	local backScale = byWidth("backwall", chord(R) * 2)
-	local backDepth = kitSize("backwall").Z * backScale
-	local backFront = R - BASE_DISTANCE - 1
-	kit(area, "backwall", at(0, 0, backFront + backDepth / 2), backScale)
-	local bannerScale = byHeight(bannerName, 22)
-	kit(area, bannerName, at(0, 7, backFront - kitSize(bannerName).Z * bannerScale / 2 - 0.2), bannerScale, false)
 
 	for _, side in { -1, 1 } do
 		kit(
 			area,
 			"statue",
-			at(side * 14.5, 0, 9) * CFrame.Angles(0, math.rad(side * 8), 0),
+			at(side * 14.5 * s, 0, 9 * s) * CFrame.Angles(0, math.rad(side * 8), 0),
 			byHeight("statue", STATUE_HEIGHT)
 		)
-		brazier(area, "brazier_pillar", at(side * 6, DAIS_HEIGHT, 7), 6.5)
-		brazier(area, "brazier_pillar", at(side * 22.5, 0, 6), 8)
-		kit(area, "cypress", at(side * 28, 0, 14), byHeight("cypress", 14))
-		kit(area, "shrub", at(side * 19, 0, 16), byHeight("shrub", 3.5))
-		kit(area, "shrub", at(side * 33, 0, 9), byHeight("shrub", 3))
+		brazier(area, "brazier_pillar", at(side * 6 * s, DAIS_HEIGHT, 7 * s), 6.5 * s)
+		brazier(area, "brazier_pillar", at(side * 22.5 * s, 0, 6 * s), 8 * s)
+		kit(area, "cypress", at(side * 28 * s, 0, 14 * s), byHeight("cypress", 14 * s))
+		kit(area, "shrub", at(side * 19 * s, 0, 16 * s), byHeight("shrub", 3.5 * s))
+		kit(area, "shrub", at(side * 30 * s, 0, 4 * s), byHeight("shrub", 3 * s))
 	end
 
-	-- The four spawn pads, two either side of the throne along the arena's curve.
+	-- The four spawn pads, two either side of the throne room along the arena's curve.
 	local pads = {}
 	local padScale = byHeight("pad", PAD_HEIGHT)
-	for _, spot in { Vector3.new(-30, 0, 2), Vector3.new(30, 0, 2), Vector3.new(-55, 0, -14), Vector3.new(55, 0, -14) } do
+	for _, spot in
+		{ Vector3.new(-46, 0, -12), Vector3.new(46, 0, -12), Vector3.new(-70, 0, -26), Vector3.new(70, 0, -26) }
+	do
 		local cf = base * CFrame.new(spot)
 		local pad = kit(area, "pad", cf, padScale)
 		if pad then
@@ -415,24 +504,29 @@ local function buildBase(map: Folder, team: string): Base
 		table.insert(pads, CFrame.lookAt(top, Vector3.new(0, top.Y, 0)))
 	end
 
-	-- The armory stall by the wall, its counter towards the arena; a weapon rack and barrels beside it.
-	local shop = at(-42, 0, 13) * CFrame.Angles(0, math.rad(-25), 0)
-	kit(area, "armory_stall" .. suffix, shop, byHeight("armory_stall" .. suffix, 12))
-	kit(
-		area,
-		"weapon_rack",
-		shop * CFrame.new(10, 0, 1) * CFrame.Angles(0, math.rad(-10), 0),
-		byHeight("weapon_rack", 7)
-	)
-	kit(area, "barrels", shop * CFrame.new(-9, 0, 2), byHeight("barrels", 4))
+	-- An armory stall either side of the throne room, so every hero has one close by; each has its counter towards
+	-- the arena, a weapon rack on the throne's side and barrels on the wall's.
+	local shops = {}
+	for _, side in { -1, 1 } do
+		local shop = at(side * 66, 0, 18) * CFrame.Angles(0, math.rad(side * 25), 0)
+		kit(area, "armory_stall" .. suffix, shop, byHeight("armory_stall" .. suffix, 12))
+		kit(
+			area,
+			"weapon_rack",
+			shop * CFrame.new(-side * 10, 0, 1) * CFrame.Angles(0, math.rad(side * 10), 0),
+			byHeight("weapon_rack", 7)
+		)
+		kit(area, "barrels", shop * CFrame.new(side * 10, 0, -2), byHeight("barrels", 4))
+		table.insert(shops, shop * CFrame.new(0, 0, -6))
+	end
 
 	local seatTop = at(0, DAIS_HEIGHT + THRONE_SEAT_Y * THRONE_HEIGHT, throneBack + THRONE_SEAT_Z * throneDepth)
 	return {
 		throne = seatTop * CFrame.new(0, SEATED_ROOT * Config.Master.Scale, 0),
-		spawn = at(0, DAIS_HEIGHT, throneBack - throneDepth / 2 - 4),
+		spawn = at(0, DAIS_HEIGHT, throneBack - throneDepth / 2 - 4 * s),
 		home = at(0, 0, daisDepth / 2).Position,
 		pads = pads,
-		shop = shop * CFrame.new(0, 0, -6),
+		shops = shops,
 	}
 end
 
@@ -478,6 +572,67 @@ local function setupLighting()
 	bloom.Threshold = 1.4
 end
 
+-- Pieces that belong on or against another piece, as "lower/upper" name pairs; every other overlap is a mistake.
+local MAY_TOUCH = {
+	["dais/throne"] = true,
+	["dais/brazier_pillar"] = true,
+	["backwall/banner"] = true,
+}
+
+local function touchKey(a: string, b: string): string
+	local function family(name: string): string
+		return (name:gsub("_blue$", ""):gsub("_red$", ""))
+	end
+	return family(a) .. "/" .. family(b)
+end
+
+-- Warns about every free-standing piece (in the bases, the centre, the cover, the grounds) that stands in another one
+-- or in the ring. The ring's own pieces overlap each other on purpose and are not compared among themselves.
+local function checkOverlaps(map: Folder): number
+	local function models(names: { string }): { Model }
+		local list = {}
+		for _, name in names do
+			local f = map:FindFirstChild(name)
+			for _, child in if f then f:GetChildren() else {} do
+				if child:IsA("Model") then
+					table.insert(list, child)
+				end
+			end
+		end
+		return list
+	end
+	local pieces = models({ "BlueBase", "RedBase", "Centre", "Cover", "Floor" })
+	local ringPieces = models({ "ArenaWall", "Stands", "Upper" })
+	local found = 0
+	for i, a in pieces do
+		local cfA, sizeA = a:GetBoundingBox()
+		local params = OverlapParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		local others = table.clone(ringPieces)
+		for j = i + 1, #pieces do
+			table.insert(others, pieces[j])
+		end
+		params.FilterDescendantsInstances = others
+		-- A tenth in from every side, so pieces that only stand close are not reported.
+		for _, hit in Workspace:GetPartBoundsInBox(cfA, sizeA * 0.9, params) do
+			local b = hit:FindFirstAncestorWhichIsA("Model")
+			if b and not MAY_TOUCH[touchKey(a.Name, b.Name)] and not MAY_TOUCH[touchKey(b.Name, a.Name)] then
+				found += 1
+				warn(
+					string.format(
+						"[ColosseumBuilder] %s at %s stands in %s at %s",
+						a.Name,
+						tostring(a:GetPivot().Position),
+						b.Name,
+						tostring(b:GetPivot().Position)
+					)
+				)
+			end
+		end
+	end
+	return found
+end
+
 export type Layout = {
 	-- Each team's four spawn pads, as the spot a hero appears on, facing the centre.
 	spawnPads: { [string]: { CFrame } },
@@ -485,7 +640,8 @@ export type Layout = {
 	masterSpawn: { [string]: CFrame },
 	thrones: { [string]: CFrame },
 	masterHome: { [string]: Vector3 },
-	shops: { [string]: CFrame },
+	-- Each team's two armory stalls, as the spot a hero stands to buy.
+	shops: { [string]: { CFrame } },
 	map: Folder,
 }
 
@@ -517,9 +673,11 @@ function ColosseumBuilder.build(): Layout
 		layout.masterSpawn[team] = base.spawn
 		layout.thrones[team] = base.throne
 		layout.masterHome[team] = base.home
-		layout.shops[team] = base.shop
+		layout.shops[team] = base.shops
 	end
+	scatterRubble(map)
 	map.Parent = Workspace
+	print("[ColosseumBuilder] overlapping pieces:", checkOverlaps(map))
 	setupLighting()
 	return layout
 end

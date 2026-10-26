@@ -8,9 +8,10 @@ Config.Arena = {
 	Radius = 125,
 }
 
--- The Master is an NPC king on his throne, clearly bigger than the heroes.
+-- The Master is an NPC king on his throne, a giant beside the heroes (three times their size); the throne room grows
+-- with him.
 Config.Master = {
-	Scale = 1.8,
+	Scale = 3,
 }
 
 Config.Teams = {

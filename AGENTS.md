@@ -29,6 +29,9 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   Meshy's metre size (about 1.9 studs); scale them with `Model:ScaleTo` when building.
 - After every step: screenshots from Play (not Edit), from the design's angle, next to the design; the owner approves;
   only then a local commit.
+- Every image for the owner (concepts, screenshots, designs) goes into the chat itself, embedded with its file path,
+  not only named or saved (owner, 2026-10-26). Play captures are saved as a file first so they can be shown:
+  `Tools/StudioShot/studio_shot.sh <out.png>` saves Studio's viewport, also when Studio is behind other windows.
 - New Meshy models: first a concept (image-to-image) the owner approves, then 3D. Never generate without his go.
   Meshy is shared with RuneVille: never buy credits.
 - Keys only in the macOS Keychain. Third-party assets need a recorded source and licence (`Docs/Third_Party.md`).
