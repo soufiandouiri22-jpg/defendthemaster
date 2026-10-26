@@ -25,9 +25,9 @@ Config.Economy = {
 Config.Minions = {
 	FirstWave = 20,
 	WaveInterval = 30,
-	-- Per doorway and wave, in marching order.
-	Wave = { "Melee", "Melee", "Melee", "Spitter", "Spitter" },
-	MaxPerTeam = 30,
+	-- Per doorway and wave, in marching order: two doorways a team, so twelve minions a wave in all.
+	Wave = { "Spitter", "Spitter", "Spitter" },
+	MaxPerTeam = 15,
 	-- The lanes pass the east and west gates this far from the centre, between the cover arcs and the pillars.
 	LaneRadius = 82,
 	Radius = 1.8,
@@ -35,6 +35,9 @@ Config.Minions = {
 	-- A minion turns on an enemy this close, and gives up the chase this far from where it left its path.
 	Acquire = 18,
 	Leash = 30,
+	-- An enemy hero who attacks a hero this close to a minion becomes its target, for this many seconds.
+	CallForHelp = 18,
+	CallTime = 3,
 	-- Minions do this share of their damage to a Master.
 	VsMaster = 0.5,
 	Kinds = {

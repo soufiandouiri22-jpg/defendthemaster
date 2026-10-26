@@ -1,7 +1,9 @@
 -- The team minions (Config.Minions). Every wave leaves a team's two doorways and marches along a path worked out once
--- at the start to the other team's dais, turning on every enemy that comes close: the other team's minions and
--- everything tagged "Combatant" (heroes, and later the Masters) with another "Team" attribute. Only the last hit by a
--- player earns the bounty.
+-- at the start to the other team's dais, turning on the enemies that come close: the other team's minions and
+-- everything tagged "Combatant" (heroes, and the Masters with the "Master" attribute) with another "Team" attribute.
+-- They pick in this order: an enemy hero who just attacked one of their heroes nearby (MinionService.heroAttacked), the
+-- enemy minions, the enemy heroes, the enemy Master; the nearest first within each. Only the last hit by a player earns
+-- the bounty.
 --
 -- The server moves one invisible root part per minion, ten times a second, in Workspace.Minions, with the attributes
 -- Team, Kind, Health, MaxHealth and Dead; each client shows the rock minion on it (MinionView). Attacks are sent to the
@@ -52,6 +54,9 @@ type Minion = {
 	-- Where it left its path for the current chase, and until when it ignores enemies after giving one up.
 	chaseFrom: Vector3?,
 	calmUntil: number,
+	-- The enemy hero who attacked one of its heroes, and until when that hero comes first.
+	called: Model?,
+	calledUntil: number,
 	nextAttack: number,
 	lastHitBy: Player?,
 	dead: boolean,
@@ -154,14 +159,34 @@ local function hurt(t: Target, amount: number)
 	end
 end
 
--- The nearest living enemy of `m` within its reach, or nil.
-local function nearestEnemy(m: Minion, combatants: { Model }): Target?
+-- How much `m` wants `t`, 1 first: the hero it was called on, minions, heroes, the Master.
+local function rankOf(m: Minion, t: Target, now: number): number
+	if isMinion(t) then
+		return 2
+	end
+	if t == m.called and now < m.calledUntil then
+		return 1
+	end
+	if (t :: Model):GetAttribute("Master") then
+		return 4
+	end
+	return 3
+end
+
+-- The enemy `m` wants most within its reach, the nearest of that rank, and its rank; nil when there is none. The hero
+-- it was called on may be as far as it would chase.
+local function chooseTarget(m: Minion, combatants: { Model }, now: number): (Target?, number)
 	local best: Target? = nil
-	local bestGap = SETTINGS.Acquire
+	local bestRank, bestGap = math.huge, math.huge
 	local function consider(t: Target)
+		local rank = rankOf(m, t, now)
+		if rank > bestRank then
+			return
+		end
+		local reach = if rank == 1 then SETTINGS.Leash else SETTINGS.Acquire
 		local gap = (positionOf(t) - m.position).Magnitude - radiusOf(t) - SETTINGS.Radius
-		if gap < bestGap and alive(t) then
-			best, bestGap = t, gap
+		if gap < reach and (rank < bestRank or gap < bestGap) and alive(t) then
+			best, bestRank, bestGap = t, rank, gap
 		end
 	end
 	for _, other in minions do
@@ -174,7 +199,7 @@ local function nearestEnemy(m: Minion, combatants: { Model }): Target?
 			consider(model)
 		end
 	end
-	return best
+	return best, bestRank
 end
 
 local function blocked(from: Vector3, direction: Vector3, distance: number): boolean
@@ -259,10 +284,13 @@ local function think(m: Minion, combatants: { Model }, now: number)
 		target = nil
 		m.calmUntil = now + 2
 	end
-	if not target and now >= m.calmUntil then
-		target = nearestEnemy(m, combatants)
-		if target and not m.chaseFrom then
-			m.chaseFrom = m.position
+	if now >= m.calmUntil then
+		local best, rank = chooseTarget(m, combatants, now)
+		if best and (not target or rank < rankOf(m, target, now)) then
+			target = best
+			if not m.chaseFrom then
+				m.chaseFrom = m.position
+			end
 		end
 	end
 	if m.target and not target then
@@ -362,6 +390,8 @@ local function spawn(team: string, kind: string, door: CFrame)
 		target = nil,
 		chaseFrom = nil,
 		calmUntil = 0,
+		called = nil,
+		calledUntil = 0,
 		nextAttack = 0,
 		lastHitBy = nil,
 		dead = false,
@@ -416,6 +446,23 @@ function MinionService.damage(root: BasePart, amount: number, player: Player?)
 	end
 end
 
+-- Tells the minions that the hero `attacker` hit the hero `victim`: `victim`'s minions near it turn on `attacker`.
+function MinionService.heroAttacked(attacker: Model, victim: Model)
+	local team = victim:GetAttribute("Team")
+	if attacker:GetAttribute("Team") == team then
+		return
+	end
+	local now = os.clock()
+	local at = positionOf(victim)
+	for _, m in minions do
+		if m.team == team and not m.dead and (m.position - at).Magnitude <= SETTINGS.CallForHelp then
+			m.called = attacker
+			m.calledUntil = now + SETTINGS.CallTime
+			m.calmUntil = 0
+		end
+	end
+end
+
 export type Layout = {
 	minionDoors: { [string]: { CFrame } },
 	daisFront: { [string]: Vector3 },
@@ -434,15 +481,18 @@ function MinionService.start(layout: Layout)
 	folder.Name = "Minions"
 	folder.Parent = Workspace
 
-	-- In Studio, tests reach the minions through ServerStorage.Dev.DamageMinion (root, amount, player).
+	-- In Studio, tests reach the minions through ServerStorage.Dev: DamageMinion (root, amount, player) and
+	-- HeroAttacked (attacker, victim).
 	if RunService:IsStudio() then
 		local dev = ServerStorage:FindFirstChild("Dev") or Instance.new("Folder")
 		dev.Name = "Dev"
 		dev.Parent = ServerStorage
-		local hook = Instance.new("BindableFunction")
-		hook.Name = "DamageMinion"
-		hook.OnInvoke = MinionService.damage
-		hook.Parent = dev
+		for name, hook in { DamageMinion = MinionService.damage, HeroAttacked = MinionService.heroAttacked } do
+			local bindable = Instance.new("BindableFunction")
+			bindable.Name = name
+			bindable.OnInvoke = hook
+			bindable.Parent = dev
+		end
 	end
 
 	local blocking = {}
