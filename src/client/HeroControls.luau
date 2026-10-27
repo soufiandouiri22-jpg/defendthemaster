@@ -20,6 +20,7 @@ local HeroCamera = require(script.Parent.HeroCamera)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local HeroSounds = require(script.Parent.HeroSounds)
 local Indicators = require(script.Parent.Indicators)
+local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local ShadowEffects = require(script.Parent.ShadowEffects)
 
@@ -103,7 +104,7 @@ local function slow(humanoid: Humanoid, length: number, speed: number)
 	humanoid.WalkSpeed = speed
 	task.delay(length, function()
 		if motionToken == token and humanoid.Parent then
-			humanoid.WalkSpeed = Config.Combat.WalkSpeed
+			humanoid.WalkSpeed = Items.walkSpeed(player)
 		end
 	end)
 end
@@ -192,7 +193,7 @@ local function fighting(): boolean
 end
 
 local function canAct(key: string, now: number): boolean
-	return fighting() and now >= busyUntil and now >= (cooldowns[key] or 0)
+	return fighting() and Leveling.learned(player, key) and now >= busyUntil and now >= (cooldowns[key] or 0)
 end
 
 local function stopAiming()
@@ -226,8 +227,9 @@ local function cast(key: string)
 		local step = if now <= comboUntil then combo % #kit.Hits + 1 else 1
 		local hit = kit.Hits[step]
 		combo, comboUntil = step, now + kit.Reset
-		busyUntil = now + hit.Hit / kit.Speed + RECOVER
-		local length = HeroAnimator.play(character, hit.Motion, kit.Speed)
+		local speed = kit.Speed * Items.attackSpeed(player)
+		busyUntil = now + hit.Hit / speed + RECOVER
+		local length = HeroAnimator.play(character, hit.Motion, speed)
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
 		return
 	end
@@ -267,7 +269,7 @@ end
 local function startAiming(key: string)
 	local _, _, _, settings = hero()
 	local kit = settings and settings.Kit[key]
-	if not kit or os.clock() < (cooldowns[key] or 0) then
+	if not kit or not Leveling.learned(player, key) or os.clock() < (cooldowns[key] or 0) then
 		return
 	end
 	stopAiming()
@@ -343,7 +345,7 @@ local function undo(key: string)
 	if character and humanoid then
 		HeroAnimator.stop(character)
 		motionToken += 1
-		humanoid.WalkSpeed = Config.Combat.WalkSpeed
+		humanoid.WalkSpeed = Items.walkSpeed(player)
 	end
 end
 
@@ -358,7 +360,7 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 		return
 	end
 	if kit.Kind == "Combo" then
-		HeroAnimator.play(character, kit.Hits[step].Motion, kit.Speed)
+		HeroAnimator.play(character, kit.Hits[step].Motion, kit.Speed * (character:GetAttribute("AttackSpeed") or 1))
 	elseif kit.Kind == "Dash" then
 		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if root and landing then

@@ -1,14 +1,17 @@
 -- The buy phase at the start of a match (Config.Match, the server's "FightAt" on Workspace): "PURCHASE YOUR ITEMS!"
 -- slams onto the screen in gold with an orchestral sting and a burst of coins, then sits small under the score board
--- counting down. The last three seconds count big in the middle, and "FIGHT!" opens the match with a deep boom.
+-- counting down while the heroes walk to their armory stalls; with the armory open (Shop) its own countdown shows
+-- instead. The last three seconds count big in the middle, and "FIGHT!" opens the match with a deep boom.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
+local Shop = require(script.Parent.Shop)
 local UiStyle = require(script.Parent.UiStyle)
 
 local BuyPhase = {}
@@ -310,6 +313,13 @@ function BuyPhase.start()
 		gui.Enabled = false
 		running = false
 	end
+
+	-- The armory shows its own countdown, so the banner and its band give way while it is open.
+	RunService.RenderStepped:Connect(function()
+		local open = Shop.isOpen()
+		group.Visible = not open
+		band.Visible = not open
+	end)
 
 	Workspace:GetAttributeChangedSignal("FightAt"):Connect(function()
 		task.spawn(run)

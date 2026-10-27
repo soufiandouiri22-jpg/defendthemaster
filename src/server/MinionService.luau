@@ -20,6 +20,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Actors = require(script.Parent.Actors)
+local Damage = require(script.Parent.Damage)
 local Economy = require(script.Parent.Economy)
 local MatchService = require(script.Parent.MatchService)
 local ProgressService = require(script.Parent.ProgressService)
@@ -47,6 +48,7 @@ type Stats = {
 	Speed: number,
 	Bounty: number,
 	SpitSpeed: number?,
+	Magic: boolean?,
 }
 
 -- The way a minion that has come to the end of its path walks to the nearest enemy left anywhere in the arena.
@@ -165,7 +167,8 @@ local function hurtMinion(m: Minion, amount: number, player: Instance?)
 	end
 end
 
-local function hurt(t: Target, amount: number)
+-- `amount` of a minion's damage on `t`, physical or `magic` (on a hero, his Armor or Resist takes it down).
+local function hurt(t: Target, amount: number, magic: boolean)
 	if isMinion(t) then
 		hurtMinion(t :: Minion, amount, nil)
 		return
@@ -173,6 +176,8 @@ local function hurt(t: Target, amount: number)
 	local model = t :: Model
 	if model:GetAttribute("Master") then
 		amount *= SETTINGS.VsMaster
+	elseif model:GetAttribute("Hero") then
+		amount = Damage.mitigated(model, amount, magic, nil)
 	end
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
@@ -352,14 +357,14 @@ local function attack(m: Minion, t: Target, gap: number, now: number)
 		attackEvent:FireAllClients(m.root, targetInstance, travel)
 		task.delay(travel, function()
 			if alive(t) then
-				hurt(t, m.stats.Damage)
+				hurt(t, m.stats.Damage, m.stats.Magic == true)
 			end
 		end)
 	else
 		attackEvent:FireAllClients(m.root, targetInstance, BITE_HIT)
 		task.delay(BITE_HIT, function()
 			if not m.dead and alive(t) then
-				hurt(t, m.stats.Damage)
+				hurt(t, m.stats.Damage, m.stats.Magic == true)
 			end
 		end)
 	end

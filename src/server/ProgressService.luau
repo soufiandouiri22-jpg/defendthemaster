@@ -30,7 +30,7 @@ local function living(character: Model?): (Humanoid?, BasePart?)
 	return nil, nil
 end
 
--- Sets the hero's health to its level, healing it by what the level adds; the hero carries its level for the HUD.
+-- Sets the hero's health to its level and items, healing it by what they add; the hero carries its level for the HUD.
 function ProgressService.refresh(player: Instance)
 	local character = Actors.character(player)
 	local hero = character and character:GetAttribute("Hero")
@@ -39,7 +39,7 @@ function ProgressService.refresh(player: Instance)
 		return
 	end
 	character:SetAttribute("Level", Leveling.level(player :: any))
-	local max = Leveling.maxHealth(Config.Heroes[hero].Health, Leveling.level(player :: any))
+	local max = Leveling.heroHealth(player :: any, hero)
 	local gain = max - humanoid.MaxHealth
 	humanoid.MaxHealth = max
 	if humanoid.Health > 0 then
@@ -180,16 +180,16 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 	return wait
 end
 
--- A new player or bot starts at level 1 with every ability at rank 1.
+-- A new player or bot starts at level 1 with StartPoints to spend and M2, E and R unlearned.
 function ProgressService.join(player: Instance)
 	if player:GetAttribute("Level") ~= nil then
 		return
 	end
 	player:SetAttribute("Level", 1)
 	player:SetAttribute("Xp", 0)
-	player:SetAttribute("Points", 0)
+	player:SetAttribute("Points", SETTINGS.StartPoints)
 	for _, key in SETTINGS.Upgrades do
-		player:SetAttribute("Rank" .. key, 1)
+		player:SetAttribute("Rank" .. key, 0)
 	end
 end
 
@@ -199,7 +199,7 @@ function ProgressService.raise(player: Instance, key: string): boolean
 		return false
 	end
 	player:SetAttribute("Rank" .. key, Leveling.rank(player :: any, key) + 1)
-	player:SetAttribute("Points", (player:GetAttribute("Points") or 1) - 1)
+	player:SetAttribute("Points", (player:GetAttribute("Points") or 0) - 1)
 	return true
 end
 

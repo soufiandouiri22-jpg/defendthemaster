@@ -1,0 +1,242 @@
+-- What a hero carries (Config.Shop, Config.Items), the same on the server and the client. A player's or bot's bag is
+-- in the server's attributes on it (Actors): "Item" .. n the item in slot n ("" when empty) and "Count" .. n how many
+-- (potions stack), for n from 1 to Config.Shop.Slots; "PotionUntil" is when the potions he drank stop healing (server
+-- time).
+
+local Config = require(script.Parent.Config)
+
+local Items = {}
+
+local SLOTS = Config.Shop.Slots
+local TIERS = { Basic = 1, Epic = 2, Legendary = 3 }
+
+export type Slot = { id: string, count: number }
+
+export type Stats = {
+	Attack: number,
+	Magic: number,
+	Health: number,
+	Armor: number,
+	Resist: number,
+	AttackSpeed: number,
+	Haste: number,
+	Lifesteal: number,
+	MoveSpeed: number,
+}
+
+-- How the armory names each stat, and whether it shows as a share.
+Items.StatNames = {
+	{ key = "Attack", name = "Attack" },
+	{ key = "Magic", name = "Magic" },
+	{ key = "Health", name = "Health" },
+	{ key = "Armor", name = "Armor" },
+	{ key = "Resist", name = "Resist" },
+	{ key = "AttackSpeed", name = "Attack Speed", share = true },
+	{ key = "Haste", name = "Haste" },
+	{ key = "Lifesteal", name = "Lifesteal", share = true },
+	{ key = "MoveSpeed", name = "Move Speed" },
+}
+
+function Items.get(id: string?): any
+	return id and Config.Items[id]
+end
+
+-- The items of `category` ("Recommended" is `hero`'s build), cheapest first within each tier.
+function Items.list(category: string, hero: string?): { string }
+	if category == "Recommended" then
+		local settings = hero and Config.Heroes[hero]
+		return if settings and settings.Build then table.clone(settings.Build) else {}
+	end
+	local list = {}
+	for id, item in Config.Items do
+		if item.Category == category then
+			table.insert(list, id)
+		end
+	end
+	table.sort(list, function(a, b)
+		local x, y = Config.Items[a], Config.Items[b]
+		if TIERS[x.Tier] ~= TIERS[y.Tier] then
+			return TIERS[x.Tier] < TIERS[y.Tier]
+		end
+		if x.Cost ~= y.Cost then
+			return x.Cost < y.Cost
+		end
+		return x.Name < y.Name
+	end)
+	return list
+end
+
+-- The bag of `actor`, slot by slot (nil where empty).
+function Items.bag(actor: Instance): { [number]: Slot }
+	local bag = {}
+	for i = 1, SLOTS do
+		local id = actor:GetAttribute("Item" .. i)
+		if typeof(id) == "string" and Config.Items[id] then
+			bag[i] = { id = id, count = actor:GetAttribute("Count" .. i) or 1 }
+		end
+	end
+	return bag
+end
+
+-- How many of `id` `actor` carries.
+function Items.count(actor: Instance, id: string): number
+	local n = 0
+	for _, slot in Items.bag(actor) do
+		if slot.id == id then
+			n += slot.count
+		end
+	end
+	return n
+end
+
+-- What `actor`'s items add up to.
+function Items.stats(actor: Instance): Stats
+	local total = {
+		Attack = 0,
+		Magic = 0,
+		Health = 0,
+		Armor = 0,
+		Resist = 0,
+		AttackSpeed = 0,
+		Haste = 0,
+		Lifesteal = 0,
+		MoveSpeed = 0,
+	}
+	for _, slot in Items.bag(actor) do
+		for key, value in Config.Items[slot.id].Stats do
+			total[key] += value
+		end
+	end
+	return total :: any
+end
+
+-- The value of the legendary effect `kind` if `actor` carries it.
+function Items.effect(actor: Instance, kind: string): number?
+	for _, slot in Items.bag(actor) do
+		local effect = Config.Items[slot.id].Effect
+		if effect and effect.Kind == kind then
+			return effect.Value
+		end
+	end
+	return nil
+end
+
+function Items.walkSpeed(actor: Instance): number
+	return Config.Combat.WalkSpeed + Items.stats(actor).MoveSpeed
+end
+
+-- How much faster than the kit's `Speed` the M1 combo plays.
+function Items.attackSpeed(actor: Instance): number
+	return 1 + Items.stats(actor).AttackSpeed
+end
+
+-- What the parts of `id` that are in `pool` (slot to item, taken out as they are used) leave to pay; their slots go
+-- into `used`. A part he lacks counts with its own parts he holds.
+local function rest(id: string, pool: { [number]: string }, used: { number }): number
+	local item = Config.Items[id]
+	local cost = item.Cost
+	for _, part in item.From or {} do
+		local found: number? = nil
+		for i, held in pool do
+			if held == part then
+				found = i
+				break
+			end
+		end
+		if found then
+			pool[found] = nil
+			table.insert(used, found)
+			cost -= Config.Items[part].Cost
+		else
+			cost -= Config.Items[part].Cost - rest(part, pool, used)
+		end
+	end
+	return cost
+end
+
+-- What `id` costs `actor` now, and the slots of the parts he holds that go into it.
+function Items.price(actor: Instance, id: string): (number, { number })
+	local pool = {}
+	for i, slot in Items.bag(actor) do
+		if not Config.Items[slot.id].Potion then
+			pool[i] = slot.id
+		end
+	end
+	local used = {}
+	return rest(id, pool, used), used
+end
+
+-- Whether `actor` may buy `id` now (where he stands aside), else why not; what it costs him and the parts it uses.
+function Items.check(actor: Instance, id: string): (boolean, string?, number, { number })
+	local item = Config.Items[id]
+	if not item then
+		return false, "Unknown item", 0, {}
+	end
+	local price, used = Items.price(actor, id)
+	local bag = Items.bag(actor)
+	local free = #used
+	for i = 1, SLOTS do
+		if not bag[i] then
+			free += 1
+		end
+	end
+	if item.Potion then
+		local stacked = false
+		for _, slot in bag do
+			if slot.id == id then
+				if slot.count >= Config.Shop.Potion.Stack then
+					return false, "You carry " .. Config.Shop.Potion.Stack .. " already", price, used
+				end
+				stacked = true
+			end
+		end
+		if stacked then
+			free = math.max(free, 1)
+		end
+	else
+		for i, slot in bag do
+			local held = Config.Items[slot.id]
+			if item.Boots and held.Boots and not table.find(used, i) then
+				return false, "Only one pair of boots", price, used
+			end
+			if item.Tier == "Legendary" and slot.id == id then
+				return false, "You own it already", price, used
+			end
+		end
+	end
+	if free < 1 then
+		return false, "Your bag is full", price, used
+	end
+	if (actor:GetAttribute("Coins") or 0) < price then
+		return false, "Not enough coins", price, used
+	end
+	return true, nil, price, used
+end
+
+-- What selling one of `id` gives back.
+function Items.refund(id: string): number
+	return math.floor(Config.Items[id].Cost * Config.Shop.Sell)
+end
+
+-- The share `x` as "12%", a number as "10" or "1.5".
+local function number(x: number, share: boolean?): string
+	if share then
+		return math.round(x * 100) .. "%"
+	end
+	return if x == math.floor(x) then tostring(x) else string.format("%.1f", x)
+end
+
+-- The armory's lines for `id`'s stats: "+10 Attack".
+function Items.lines(id: string): { string }
+	local item = Config.Items[id]
+	local lines = {}
+	for _, stat in Items.StatNames do
+		local value = item.Stats[stat.key]
+		if value then
+			table.insert(lines, "+" .. number(value, stat.share) .. " " .. stat.name)
+		end
+	end
+	return lines
+end
+
+return Items

@@ -32,6 +32,265 @@ Config.Economy = {
 	Assist = 0.5,
 }
 
+-- The armory (design 08), as League of Legends' shop: a hero walks to one of his team's two armory stalls and opens it
+-- there (within `Reach` studs, holding F), or shops while dead, and carries `Slots` items. A bigger item is built from smaller
+-- ones (`From`): the ones he holds count towards it, so he pays only the rest. Selling gives back `Sell` of an item's
+-- price, and while he stays at the armory he can undo what he bought and sold since he came. He wears one pair of boots
+-- and every legendary item once; potions stack up to `Potion.Stack` in one slot, and each heals `Potion.Heal` over
+-- `Potion.Time` seconds (Q), one after another. Crown Bulwark guards within `GuardReach` studs of the hero's Master.
+Config.Shop = {
+	Slots = 6,
+	Sell = 0.7,
+	Reach = 16,
+	Potion = { Heal = 120, Time = 15, Stack = 5 },
+	GuardReach = 40,
+}
+
+-- The items of the armory (Config.Shop), with their icons (Art/Icons/Items, cut by Tools/cut_icons.py from three Meshy
+-- sheets). `Cost` is an item's whole price, its parts (`From`) included. Stats: Attack and Magic add to the hero's
+-- damage as his kit's `Ratio` of them (a kit scales with its hero's `Scales`); Health adds to his health; Armor and
+-- Resist take physical and magic damage down to 100 / (100 + them); AttackSpeed speeds up his M1 combo by that share;
+-- Haste shortens his cooldowns to 100 / (100 + it); Lifesteal heals him by that share of the damage he deals; MoveSpeed
+-- adds studs a second to his walk. A legendary's `Effect` is its own (CombatService, Damage).
+Config.Items = {
+	IronSword = {
+		Name = "Iron Sword",
+		Tier = "Basic",
+		Category = "Attack",
+		Cost = 350,
+		Stats = { Attack = 10 },
+		Icon = "rbxassetid://74842605657066",
+	},
+	SpellTome = {
+		Name = "Spell Tome",
+		Tier = "Basic",
+		Category = "Magic",
+		Cost = 400,
+		Stats = { Magic = 20 },
+		Icon = "rbxassetid://138902820519978",
+	},
+	WarHelmet = {
+		Name = "War Helmet",
+		Tier = "Basic",
+		Category = "Defense",
+		Cost = 400,
+		Stats = { Health = 150 },
+		Icon = "rbxassetid://91154718004505",
+	},
+	SteelShield = {
+		Name = "Steel Shield",
+		Tier = "Basic",
+		Category = "Defense",
+		Cost = 300,
+		Stats = { Armor = 15 },
+		Icon = "rbxassetid://98798266530348",
+	},
+	MoonRing = {
+		Name = "Moon Ring",
+		Tier = "Basic",
+		Category = "Defense",
+		Cost = 450,
+		Stats = { Resist = 25 },
+		Icon = "rbxassetid://77409479313966",
+	},
+	SwiftGloves = {
+		Name = "Swift Gloves",
+		Tier = "Basic",
+		Category = "Attack",
+		Cost = 300,
+		Stats = { AttackSpeed = 0.12 },
+		Icon = "rbxassetid://135207480238190",
+	},
+	SandGlass = {
+		Name = "Sand Glass",
+		Tier = "Basic",
+		Category = "Magic",
+		Cost = 400,
+		Stats = { Haste = 10 },
+		Icon = "rbxassetid://78272679956560",
+	},
+	Boots = {
+		Name = "Boots",
+		Tier = "Basic",
+		Category = "Speed",
+		Cost = 300,
+		Boots = true,
+		Stats = { MoveSpeed = 1.5 },
+		Icon = "rbxassetid://103361407233752",
+	},
+	HealthPotion = {
+		Name = "Health Potion",
+		Tier = "Basic",
+		Category = "Defense",
+		Cost = 50,
+		Potion = true,
+		Stats = {},
+		Text = "Q: heals 120 health over 15 seconds",
+		Icon = "rbxassetid://131707278624739",
+	},
+
+	KnightsBlade = {
+		Name = "Knight's Blade",
+		Tier = "Epic",
+		Category = "Attack",
+		Cost = 1100,
+		From = { "IronSword", "SwiftGloves" },
+		Stats = { Attack = 20, AttackSpeed = 0.15 },
+		Icon = "rbxassetid://113629917939583",
+	},
+	HuntersFang = {
+		Name = "Hunter's Fang",
+		Tier = "Epic",
+		Category = "Attack",
+		Cost = 1000,
+		From = { "IronSword" },
+		Stats = { Attack = 15, Lifesteal = 0.08 },
+		Icon = "rbxassetid://84860004316540",
+	},
+	GreatAxe = {
+		Name = "Great Axe",
+		Tier = "Epic",
+		Category = "Attack",
+		Cost = 1300,
+		From = { "IronSword", "IronSword" },
+		Stats = { Attack = 25, Haste = 10 },
+		Icon = "rbxassetid://114343624697473",
+	},
+	MagicStaff = {
+		Name = "Magic Staff",
+		Tier = "Epic",
+		Category = "Magic",
+		Cost = 850,
+		From = { "SpellTome" },
+		Stats = { Magic = 40 },
+		Icon = "rbxassetid://105311982446295",
+	},
+	ArcaneOrb = {
+		Name = "Arcane Orb",
+		Tier = "Epic",
+		Category = "Magic",
+		Cost = 1100,
+		From = { "SpellTome", "SandGlass" },
+		Stats = { Magic = 30, Haste = 15 },
+		Icon = "rbxassetid://96722888507243",
+	},
+	TowerShield = {
+		Name = "Tower Shield",
+		Tier = "Epic",
+		Category = "Defense",
+		Cost = 1000,
+		From = { "SteelShield", "WarHelmet" },
+		Stats = { Armor = 25, Health = 200 },
+		Icon = "rbxassetid://91948796021469",
+	},
+	MoonCloak = {
+		Name = "Moon Cloak",
+		Tier = "Epic",
+		Category = "Defense",
+		Cost = 1000,
+		From = { "MoonRing", "WarHelmet" },
+		Stats = { Resist = 30, Health = 200 },
+		Icon = "rbxassetid://99062067076918",
+	},
+	SwiftBoots = {
+		Name = "Swift Boots",
+		Tier = "Epic",
+		Category = "Speed",
+		Cost = 900,
+		From = { "Boots" },
+		Boots = true,
+		Stats = { MoveSpeed = 3, AttackSpeed = 0.12 },
+		Icon = "rbxassetid://107660298590172",
+	},
+	IronBoots = {
+		Name = "Iron Boots",
+		Tier = "Epic",
+		Category = "Speed",
+		Cost = 1000,
+		From = { "Boots" },
+		Boots = true,
+		Stats = { MoveSpeed = 2.5, Armor = 20 },
+		Icon = "rbxassetid://103173237999028",
+	},
+	SageBoots = {
+		Name = "Sage Boots",
+		Tier = "Epic",
+		Category = "Speed",
+		Cost = 950,
+		From = { "Boots" },
+		Boots = true,
+		Stats = { MoveSpeed = 2.5, Haste = 15 },
+		Icon = "rbxassetid://87395581419123",
+	},
+
+	Kingsbane = {
+		Name = "Kingsbane",
+		Tier = "Legendary",
+		Category = "Attack",
+		Cost = 3000,
+		From = { "KnightsBlade", "HuntersFang" },
+		Stats = { Attack = 45, AttackSpeed = 0.25, Lifesteal = 0.1 },
+		Effect = { Kind = "Kingsbane", Value = 0.25 },
+		Text = "Deals 25% more damage to the enemy Master",
+		Icon = "rbxassetid://92626898355128",
+	},
+	EclipseEdge = {
+		Name = "Eclipse Edge",
+		Tier = "Legendary",
+		Category = "Attack",
+		Cost = 2900,
+		From = { "GreatAxe", "KnightsBlade" },
+		Stats = { Attack = 55, Haste = 15 },
+		Effect = { Kind = "Eclipse", Value = 0.5 },
+		Text = "After an ability, the next M1 hits 50% harder",
+		Icon = "rbxassetid://106708873081114",
+	},
+	Bloodthorn = {
+		Name = "Bloodthorn",
+		Tier = "Legendary",
+		Category = "Attack",
+		Cost = 3000,
+		From = { "HuntersFang", "TowerShield" },
+		Stats = { Attack = 35, Health = 400, Lifesteal = 0.1 },
+		Effect = { Kind = "Bloodthorn", Value = 0.3 },
+		Text = "Lifesteal doubles below 30% health",
+		Icon = "rbxassetid://90156462163435",
+	},
+	Stormcrown = {
+		Name = "Stormcrown",
+		Tier = "Legendary",
+		Category = "Magic",
+		Cost = 3000,
+		From = { "MagicStaff", "ArcaneOrb" },
+		Stats = { Magic = 90, Haste = 15 },
+		Effect = { Kind = "Stormcrown", Value = 0.15 },
+		Text = "Magic damage dealt is 15% higher",
+		Icon = "rbxassetid://119905285835396",
+	},
+	VoidScepter = {
+		Name = "Void Scepter",
+		Tier = "Legendary",
+		Category = "Magic",
+		Cost = 2800,
+		From = { "MagicStaff", "MoonRing", "SpellTome" },
+		Stats = { Magic = 75, Resist = 25 },
+		Effect = { Kind = "VoidScepter", Value = 0.35 },
+		Text = "Magic damage ignores 35% of the target's Resist",
+		Icon = "rbxassetid://71853899576747",
+	},
+	CrownBulwark = {
+		Name = "Crown Bulwark",
+		Tier = "Legendary",
+		Category = "Defense",
+		Cost = 2800,
+		From = { "TowerShield", "MoonCloak" },
+		Stats = { Armor = 40, Resist = 40, Health = 350 },
+		Effect = { Kind = "CrownBulwark", Value = 20 },
+		Text = "+20 Armor and Resist near your own Master",
+		Icon = "rbxassetid://127387090758352",
+	},
+}
+
 -- The start of a match: once the first player is in, the heroes have `BuyTime` seconds to shop before the fight begins.
 -- Until then nobody can attack, no minions come and no passive coins are paid; the match clock starts with the fight.
 -- Without a player the buy phase starts after `WaitForPlayer` seconds.
@@ -43,8 +302,11 @@ Config.Match = {
 -- Levels, as in League of Legends: when an enemy dies, the heroes of the other team within `Share` studs (and its
 -- killer, wherever he is) share its XP evenly. `Steps` is the XP from each level to the next. Every level adds
 -- `Health` and `Damage` of the hero's base, and a point to spend on raising M2, E or R one rank with the keys 1, 2 and 3
--- (`Upgrades`). A rank adds `RankDamage` to its ability's damage and takes `RankCooldown` off its cooldown; rank `n`
--- of an ability needs the hero level `Needs[key][n]`.
+-- (`Upgrades`); the hero starts with one point at level 1. The combo (M1) and the dash are always there; M2, E and R
+-- start unlearned (rank 0) and are learned with their first rank. A rank past the first adds `RankDamage` to its
+-- ability's damage and takes `RankCooldown` off its cooldown; rank `n` of an ability needs the hero level
+-- `Needs[key][n]`: as in League, a basic ability's rank is at most half the level rounded up, and the ultimate comes
+-- later.
 Config.Progress = {
 	MaxLevel = 10,
 	Steps = { 120, 160, 200, 240, 280, 320, 360, 400, 440 },
@@ -56,14 +318,15 @@ Config.Progress = {
 	KillCredit = 10,
 	Health = 0.08,
 	Damage = 0.04,
-	MaxRank = 3,
+	StartPoints = 1,
+	MaxRank = 4,
 	RankDamage = 0.2,
 	RankCooldown = 0.1,
 	Upgrades = { "M2", "E", "R" },
 	Needs = {
-		M2 = { 1, 2, 4 },
-		E = { 1, 2, 4 },
-		R = { 1, 6, 9 },
+		M2 = { 1, 3, 5, 7 },
+		E = { 1, 3, 5, 7 },
+		R = { 4, 6, 8, 10 },
 	},
 }
 
@@ -89,9 +352,19 @@ Config.Minions = {
 	CallTime = 3,
 	-- Minions do this share of their damage to a Master.
 	VsMaster = 0.5,
+	-- A Melee minion's bite is physical damage, a Spitter's spit magic (Config.Items: Armor and Resist).
 	Kinds = {
-		Melee = { Health = 450, Damage = 12, Interval = 1.25, Range = 1.2, Speed = 11, Bounty = 21 },
-		Spitter = { Health = 280, Damage = 22, Interval = 1.6, Range = 18, Speed = 11, Bounty = 14, SpitSpeed = 45 },
+		Melee = { Health = 450, Damage = 12, Interval = 1.25, Range = 1.2, Speed = 11, Bounty = 21, Magic = false },
+		Spitter = {
+			Health = 280,
+			Damage = 22,
+			Interval = 1.6,
+			Range = 18,
+			Speed = 11,
+			Bounty = 14,
+			SpitSpeed = 45,
+			Magic = true,
+		},
 	},
 }
 
@@ -113,6 +386,20 @@ Config.Heroes = {
 	Shadowren = {
 		Role = "Assassin",
 		Health = 900,
+		-- His kit deals physical damage, growing with Attack (each key's `Ratio` of it, Config.Items).
+		Scales = "Attack",
+		-- The armory's Recommended tab, in buying order (Config.Items).
+		Build = {
+			"IronSword",
+			"HealthPotion",
+			"Boots",
+			"HuntersFang",
+			"KnightsBlade",
+			"SwiftBoots",
+			"Kingsbane",
+			"EclipseEdge",
+			"Bloodthorn",
+		},
 		Look = {
 			Shirt = 13403820292,
 			Pants = 10703036251,
@@ -150,6 +437,7 @@ Config.Heroes = {
 			M1 = {
 				Kind = "Combo",
 				Speed = 1.25,
+				Ratio = 0.6,
 				-- The combo starts again after this long without a swing.
 				Reset = 1.5,
 				Hits = {
@@ -168,6 +456,7 @@ Config.Heroes = {
 				Range = 14,
 				Radius = 8,
 				Damage = 90,
+				Ratio = 1,
 				-- He leaves the ground and lands at these times.
 				Takeoff = 0.33,
 				Land = 1.55,
@@ -183,6 +472,7 @@ Config.Heroes = {
 				Range = 40,
 				Width = 2,
 				Damage = 110,
+				Ratio = 1.1,
 			},
 			-- Fast sweeps in a cone ahead of him.
 			R = {
@@ -191,9 +481,15 @@ Config.Heroes = {
 				Indicator = "Cone",
 				Cooldown = 40,
 				Hits = { 0.27, 0.43, 0.60, 0.97, 1.57, 2.13 },
-				-- He comes down from his leap and strikes the ground, in a shockwave of shadow.
+				-- He comes down from his leap and strikes the ground, in a shockwave of shadow: that hit, the kit's
+				-- strongest, deals SlamDamage (with SlamRatio) all round him, SlamRadius studs (the shockwave's shade);
+				-- the sweeps before it deal Damage in the cone where he faces at each.
 				Slam = 2.13,
-				Damage = 40,
+				SlamRadius = 12,
+				SlamDamage = 120,
+				SlamRatio = 1,
+				Damage = 24,
+				Ratio = 0.2,
 				Range = 10,
 				Angle = 70,
 			},
@@ -206,6 +502,7 @@ Config.Heroes = {
 				Range = 16,
 				Width = 4,
 				Damage = 20,
+				Ratio = 0.3,
 				-- He moves from Start to Move seconds after the press, and the lunge fades out at Stop.
 				Start = 0.04,
 				Move = 0.34,
@@ -236,13 +533,35 @@ Config.Respawn = {
 }
 
 -- Bots fill both teams up to `TeamSize` heroes, all playing `Hero`. A bot fights the nearest enemy hero within `Sight`
--- studs, else the nearest other enemy there, else walks its lane behind its minions. Each tick an ability it could
--- use is used with chance `Reaction`, so it does not answer every opening at once.
+-- studs, else the nearest other enemy there, else walks its lane behind its minions. It plays as a person would, not
+-- perfectly: after an ability, and on a new target, it waits `Reaction` seconds (between Min and Max) before its next
+-- ability; between its swings it rests up to `Rest` seconds; its dagger leads its target by `Lead` of the way and
+-- flies up to `Miss` degrees off, its leaps and dashes land up to `Stray` studs from where it aimed. Only while
+-- `Buys` is on does a bot shop: at the armory it buys `Build` in order, its parts first while the whole is too dear,
+-- and it drinks a potion below `PotionAt` of its health.
 Config.Bots = {
 	TeamSize = 4,
 	Hero = "Shadowren",
-	Sight = 40,
-	Reaction = 0.35,
+	Sight = 25,
+	Reaction = { Min = 1.3, Max = 2.6 },
+	Rest = 0.9,
+	Lead = 0.2,
+	Miss = 15,
+	Stray = 6,
+	Buys = false,
+	Build = {
+		"IronSword",
+		"HealthPotion",
+		"HealthPotion",
+		"Boots",
+		"HuntersFang",
+		"KnightsBlade",
+		"Kingsbane",
+		"SwiftBoots",
+		"EclipseEdge",
+		"Bloodthorn",
+	},
+	PotionAt = 0.45,
 }
 
 -- Every hero walks `WalkSpeed`, and `AttackWalkSpeed` while a motion of his kit plays. Commands from a client for a

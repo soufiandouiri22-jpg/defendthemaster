@@ -2,8 +2,10 @@
 -- bot is an Actor (a Configuration in ServerStorage.Bots) whose hero the server moves: it walks its lane (east or west,
 -- in turn) behind its team's minions, turns on the nearest enemy hero in sight, else the nearest other enemy, and
 -- fights with its whole kit through CombatService, as a player would: leap and flurry on heroes up close, the dagger
--- at range, the dash to close in, the combo in reach. It levels up as players do and spends its points itself, and
--- comes back on a spawn pad after it dies.
+-- at range, the dash to close in, the combo in reach; with a person's reaction time, rests and misses (Config.Bots),
+-- not perfectly. It levels up as players do and spends its points itself; while Buys is on it buys its Build at
+-- the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its potions. It comes back on a
+-- spawn pad after it dies.
 
 local CollectionService = game:GetService("CollectionService")
 local PathfindingService = game:GetService("PathfindingService")
@@ -15,6 +17,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
+local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Actors = require(script.Parent.Actors)
 local CombatService = require(script.Parent.CombatService)
@@ -22,6 +25,7 @@ local Economy = require(script.Parent.Economy)
 local HeroService = require(script.Parent.HeroService)
 local MatchService = require(script.Parent.MatchService)
 local ProgressService = require(script.Parent.ProgressService)
+local ShopService = require(script.Parent.ShopService)
 
 local BotService = {}
 
@@ -63,6 +67,10 @@ type Bot = {
 	checkAt: number,
 	checkFrom: Vector3,
 	detourUntil: number,
+	-- Until when it holds its next ability and its next swing, and the enemy hero it last turned on.
+	calmUntil: number,
+	swingAt: number,
+	focus: Instance?,
 }
 
 type Target = {
@@ -76,6 +84,7 @@ type Target = {
 local bots: { Bot } = {}
 local folder: Folder
 local fronts: { [string]: Vector3 } = {}
+local stalls: { [string]: { Vector3 } } = {}
 local made = 0
 local walls = RaycastParams.new()
 walls.FilterType = Enum.RaycastFilterType.Exclude
@@ -240,9 +249,29 @@ local function use(b: Bot, key: string, aim: Vector3): boolean
 	return ok
 end
 
--- An ability the bot could use now, used with chance Reaction.
-local function maybe(b: Bot, key: string, aim: Vector3): boolean
-	return CombatService.ready(b.actor, key) and math.random() < SETTINGS.Reaction and use(b, key, aim)
+local function reaction(): number
+	return SETTINGS.Reaction.Min + math.random() * (SETTINGS.Reaction.Max - SETTINGS.Reaction.Min)
+end
+
+-- An ability the bot could use now, once it has waited its reaction time since the last.
+local function maybe(b: Bot, key: string, aim: Vector3, now: number): boolean
+	if now < b.calmUntil or not use(b, key, aim) then
+		return false
+	end
+	b.calmUntil = now + reaction()
+	return true
+end
+
+-- Somewhere up to Stray studs from `at`, where a leap or dash aimed at it lands.
+local function stray(at: Vector3): Vector3
+	local angle = math.random() * 2 * math.pi
+	return at + Vector3.new(math.cos(angle), 0, math.sin(angle)) * (math.random() * SETTINGS.Stray)
+end
+
+-- `at` turned round `from` by up to Miss degrees either way, where a thrown dagger flies.
+local function miss(from: Vector3, at: Vector3): Vector3
+	local turn = CFrame.Angles(0, math.rad((math.random() * 2 - 1) * SETTINGS.Miss), 0)
+	return from + turn:VectorToWorldSpace(at - from)
 end
 
 local function fight(b: Bot, target: Target, others: { Target }, now: number)
@@ -252,11 +281,16 @@ local function fight(b: Bot, target: Target, others: { Target }, now: number)
 	local gap = offset.Magnitude - target.radius
 	local used = false
 	if target.hero then
-		local lead = target.position + HeroKit.flat(target.velocity) * (gap / kit.E.ProjectileSpeed)
-		used = (gap <= kit.R.Range - 1 and maybe(b, "R", target.position))
-			or (gap >= 5 and gap <= kit.M2.Range - 2 and maybe(b, "M2", target.position))
-			or (gap <= kit.E.Range - 4 and clear(root.Position, target.position) and maybe(b, "E", lead))
-			or (gap >= 7 and gap <= kit.Dash.Range - 2 and maybe(b, "Dash", target.position))
+		local lead = target.position + HeroKit.flat(target.velocity) * (gap / kit.E.ProjectileSpeed * SETTINGS.Lead)
+		used = (gap <= kit.R.Range - 1 and maybe(b, "R", stray(target.position), now))
+			or (gap >= 5 and gap <= kit.M2.Range - 2 and maybe(b, "M2", stray(target.position), now))
+			or (gap <= kit.E.Range - 4 and clear(root.Position, target.position) and maybe(
+				b,
+				"E",
+				miss(root.Position, lead),
+				now
+			))
+			or (gap >= 7 and gap <= kit.Dash.Range - 2 and maybe(b, "Dash", stray(target.position), now))
 	else
 		local crowd = 0
 		for _, other in others do
@@ -264,11 +298,11 @@ local function fight(b: Bot, target: Target, others: { Target }, now: number)
 				crowd += 1
 			end
 		end
-		used = (crowd >= 3 and maybe(b, "R", target.position))
-			or (gap > 6 and gap <= 30 and clear(root.Position, target.position) and maybe(b, "E", target.position))
+		used = (crowd >= 3 and maybe(b, "R", target.position, now))
+			or (gap > 6 and gap <= 30 and clear(root.Position, target.position) and maybe(b, "E", target.position, now))
 	end
-	if not used and gap <= kit.M1.Hits[1].Range - 0.5 then
-		use(b, "M1", target.position)
+	if not used and gap <= kit.M1.Hits[1].Range - 0.5 and now >= b.swingAt and use(b, "M1", target.position) then
+		b.swingAt = now + math.random() * SETTINGS.Rest
 	end
 	if gap > 3 then
 		walkTo(b, target.position, now)
@@ -325,17 +359,114 @@ local function spend(b: Bot)
 	end
 end
 
+-- The parts of `id` the bot lacks, at every depth, with the ones it holds (`pool`) taken out as they are counted.
+local function missingParts(id: string, pool: { string }, out: { string })
+	for _, part in Config.Items[id].From or {} do
+		local found = table.find(pool, part)
+		if found then
+			table.remove(pool, found)
+		else
+			table.insert(out, part)
+			missingParts(part, pool, out)
+		end
+	end
+end
+
+-- At the armory the bot buys the next item of its Build, or while that is too dear the dearest part of it it can
+-- afford; an item it cannot carry is passed over.
+local function shop(b: Bot)
+	if not ShopService.atShop(b.actor) then
+		return
+	end
+	local step = b.actor:GetAttribute("BuildStep") or 1
+	local id = SETTINGS.Build[step]
+	if not id then
+		return
+	end
+	local ok, why = Items.check(b.actor, id)
+	if ok then
+		ShopService.buy(b.actor, id)
+		b.actor:SetAttribute("BuildStep", step + 1)
+		return
+	elseif why ~= "Not enough coins" then
+		b.actor:SetAttribute("BuildStep", step + 1)
+		return
+	end
+	local pool = {}
+	for _, slot in Items.bag(b.actor) do
+		table.insert(pool, slot.id)
+	end
+	local parts = {}
+	missingParts(id, pool, parts)
+	table.sort(parts, function(x, y)
+		return Config.Items[x].Cost > Config.Items[y].Cost
+	end)
+	for _, part in parts do
+		if Items.check(b.actor, part) then
+			ShopService.buy(b.actor, part)
+			return
+		end
+	end
+end
+
+-- A bot drinks a potion when it is low and none is healing it.
+local function drink(b: Bot)
+	local humanoid = b.humanoid :: Humanoid
+	local ends = b.actor:GetAttribute("PotionUntil") or 0
+	if
+		humanoid.Health < humanoid.MaxHealth * SETTINGS.PotionAt
+		and ends <= Workspace:GetServerTimeNow()
+		and Items.count(b.actor, "HealthPotion") > 0
+	then
+		ShopService.drink(b.actor)
+	end
+end
+
+-- The nearest of the bot's team's armory stalls.
+local function nearestStall(b: Bot, from: Vector3): Vector3?
+	local best, bestGap = nil, math.huge
+	for _, spot in stalls[b.team] or {} do
+		local gap = HeroKit.flat(spot - from).Magnitude
+		if gap < bestGap then
+			best, bestGap = spot, gap
+		end
+	end
+	return best
+end
+
 local function think(b: Bot, now: number)
-	if not alive(b) or b.move then
+	if not alive(b) then
+		if SETTINGS.Buys then
+			shop(b)
+		end
+		return
+	end
+	if b.move then
 		return
 	end
 	spend(b)
-	if not MatchService.fighting() then
-		return
+	if SETTINGS.Buys then
+		shop(b)
+		drink(b)
 	end
 	local root = b.root :: BasePart
+	-- In the buy phase a bot that buys walks to its armory stall and shops there; the others wait on their pad.
+	if not MatchService.fighting() then
+		local stall = SETTINGS.Buys and nearestStall(b, root.Position)
+		if stall and not ShopService.atShop(b.actor) then
+			walkTo(b, stall, now)
+		else
+			(b.humanoid :: Humanoid):Move(Vector3.zero)
+		end
+		return
+	end
 	local heroes, others = enemiesNear(b.team, root.Position, SETTINGS.Sight)
 	local target = nearest(heroes, root.Position) or nearest(others, root.Position)
+	-- A hero it turns on gets a moment before the first ability, as a person needs to see him coming.
+	if target and target.hero and target.instance ~= b.focus then
+		b.calmUntil = math.max(b.calmUntil, now + reaction())
+	end
+	b.focus = if target and target.hero then target.instance else b.focus
 	if target then
 		fight(b, target, others, now)
 	else
@@ -379,7 +510,7 @@ local function spawnHero(b: Bot)
 		return
 	end
 	character.Name = hero
-	local humanoid = HeroService.prepare(character, hero, b.team, Leveling.level(b.actor :: any))
+	local humanoid = HeroService.prepare(character, hero, b.team, b.actor)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not humanoid or not root then
 		character:Destroy()
@@ -436,6 +567,9 @@ local function addBot(team: string)
 		checkAt = 0,
 		checkFrom = Vector3.zero,
 		detourUntil = 0,
+		calmUntil = 0,
+		swingAt = 0,
+		focus = nil,
 	}
 	table.insert(bots, b)
 	task.spawn(spawnHero, b)
@@ -478,10 +612,17 @@ end
 
 export type Layout = {
 	daisFront: { [string]: Vector3 },
+	shops: { [string]: { CFrame } },
 }
 
 function BotService.start(layout: Layout)
 	fronts = layout.daisFront
+	for team, list in layout.shops do
+		stalls[team] = {}
+		for _, spot in list do
+			table.insert(stalls[team], spot.Position)
+		end
+	end
 	folder = Instance.new("Folder")
 	folder.Name = "Bots"
 	folder.Parent = ServerStorage

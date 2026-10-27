@@ -27,6 +27,20 @@ function Actors.character(actor: Instance): Model?
 	return characters[actor]
 end
 
+-- The player or bot who plays the hero `character`, if any.
+function Actors.owner(character: Model): Instance?
+	local player = Players:GetPlayerFromCharacter(character)
+	if player then
+		return player
+	end
+	for bot, model in characters do
+		if model == character then
+			return bot
+		end
+	end
+	return nil
+end
+
 function Actors.addBot(bot: Instance)
 	table.insert(bots, bot)
 end

@@ -1,7 +1,8 @@
 -- The ability bar at the bottom centre (design 05): a slot per key (M1, M2, E, R, Shift) on a parchment panel, with the
 -- hero's icon for it (Config.Heroes[hero].Icons) over the key, each darkening from the top while its cooldown runs with the seconds left on it, and lighting up while it is held to aim.
 -- Under M2, E and R a pill with the ability's rank as pips; with a point to spend it lights up with the key that
--- raises it (1, 2, 3), which, or a click on the pill, raises the rank through Net.Upgrade (Shared.Leveling).
+-- raises it (1, 2, 3), which, or a click on the pill, raises the rank through Net.Upgrade (Shared.Leveling). An
+-- ability not learned yet shows its icon greyed out.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,6 +24,8 @@ local UPGRADE_KEYS = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three }
 local SLOT = 104
 local GAP = 14
 local PILL = 30
+-- A rank pip, and the step from one to the next.
+local PIP, PIP_STEP = 11, 13
 local SLOT_TOP = Color3.fromRGB(250, 238, 206)
 local SLOT_BOTTOM = Color3.fromRGB(222, 196, 146)
 
@@ -38,7 +41,7 @@ type Slot = {
 	rank: Rank?,
 }
 
--- The pill under a slot that can be raised: its rank as three pips; with a point to spend it lights up gold, with the
+-- The pill under a slot that can be raised: its rank as pips (Progress.MaxRank); with a point to spend it lights up gold, with the
 -- key that raises it on the left and a "+" on the right.
 type Rank = {
 	pill: TextButton,
@@ -114,9 +117,10 @@ local function slot(parent: Instance, key: string, index: number): Slot
 		local gradient = UiStyle.gradient(pill, C.CreamDark, Color3.fromRGB(206, 178, 124))
 		local stroke = UiStyle.stroke(pill, C.GoldDark, 2)
 		local pips = {}
-		for i = 1, Config.Progress.MaxRank do
-			local pip =
-				UiStyle.frame(pill, UDim2.fromOffset(13, 13), UDim2.new(0.5, (i - 2) * 19, 0.5, 0), Vector2.one / 2)
+		local most = Config.Progress.MaxRank
+		for i = 1, most do
+			local along = (i - (most + 1) / 2) * PIP_STEP
+			local pip = UiStyle.frame(pill, UDim2.fromOffset(PIP, PIP), UDim2.new(0.5, along, 0.5, 0), Vector2.one / 2)
 			UiStyle.corner(pip, UDim.new(0.5, 0))
 			UiStyle.stroke(pip, C.Edge, 1.5)
 			table.insert(pips, pip)
@@ -138,12 +142,15 @@ local function slot(parent: Instance, key: string, index: number): Slot
 	return s
 end
 
--- Shows the ranks, and lights up what can be raised.
+-- Shows the ranks, greys out what is not learned yet, and lights up what can be raised.
 local function showRanks()
 	for _, key in Config.Progress.Upgrades do
 		local r = slots[key] and slots[key].rank
 		if r then
 			local rank = Leveling.rank(player, key)
+			local s = slots[key]
+			s.icon.ImageColor3 = if rank >= 1 then Color3.new(1, 1, 1) else Color3.fromRGB(90, 84, 78)
+			s.icon.ImageTransparency = if rank >= 1 then 0 else 0.35
 			for i, pip in r.pips do
 				pip.BackgroundColor3 = if i <= rank then Color3.fromRGB(255, 196, 48) else Color3.fromRGB(120, 96, 70)
 			end

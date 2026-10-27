@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Motion = require(ReplicatedStorage.Shared.Motion)
 local ProgressService = require(script.Parent.ProgressService)
@@ -79,12 +80,14 @@ function HeroService.pad(team: string): CFrame
 	return list[nextPad[team]]
 end
 
--- Makes `character` the hero `hero` of `team` at `level`: its attributes, head, weapons, health and speed. It becomes
--- a "Combatant" once it is in the world (HeroService.enlist).
-function HeroService.prepare(character: Model, hero: string, team: string, level: number): Humanoid?
+-- Makes `character` the hero `hero` of `team` for `actor` (a player or bot): its attributes, head, weapons, health
+-- and speed, with his level and items; "AttackSpeed" is his items' speed-up of the M1 combo, for every client. It
+-- becomes a "Combatant" once it is in the world (HeroService.enlist).
+function HeroService.prepare(character: Model, hero: string, team: string, actor: Instance): Humanoid?
 	character:SetAttribute("Hero", hero)
 	character:SetAttribute("Team", team)
-	character:SetAttribute("Level", level)
+	character:SetAttribute("Level", Leveling.level(actor :: any))
+	character:SetAttribute("AttackSpeed", Items.attackSpeed(actor))
 	local head = character:FindFirstChild("Head")
 	if Config.Heroes[hero].Look.HideHead and head and head:IsA("BasePart") then
 		head.Transparency = 1
@@ -92,9 +95,9 @@ function HeroService.prepare(character: Model, hero: string, team: string, level
 	arm(character, hero)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		humanoid.MaxHealth = Leveling.maxHealth(Config.Heroes[hero].Health, level)
+		humanoid.MaxHealth = Leveling.heroHealth(actor :: any, hero)
 		humanoid.Health = humanoid.MaxHealth
-		humanoid.WalkSpeed = Config.Combat.WalkSpeed
+		humanoid.WalkSpeed = Items.walkSpeed(actor)
 		-- A hero falls down whole when he dies, as StarterPlayer has it for players; a bot's model would fall apart.
 		humanoid.BreakJointsOnDeath = false
 		-- The HUD draws every hero's bar in its team's colour instead (HeroBars).
@@ -138,7 +141,7 @@ function HeroService.start(layout: Layout)
 		if not character then
 			return
 		end
-		local humanoid = HeroService.prepare(character, hero, "Blue", Leveling.level(player))
+		local humanoid = HeroService.prepare(character, hero, "Blue", player)
 		character:PivotTo(HeroService.pad("Blue"))
 		if humanoid then
 			HeroService.enlist(character)
