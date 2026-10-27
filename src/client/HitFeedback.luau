@@ -1,24 +1,116 @@
 -- Shows every hit a hero lands (Net.HeroHit from the server: the target, the damage, where, and who struck): the target
--- flashes white for a moment, and the striker sees the damage jump up from it, gold and larger the harder the hit.
+-- flashes white for a moment, brighter the harder the hit, and the striker sees the damage pop up from it and arc away,
+-- to the left and right in turn. How hard a hit was reads at a glance from its tier (TIERS): light hits small and
+-- white, medium ones gold, heavy ones big, red-hot and with a burst of sparks.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local MinionView = require(script.Parent.MinionView)
+local UiStyle = require(script.Parent.UiStyle)
 
 local HitFeedback = {}
 
-local GOLD = Color3.fromRGB(255, 214, 102)
-local OUTLINE = Color3.fromRGB(60, 34, 8)
+type Tier = {
+	from: number,
+	size: number,
+	top: Color3,
+	bottom: Color3,
+	edge: Color3,
+	stroke: number,
+	-- How far it overshoots when it pops up (the back-ease's constant: 2 about 13 %, 3 25 %, 4.5 45 %), and how bright the
+	-- target flashes (0 white, 1 not at all).
+	pop: number,
+	flash: number,
+	sparks: number,
+}
+
+-- From the lightest; a hit takes the last tier whose `from` it reaches.
+local TIERS: { Tier } = {
+	{
+		from = 0,
+		size = 30,
+		top = Color3.fromRGB(255, 255, 255),
+		bottom = Color3.fromRGB(214, 224, 236),
+		edge = Color3.fromRGB(34, 38, 56),
+		stroke = 2.5,
+		pop = 2,
+		flash = 0.45,
+		sparks = 0,
+	},
+	{
+		from = 50,
+		size = 40,
+		top = Color3.fromRGB(255, 240, 150),
+		bottom = Color3.fromRGB(255, 176, 30),
+		edge = Color3.fromRGB(86, 44, 0),
+		stroke = 3,
+		pop = 3,
+		flash = 0.25,
+		sparks = 0,
+	},
+	{
+		from = 90,
+		size = 54,
+		top = Color3.fromRGB(255, 168, 64),
+		bottom = Color3.fromRGB(232, 28, 22),
+		edge = Color3.fromRGB(60, 4, 0),
+		stroke = 3.5,
+		pop = 4.5,
+		flash = 0.05,
+		sparks = 14,
+	},
+}
+
+-- A heal from a spawn pad (HitFeedback.heal), in the health bar's green.
+local HEAL: Tier = {
+	from = 0,
+	size = 38,
+	top = Color3.fromRGB(196, 255, 150),
+	bottom = Color3.fromRGB(70, 214, 60),
+	edge = Color3.fromRGB(14, 64, 10),
+	stroke = 3,
+	pop = 3,
+	flash = 1,
+	sparks = 0,
+}
+
 local FLASH_TIME = 0.18
-local NUMBER_TIME = 0.75
+-- A number pops up over POP seconds, flies for LIFE seconds in all, and fades over the last FADE of them.
+local POP, LIFE, FADE = 0.16, 0.85, 0.3
+-- Its arc: it starts this high over the hit, rises at RISE studs a second against GRAVITY, and drifts SPREAD studs aside.
+local START_HEIGHT, RISE, GRAVITY, SPREAD = 3.2, 6.5, 12, 1.6
+
+type Number = {
+	gui: BillboardGui,
+	scale: UIScale,
+	label: TextLabel,
+	stroke: UIStroke,
+	tier: Tier,
+	started: number,
+	side: Vector3,
+	tilt: number,
+}
 
 local player = Players.LocalPlayer
 local flashing: { [Instance]: Highlight } = {}
+local live: { Number } = {}
+local nextSide = 1
 
-local function flash(target: Instance)
+local function tierOf(amount: number): Tier
+	local found = TIERS[1]
+	for _, tier in TIERS do
+		if amount >= tier.from then
+			found = tier
+		end
+	end
+	return found
+end
+
+local function flash(target: Instance, tier: Tier)
 	local model = if target:IsA("BasePart") then MinionView.modelOf(target) else target
 	if not model then
 		return
@@ -34,7 +126,7 @@ local function flash(target: Instance)
 		flashing[model] = highlight
 	end
 	local h = highlight :: Highlight
-	h.FillTransparency = 0.25
+	h.FillTransparency = math.min(h.FillTransparency, tier.flash)
 	TweenService:Create(h, TweenInfo.new(FLASH_TIME), { FillTransparency = 1 }):Play()
 	task.delay(FLASH_TIME + 0.05, function()
 		if flashing[model] == h and h.FillTransparency >= 0.99 then
@@ -44,7 +136,27 @@ local function flash(target: Instance)
 	end)
 end
 
-local function number(at: Vector3, amount: number)
+local function sparks(anchor: BasePart, tier: Tier)
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Enabled = false
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.Color = ColorSequence.new(tier.top, tier.bottom)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.9),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Transparency = NumberSequence.new(0)
+	emitter.Lifetime = NumberRange.new(0.18, 0.32)
+	emitter.Speed = NumberRange.new(14, 24)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Drag = 6
+	emitter.ZOffset = 2
+	emitter.Parent = anchor
+	emitter:Emit(tier.sparks)
+end
+
+local function number(at: Vector3, text: string, tier: Tier)
 	local anchor = Instance.new("Part")
 	anchor.Anchored = true
 	anchor.CanCollide = false
@@ -52,46 +164,105 @@ local function number(at: Vector3, amount: number)
 	anchor.CanTouch = false
 	anchor.Transparency = 1
 	anchor.Size = Vector3.new(0.2, 0.2, 0.2)
-	anchor.Position = at + Vector3.new(math.random(-10, 10) / 10, 3.5, math.random(-10, 10) / 10)
+	anchor.Position = at
+
 	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(120, 50)
+	gui.Size = UDim2.fromOffset(220, 90)
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
 	gui.Adornee = anchor
+	gui.StudsOffsetWorldSpace = Vector3.new(0, START_HEIGHT, 0)
 	local label = Instance.new("TextLabel")
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromScale(0.5, 0.5)
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBlack
-	label.Text = tostring(math.round(amount))
-	label.TextColor3 = GOLD
-	label.TextSize = math.clamp(18 + amount / 6, 20, 40)
+	label.Font = UiStyle.Font
+	label.Text = text
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.TextSize = tier.size
 	label.Parent = gui
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(tier.top, tier.bottom)
+	gradient.Rotation = 90
+	gradient.Parent = label
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = OUTLINE
-	stroke.Thickness = 2
+	stroke.Color = tier.edge
+	stroke.Thickness = tier.stroke
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
 	stroke.Parent = label
+	local scale = Instance.new("UIScale")
+	scale.Scale = 0.2
+	scale.Parent = label
 	gui.Parent = anchor
 	anchor.Parent = Workspace:FindFirstChild("Effects") or Workspace
-	local info = TweenInfo.new(NUMBER_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	TweenService:Create(anchor, info, { Position = anchor.Position + Vector3.new(0, 2.5, 0) }):Play()
-	TweenService:Create(label, info, { TextTransparency = 1 }):Play()
-	TweenService:Create(stroke, info, { Transparency = 1 }):Play()
-	task.delay(NUMBER_TIME, function()
+	if tier.sparks > 0 then
+		sparks(anchor, tier)
+	end
+
+	local camera = Workspace.CurrentCamera
+	local right = if camera then camera.CFrame.RightVector else Vector3.xAxis
+	nextSide = -nextSide
+	table.insert(live, {
+		gui = gui,
+		scale = scale,
+		label = label,
+		stroke = stroke,
+		tier = tier,
+		started = os.clock(),
+		side = right * nextSide * SPREAD * (0.75 + math.random() * 0.5),
+		tilt = nextSide * (if tier.sparks > 0 then 8 else 3),
+	})
+	task.delay(LIFE + 0.4, function()
 		anchor:Destroy()
 	end)
+end
+
+local function easeOutBack(a: number, overshoot: number): number
+	local c = overshoot
+	return 1 + (c + 1) * (a - 1) ^ 3 + c * (a - 1) ^ 2
+end
+
+local function update()
+	local now = os.clock()
+	for i = #live, 1, -1 do
+		local n = live[i]
+		local t = now - n.started
+		if t >= LIFE or not n.gui.Parent then
+			n.gui.Enabled = false
+			table.remove(live, i)
+			continue
+		end
+		local pop = math.clamp(t / POP, 0, 1)
+		local size = easeOutBack(pop, n.tier.pop)
+		local fade = math.clamp((t - (LIFE - FADE)) / FADE, 0, 1)
+		n.scale.Scale = math.max(0.05, size * (1 - 0.35 * fade))
+		n.label.Rotation = n.tilt * (1 - pop)
+		n.label.TextTransparency = fade
+		n.stroke.Transparency = fade
+		local drift = math.min(1, t / LIFE)
+		n.gui.StudsOffsetWorldSpace = Vector3.new(0, START_HEIGHT + RISE * t - GRAVITY * t * t / 2, 0) + n.side * drift
+	end
+end
+
+-- Shows the player's hero healing `amount` at `at`, as a green "+amount".
+function HitFeedback.heal(at: Vector3, amount: number)
+	number(at, "+" .. math.round(amount), HEAL)
 end
 
 function HitFeedback.start()
 	local net = ReplicatedStorage:WaitForChild("Net")
 	local event = net:WaitForChild("HeroHit") :: RemoteEvent
 	event.OnClientEvent:Connect(function(target: Instance, amount: number, at: Vector3, striker: Player?)
+		local tier = tierOf(amount)
 		if target and target.Parent then
-			flash(target)
+			flash(target, tier)
 		end
 		if striker == player then
-			number(at, amount)
+			number(at, tostring(math.round(amount)), tier)
 		end
 	end)
+	RunService.RenderStepped:Connect(update)
 end
 
 return HitFeedback

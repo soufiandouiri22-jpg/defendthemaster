@@ -4,7 +4,9 @@
 -- motion on the enemies there: the other team's minions and Combatants (heroes, Masters). A refused attack is sent
 -- back to its client (Net.HeroRefused), which stops the motion it already began. Thrown daggers fly on the server
 -- (Net.HeroProjectile: id, origin, direction, speed, range; Net.HeroProjectileEnd: id, where it stopped, hit or not).
--- Every hit is told to the clients for its feedback (Net.HeroHit: target, damage, where, the striking player).
+-- Every hit is told to the clients for its feedback (Net.HeroHit: target, damage, where, the striking player). Bots
+-- (Actors, BotService) attack through CombatService.act, with the same checks; they move through their leaps and
+-- dashes on the server (CombatService.act gives where they land), as a player's client moves him.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -16,6 +18,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Motion = require(ReplicatedStorage.Shared.Motion)
+local Actors = require(script.Parent.Actors)
+local MatchService = require(script.Parent.MatchService)
 local MinionService = require(script.Parent.MinionService)
 local ProgressService = require(script.Parent.ProgressService)
 
@@ -47,7 +51,7 @@ type Enemy = {
 
 type Projectile = {
 	id: number,
-	player: Player,
+	player: Instance,
 	character: Model,
 	team: string,
 	position: Vector3,
@@ -58,7 +62,7 @@ type Projectile = {
 	damage: number,
 }
 
-local states: { [Player]: State } = {}
+local states: { [Instance]: State } = {}
 local projectiles: { Projectile } = {}
 local nextProjectile = 0
 local net: Folder
@@ -107,12 +111,12 @@ local function enemiesNear(team: string, centre: Vector3, reach: number): { Enem
 	return found
 end
 
-local function damage(player: Player, character: Model, enemy: Enemy, amount: number)
+local function damage(player: Instance, character: Model, enemy: Enemy, amount: number)
 	local target = enemy.instance
 	amount = math.round(amount)
-	hitEvent:FireAllClients(target, amount, enemy.position, player)
+	hitEvent:FireAllClients(target, amount, enemy.position, if player:IsA("Player") then player else nil)
 	if target:IsA("BasePart") then
-		MinionService.damage(target, amount, player)
+		MinionService.damage(target, amount, player :: any)
 		return
 	end
 	local model = target :: Model
@@ -155,7 +159,7 @@ local function slow(state: State, length: number, speed: number)
 end
 
 local function strikeCone(
-	player: Player,
+	player: Instance,
 	state: State,
 	team: string,
 	direction: Vector3,
@@ -175,7 +179,7 @@ local function strikeCone(
 	end
 end
 
-local function launch(player: Player, state: State, team: string, direction: Vector3, kit: any, amount: number)
+local function launch(player: Instance, state: State, team: string, direction: Vector3, kit: any, amount: number)
 	local root = rootOf(state.character)
 	if not root then
 		return
@@ -227,26 +231,41 @@ local function stepProjectiles(dt: number)
 	end
 end
 
-local function act(player: Player, key: string, aim: Vector3)
+local function refuse(player: Instance, key: string): (boolean, Vector3?)
+	if player:IsA("Player") then
+		refusedEvent:FireClient(player, key)
+	end
+	return false, nil
+end
+
+-- `player` (or a bot) attacks with `key` towards `aim`. Whether the attack began, and for a leap or a dash where the
+-- hero lands.
+local function act(player: Instance, key: string, aim: Vector3): (boolean, Vector3?)
 	local state = states[player]
-	local character = player.Character
-	if not state or not character or state.character ~= character or not alive(character) then
-		return refusedEvent:FireClient(player, key)
+	local character = Actors.character(player)
+	if
+		not MatchService.fighting()
+		or not state
+		or not character
+		or state.character ~= character
+		or not alive(character)
+	then
+		return refuse(player, key)
 	end
 	local hero = character:GetAttribute("Hero")
 	local settings = hero and Config.Heroes[hero]
 	local root = rootOf(character)
 	if not settings or not root then
-		return refusedEvent:FireClient(player, key)
+		return refuse(player, key)
 	end
 	local kit = settings.Kit[key]
 	local now = os.clock()
 	if not kit or now + EARLY < state.busyUntil or now + EARLY < (state.cooldowns[key] or 0) then
-		return refusedEvent:FireClient(player, key)
+		return refuse(player, key)
 	end
 	local team = character:GetAttribute("Team") or "Blue"
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
-	local power = Leveling.power(player, key)
+	local power = Leveling.power(player :: any, key)
 	state.motion += 1
 
 	if kit.Kind == "Combo" then
@@ -261,11 +280,11 @@ local function act(player: Player, key: string, aim: Vector3)
 		later(state, hit.Hit / kit.Speed, function()
 			strikeCone(player, state, team, direction, hit.Range, hit.Angle, hit.Damage * power)
 		end)
-		return
+		return true, nil
 	end
 
 	local length = Motion.meta(settings.Pack, kit.Motion).duration
-	state.cooldowns[key] = now + Leveling.cooldown(player, key, kit.Cooldown)
+	state.cooldowns[key] = now + Leveling.cooldown(player :: any, key, kit.Cooldown)
 	state.comboUntil = 0
 	if kit.Kind == "Leap" then
 		local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
@@ -286,6 +305,7 @@ local function act(player: Player, key: string, aim: Vector3)
 				end
 			end
 		end)
+		return true, landing
 	elseif kit.Kind == "Dash" then
 		local from = root.Position
 		local landing = HeroKit.dashEnd(from, direction, kit.Range, HeroKit.leapIgnore())
@@ -314,6 +334,7 @@ local function act(player: Player, key: string, aim: Vector3)
 				end
 			end)
 		end
+		return true, landing
 	elseif kit.Kind == "Throw" then
 		state.busyUntil = now + kit.Release + RECOVER
 		motionEvent:FireAllClients(character, key, 0)
@@ -331,6 +352,32 @@ local function act(player: Player, key: string, aim: Vector3)
 			end)
 		end
 	end
+	return true, nil
+end
+
+CombatService.act = act
+
+-- Starts keeping the attacks of `player`'s (or a bot's) hero `character`.
+function CombatService.track(player: Instance, character: Model)
+	states[player] = {
+		character = character,
+		busyUntil = 0,
+		combo = 0,
+		comboUntil = 0,
+		cooldowns = {},
+		motion = 0,
+	}
+end
+
+function CombatService.forget(player: Instance)
+	states[player] = nil
+end
+
+-- Whether `player`'s hero is free to use `key` now: not in a motion, and off its cooldown.
+function CombatService.ready(player: Instance, key: string): boolean
+	local state = states[player]
+	local now = os.clock()
+	return state ~= nil and now >= state.busyUntil and now >= (state.cooldowns[key] or 0)
 end
 
 function CombatService.start()
@@ -357,14 +404,7 @@ function CombatService.start()
 
 	local function track(player: Player)
 		local function added(character: Model)
-			states[player] = {
-				character = character,
-				busyUntil = 0,
-				combo = 0,
-				comboUntil = 0,
-				cooldowns = {},
-				motion = 0,
-			}
+			CombatService.track(player, character)
 		end
 		player.CharacterAdded:Connect(added)
 		if player.Character then

@@ -1,9 +1,10 @@
--- The match's state for the HUD (design 05), as the server's attributes on Workspace: "MatchStart" (the server time
--- the match began), "Score" .. team (the enemy heroes the team killed), and "Master" .. team and "MasterMax" .. team
+-- The match's state for the HUD (design 05), as the server's attributes on Workspace: "FightAt" (the server time the
+-- buy phase of Config.Match ends), "MatchStart" (set when it does), "Score" .. team (the enemy heroes the team killed), and "Master" .. team and "MasterMax" .. team
 -- (its Master's health), and "Throne" .. team (where its Master sits, for the minimap). Until the Masters stand in the
 -- arena their health stays full.
 
 local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -14,6 +15,37 @@ local MatchService = {}
 -- The other team than `team`.
 function MatchService.enemyOf(team: string): string
 	return if team == Config.TeamOrder[1] then Config.TeamOrder[2] else Config.TeamOrder[1]
+end
+
+-- Whether the buy phase is over, so heroes may attack.
+function MatchService.fighting(): boolean
+	local at = Workspace:GetAttribute("FightAt")
+	return at ~= nil and Workspace:GetServerTimeNow() >= at
+end
+
+-- Waits until the buy phase is over.
+function MatchService.awaitFight()
+	while not MatchService.fighting() do
+		task.wait(0.1)
+	end
+end
+
+local function buyPhase()
+	local deadline = os.clock() + Config.Match.WaitForPlayer
+	while os.clock() < deadline do
+		local arrived = false
+		for _, player in Players:GetPlayers() do
+			arrived = arrived or player.Character ~= nil
+		end
+		if arrived then
+			break
+		end
+		task.wait(0.2)
+	end
+	local fightAt = Workspace:GetServerTimeNow() + Config.Match.BuyTime
+	Workspace:SetAttribute("FightAt", fightAt)
+	task.wait(Config.Match.BuyTime)
+	Workspace:SetAttribute("MatchStart", fightAt)
 end
 
 -- `team` killed an enemy hero.
@@ -47,7 +79,7 @@ export type Layout = {
 }
 
 function MatchService.start(layout: Layout)
-	Workspace:SetAttribute("MatchStart", Workspace:GetServerTimeNow())
+	task.spawn(buyPhase)
 	for _, team in Config.TeamOrder do
 		Workspace:SetAttribute("Throne" .. team, layout.thrones[team].Position)
 		Workspace:SetAttribute("Score" .. team, 0)

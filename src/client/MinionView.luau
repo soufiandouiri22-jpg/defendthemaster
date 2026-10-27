@@ -54,7 +54,8 @@ local function healthBar(body: BasePart, team: string): Frame
 	gui.Size = UDim2.fromScale(3.2, 0.34)
 	gui.StudsOffsetWorldSpace = Vector3.new(0, 3.5, 0)
 	gui.LightInfluence = 0
-	gui.MaxDistance = 160
+	-- Only the minions near the fight, measured from the camera.
+	gui.MaxDistance = 55
 	gui.Adornee = body
 	local back = Instance.new("Frame")
 	back.Size = UDim2.fromScale(1, 1)

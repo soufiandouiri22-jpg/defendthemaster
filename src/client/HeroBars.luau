@@ -18,14 +18,17 @@ local function levelOf(model: Model): number
 	return (if owner then owner:GetAttribute("Level") else model:GetAttribute("Level")) or 1
 end
 
-local function add(instance: Instance)
-	if not instance:IsA("Model") or not instance:GetAttribute("Hero") or instance == Players.LocalPlayer.Character then
-		return
-	end
-	local model = instance :: Model
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if bars[model] or not humanoid or not root then
+local function build(model: Model)
+	-- While the game loads, a hero's tag can arrive before its parts.
+	local humanoid = model:WaitForChild("Humanoid", 10) :: Humanoid?
+	local root = model:WaitForChild("HumanoidRootPart", 10) :: BasePart?
+	if
+		bars[model]
+		or not humanoid
+		or not root
+		or not CollectionService:HasTag(model, "Combatant")
+		or model == Players.LocalPlayer.Character
+	then
 		return
 	end
 	local team = model:GetAttribute("Team") or "Blue"
@@ -36,7 +39,8 @@ local function add(instance: Instance)
 	gui.Size = UDim2.fromOffset(WIDTH + KNOB / 2, KNOB)
 	gui.StudsOffsetWorldSpace = Vector3.new(0, 4.4, 0)
 	gui.LightInfluence = 0
-	gui.MaxDistance = 220
+	-- Only the heroes near enough to matter, measured from the camera: further bars would crowd the screen.
+	gui.MaxDistance = 75
 	gui.Adornee = root
 
 	local bar = UiStyle.bar(
@@ -67,10 +71,18 @@ local function add(instance: Instance)
 	local owner = Players:GetPlayerFromCharacter(model)
 	if owner then
 		owner:GetAttributeChangedSignal("Level"):Connect(update)
+	else
+		model:GetAttributeChangedSignal("Level"):Connect(update)
 	end
 	update()
 	gui.Parent = model
 	bars[model] = gui
+end
+
+local function add(instance: Instance)
+	if instance:IsA("Model") and instance:GetAttribute("Hero") and instance ~= Players.LocalPlayer.Character then
+		task.spawn(build, instance)
+	end
 end
 
 local function remove(instance: Instance)

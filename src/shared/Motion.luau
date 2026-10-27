@@ -236,16 +236,16 @@ local function advance(self: Motion, clip: Clip, delta: number, cued: boolean)
 	local length = clip.meta.duration
 	local to = clip.time
 	if clip.meta.loop and length > 0 then
-		while to > from do
-			local cycle = math.floor(from / length) * length
-			local stop = math.min(to, cycle + length)
+		-- Counted in whole cycles: stepping `from` to each cycle's end can round back into the same cycle forever.
+		local cycle = math.floor(from / length)
+		while cycle * length < to do
 			for _, cue in cues do
-				local at = cycle + cue.Time
-				if at > from and at <= stop then
+				local at = cycle * length + cue.Time
+				if at > from and at <= to then
 					onCue(cue)
 				end
 			end
-			from = stop
+			cycle += 1
 		end
 	else
 		for _, cue in cues do

@@ -16,6 +16,14 @@ return {
 	HudScoreboard = "rbxassetid://135647770824642",
 	-- The arena from straight above (Play, camera 380 studs up), MAP_REACH studs from the centre to the edge.
 	HudMinimap = "rbxassetid://113866338742572",
+	-- The spawn pads' rune circle and the ring that sweeps out at a respawn (Tools/pad_textures.py), white to be tinted.
+	PadRunes = "rbxassetid://96305253371811",
+	PadRing = "rbxassetid://88093541402245",
 	-- The match music, a seamless loop (Art/Music/determined_pursuit_loop.wav, uploaded by Tools/upload_audio.py).
 	Music = "rbxassetid://97712677913218",
+	-- The buy phase's sounds, Roblox's licensed library (Docs/Third_Party.md): the dark drum sting under "Purchase your
+	-- items!", the timpani of the last three seconds, and the deep boom of "FIGHT!".
+	BuySting = "rbxassetid://1842178392",
+	CountTick = "rbxassetid://1846284931",
+	FightBoom = "rbxassetid://9125484526",
 }

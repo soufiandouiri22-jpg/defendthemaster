@@ -154,7 +154,7 @@ local function buildTop(gui: Frame): () -> ()
 		redScore.Text =
 			string.format("%d %s", Workspace:GetAttribute("Score" .. red) or 0, string.upper(Config.Teams[red].Name))
 		local start = Workspace:GetAttribute("MatchStart")
-		clock.Text = UiStyle.clock(if start then Workspace:GetServerTimeNow() - start else 0)
+		clock.Text = UiStyle.clock(if start then math.max(0, Workspace:GetServerTimeNow() - start) else 0)
 	end
 end
 

@@ -19,7 +19,9 @@ local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Actors = require(script.Parent.Actors)
 local Economy = require(script.Parent.Economy)
+local MatchService = require(script.Parent.MatchService)
 local ProgressService = require(script.Parent.ProgressService)
 
 local MinionService = {}
@@ -77,7 +79,8 @@ type Minion = {
 	-- The enemy heroes who attacked it, one of its heroes or its Master, and until when each comes first.
 	callers: { [Model]: number },
 	nextAttack: number,
-	lastHitBy: Player?,
+	-- The player or bot (Actors) who hit it last.
+	lastHitBy: Instance?,
 	dead: boolean,
 }
 
@@ -150,7 +153,7 @@ local function kill(m: Minion)
 	end)
 end
 
-local function hurtMinion(m: Minion, amount: number, player: Player?)
+local function hurtMinion(m: Minion, amount: number, player: Instance?)
 	if m.dead then
 		return
 	end
@@ -549,13 +552,13 @@ end
 
 -- Damage to the minion whose root is `root`, from `player` (the bounty goes to the player who lands the last hit); the
 -- minion turns on the player's hero.
-function MinionService.damage(root: BasePart, amount: number, player: Player?)
+function MinionService.damage(root: BasePart, amount: number, player: Instance?)
 	local m = byRoot[root]
 	if not m then
 		return
 	end
 	hurtMinion(m, amount, player)
-	local attacker = player and player.Character
+	local attacker = player and Actors.character(player)
 	if attacker and not m.dead and attacker:GetAttribute("Team") ~= m.team then
 		call(m, attacker, os.clock())
 	end
@@ -654,6 +657,7 @@ function MinionService.start(layout: Layout)
 	end)
 
 	task.spawn(function()
+		MatchService.awaitFight()
 		task.wait(SETTINGS.FirstWave)
 		while true do
 			task.spawn(wave, layout.minionDoors)

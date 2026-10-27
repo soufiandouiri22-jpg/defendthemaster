@@ -5,14 +5,17 @@
 
 local ContentProvider = game:GetService("ContentProvider")
 local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HeroSounds = {}
 
 local VOLUME = 1
--- Heard at full strength within this many studs, fading out to nothing at the far one.
+-- Other heroes sound this much softer than the player's own, so he hears above all what he does.
+local OTHERS = 0.6
+-- Heard at full strength within this many studs, fading out to nothing at the far one: about what is on screen.
 local NEAR = 14
-local FAR = 160
+local FAR = 80
 
 export type Bank = {
 	Asset: string,
@@ -50,7 +53,8 @@ local function play(root: BasePart, bank: Bank, id: string, volume: number)
 	sound.SoundId = bank.Asset
 	sound.PlaybackRegionsEnabled = true
 	sound.PlaybackRegion = NumberRange.new(region[1], region[1] + region[2])
-	sound.Volume = volume * VOLUME
+	local own = root.Parent ~= nil and root.Parent == Players.LocalPlayer.Character
+	sound.Volume = volume * VOLUME * (if own then 1 else OTHERS)
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered
 	sound.RollOffMinDistance = NEAR
 	sound.RollOffMaxDistance = FAR

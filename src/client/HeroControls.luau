@@ -185,8 +185,14 @@ local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any
 	end)
 end
 
+-- Whether the buy phase is over (the server's "FightAt" on Workspace, as MatchService has it).
+local function fighting(): boolean
+	local at = Workspace:GetAttribute("FightAt")
+	return at ~= nil and Workspace:GetServerTimeNow() >= at
+end
+
 local function canAct(key: string, now: number): boolean
-	return now >= busyUntil and now >= (cooldowns[key] or 0)
+	return fighting() and now >= busyUntil and now >= (cooldowns[key] or 0)
 end
 
 local function stopAiming()

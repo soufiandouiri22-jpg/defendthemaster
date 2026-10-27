@@ -15,11 +15,29 @@ Config.Master = {
 	Health = 20000,
 }
 
--- Coins: every hero starts with enough for a potion and a small first item, and earns more by last hits on minions
--- and the killing blow on an enemy hero.
+-- Coins, in League of Legends' proportions (a hero kill is worth 14 Melee or 21 Spitter last hits, a legendary item
+-- about ten kills): every hero starts with enough for one or two small items in the buy phase (Config.Match), earns
+-- `Passive` coins every second once the fight began, and more by last hits on minions and by killing enemy heroes.
+-- A hero's bounty, what his killer earns: `HeroBounty` at first; less after he died again without a kill in between
+-- (`DeathBounty`, by those deaths: one, two or more), and `StreakBounty` more for every kill past the first since he
+-- last died, at most `StreakMax` more. So a hero who keeps dying is worth little, and one on a streak a lot. The other
+-- enemies who hurt him within Progress.KillCredit seconds share `Assist` of his bounty on top.
 Config.Economy = {
-	StartCoins = 500,
-	HeroBounty = 150,
+	StartCoins = 600,
+	Passive = 2,
+	HeroBounty = 300,
+	DeathBounty = { 270, 220, 175, 140, 110, 100 },
+	StreakBounty = 100,
+	StreakMax = 500,
+	Assist = 0.5,
+}
+
+-- The start of a match: once the first player is in, the heroes have `BuyTime` seconds to shop before the fight begins.
+-- Until then nobody can attack, no minions come and no passive coins are paid; the match clock starts with the fight.
+-- Without a player the buy phase starts after `WaitForPlayer` seconds.
+Config.Match = {
+	BuyTime = 15,
+	WaitForPlayer = 20,
 }
 
 -- Levels, as in League of Legends: when an enemy dies, the heroes of the other team within `Share` studs (and its
@@ -50,10 +68,11 @@ Config.Progress = {
 }
 
 -- The team minions (concept G, rock creatures with crystals): a wave leaves both of a team's doorways on its own half every
--- `WaveInterval` seconds and marches on the other team's Master, fighting every enemy it meets on the way. Only the last
--- hit earns the bounty. Ranges are from edge to edge, speeds in studs a second (a hero walks 16).
+-- `WaveInterval` seconds, the first `FirstWave` seconds after the fight began, and marches on the other team's Master,
+-- fighting every enemy it meets on the way. Only the last hit earns the bounty. Ranges are from edge to edge, speeds in
+-- studs a second (a hero walks 16).
 Config.Minions = {
-	FirstWave = 20,
+	FirstWave = 10,
 	WaveInterval = 30,
 	-- Per doorway and wave, in marching order: two doorways a team, so twelve minions a wave in all.
 	Wave = { "Spitter", "Spitter", "Spitter" },
@@ -71,15 +90,15 @@ Config.Minions = {
 	-- Minions do this share of their damage to a Master.
 	VsMaster = 0.5,
 	Kinds = {
-		Melee = { Health = 450, Damage = 12, Interval = 1.25, Range = 1.2, Speed = 11, Bounty = 20 },
-		Spitter = { Health = 280, Damage = 22, Interval = 1.6, Range = 18, Speed = 11, Bounty = 15, SpitSpeed = 45 },
+		Melee = { Health = 450, Damage = 12, Interval = 1.25, Range = 1.2, Speed = 11, Bounty = 21 },
+		Spitter = { Health = 280, Damage = 22, Interval = 1.6, Range = 18, Speed = 11, Bounty = 14, SpitSpeed = 45 },
 	},
 }
 
 -- The heroes. Each looks like a Roblox R15 avatar put together from catalog items (Docs/Third_Party.md): a classic
 -- shirt and pants, hair, a face accessory, and one skin colour on every body part. Faces come from the catalog too: R15
 -- heads are dynamic heads, on which a Decal face does not render. Until the draft exists every player plays
--- `DefaultHero`, and comes back on a spawn pad `RespawnTime` seconds after dying.
+-- `DefaultHero`, and comes back on a spawn pad after dying (Config.Respawn).
 --
 -- A hero moves and attacks with the motions of a bought animation pack (`Pack`, a folder in ReplicatedStorage with the
 -- pack's player and rig, Docs/Third_Party.md). The pack's rig has the R15 proportions of BodyTypeScale 0 and
@@ -196,7 +215,35 @@ Config.Heroes = {
 	},
 }
 Config.DefaultHero = "Shadowren"
-Config.RespawnTime = 5
+
+-- A dead hero waits `Base` seconds and `PerLevel` more for every level past the first, so deaths cost more as the
+-- match goes on; and `Streak` more for each time he died within `StreakWindow` seconds of his last death, at most
+-- `StreakMax` more. Surviving StreakWindow seconds clears it.
+-- A hero on one of his own team's spawn pads heals `Heal` of his health a second, in ticks of `Tick` seconds, unless
+-- an enemy hero hit him in the last `CombatPause` seconds (design 03).
+Config.Pads = {
+	Heal = 0.10,
+	Tick = 1,
+	CombatPause = 3,
+}
+
+Config.Respawn = {
+	Base = 6,
+	PerLevel = 2.5,
+	StreakWindow = 60,
+	Streak = 3,
+	StreakMax = 9,
+}
+
+-- Bots fill both teams up to `TeamSize` heroes, all playing `Hero`. A bot fights the nearest enemy hero within `Sight`
+-- studs, else the nearest other enemy there, else walks its lane behind its minions. Each tick an ability it could
+-- use is used with chance `Reaction`, so it does not answer every opening at once.
+Config.Bots = {
+	TeamSize = 4,
+	Hero = "Shadowren",
+	Sight = 40,
+	Reaction = 0.35,
+}
 
 -- Every hero walks `WalkSpeed`, and `AttackWalkSpeed` while a motion of his kit plays. Commands from a client for a
 -- hit further than `Slack` studs beyond the server's ranges are ignored.
