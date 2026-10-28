@@ -145,13 +145,17 @@ local function build(event: RemoteEvent)
 	-- Who is picking, and his time.
 	local title = Widgets.label(gui, "", 54, C.Cream, nil, C.Edge)
 	title.Size = UDim2.new(1, 0, 0, 64)
-	title.Position = UDim2.fromOffset(0, 18)
+	title.Position = UDim2.fromOffset(0, 42)
 	local timer = Widgets.label(gui, "", 92, C.Cream, nil, C.Edge)
 	timer.Size = UDim2.new(1, 0, 0, 96)
-	timer.Position = UDim2.fromOffset(0, 78)
+	timer.Position = UDim2.fromOffset(0, 102)
 
-	-- Everything under the clock in one block of 788, in the middle of the room between the clock and the bottom.
-	local middle = Widgets.middle(gui, 788, 78 + 96)
+	-- Everything under the clock in one block of 788, in the middle of the room between the clock and the bottom,
+	-- drawn at 90% round that middle.
+	local middle = Widgets.middle(gui, 788, 102 + 96)
+	middle.AnchorPoint = Vector2.new(0.5, 0.5)
+	middle.Position = UDim2.new(0.5, 0, 0.5, (102 + 96) / 2)
+	UiStyle.shrink(middle, 0.9)
 
 	-- The teams, their middles level with the block's.
 	local rows: { [string]: { Frame } } = {}
