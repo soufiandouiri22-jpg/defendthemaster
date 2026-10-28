@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Puts a hero's sounds from its bought animation pack's sound add-on into the game (Docs/Third_Party.md).
+"""Puts a hero's or the Masters' sounds from their bought animation pack's sound add-on into the game
+(Docs/Third_Party.md).
 
 The pack's Sound Map.json says which recordings play at which moment of each clip. This takes the cues of the clips a
 hero uses, joins every recording they need into one audio file (one Roblox upload: an account that is not ID-verified
@@ -54,6 +55,31 @@ PACKS = {
             "Slam": (["Slam1", "Slam2"], 0.9),
         },
     },
+    "GreataxeBerserker": {
+        "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
+        # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no
+        # cues.
+        "clips": {
+            "Guard": "RA-GBK-018",
+            "Unguard": "RA-GBK-019",
+            "Attack1": "RA-GBK-023",
+            "Attack2": "RA-GBK-024",
+            "Attack3": "RA-GBK-025",
+            "Hit": "RA-GBK-026",
+            "Death": "RA-GBK-033",
+            "Frenzy": "RA-GBK-049",
+            "Slam": "RA-GBK-044",
+        },
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        # The pack leaves the cloth to the game: his toga is the first garment, its body impacts the first profile.
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+            "RA-GBK-026-S6782d7146e-Alternatives": lambda member, sound: "clothing profile 1 " in sound["file"],
+        },
+        "events": {},
+    },
 }
 
 
@@ -81,7 +107,8 @@ def select(pack, sound_map):
     contacts = [footsteps[i] for i in sorted(footsteps)]
 
     clips = {}
-    for clip_id in pack["clips"]:
+    named = pack["clips"] if isinstance(pack["clips"], dict) else {clip_id: clip_id for clip_id in pack["clips"]}
+    for key, clip_id in named.items():
         animation = sound_map["animations"][clip_id]
         sets = sound_map["soundSets"].get(clip_id)
         routes = sets["sets"][sets["default"]]["routes"] if sets else None
@@ -95,12 +122,16 @@ def select(pack, sound_map):
                 elif cue.get("soundIds"):
                     entry["sounds"] = [need(s) for s in cue["soundIds"]]
                 elif cue.get("group"):
-                    entry["sounds"] = [need(m["soundId"]) for m in sound_map["groups"][cue["group"]]]
+                    pick = pack.get("pick", {}).get(cue["group"], lambda member, sound: True)
+                    members = sound_map["groups"][cue["group"]]
+                    entry["sounds"] = [
+                        need(m["soundId"]) for m in members if pick(m, sound_map["sounds"][m["soundId"]])
+                    ]
                 else:
                     continue
                 cues.append(entry)
         cues.sort(key=lambda c: c["time"])
-        clips[clip_id] = cues
+        clips[key] = cues
 
     events = {name: {"sounds": [need(s) for s in sounds], "volume": volume} for name, (sounds, volume) in pack["events"].items()}
     return clips, contacts, events, needed
@@ -192,8 +223,8 @@ def upload(name):
     key = api_key()
     meta = {
         "assetType": "Audio",
-        "displayName": f"DTM {name} hero sounds",
-        "description": "Defend The Master: hero sound effects.",
+        "displayName": f"DTM {name} sounds",
+        "description": "Defend The Master: sound effects.",
         "creationContext": {"creator": {"userId": CREATOR_USER_ID}},
     }
     boundary = uuid.uuid4().hex

@@ -1,11 +1,11 @@
 -- The team minions (Config.Minions). Every wave leaves a team's two doorways and marches along a path worked out once
--- at the start to the other team's dais, turning on the enemies that come close: the other team's minions and
--- everything tagged "Combatant" (heroes, and the Masters with the "Master" attribute) with another "Team" attribute.
--- They go first for an enemy hero who just attacked them, or one of their heroes or their Master nearby
--- (MinionService.heroAttacked),
--- and otherwise for the nearest enemy, minion, hero or Master. A minion that has come to the end of its path with
--- nobody in reach hunts: it walks to the nearest enemy left anywhere in the arena, and with none left stands on its own
--- spot there. Only the last hit by a player earns the bounty.
+-- at the start to the other team's dais, turning on the enemies that come close: everything tagged "Combatant"
+-- (heroes, and the Masters with the "Master" attribute) with another "Team" attribute. Minions never fight each other
+-- (owner, 2026-10-27): the two teams' waves pass by one another. They go first for an enemy hero who just attacked
+-- them, or one of their heroes or their Master nearby (MinionService.heroAttacked), then for any enemy hero near, then
+-- the enemy Master; the nearest of those, and they turn from the Master as soon as a hero comes near. A minion that has
+-- come to the end of its path with nobody in reach hunts: it walks to the nearest enemy hero or Master left anywhere in
+-- the arena, and with none left stands on its own spot there. Only the last hit by a player earns the bounty.
 --
 -- The server moves one invisible root part per minion, ten times a second, in Workspace.Minions, with the attributes
 -- Team, Kind, Health, MaxHealth and Dead; each client shows the rock minion on it (MinionView). Attacks are sent to the
@@ -86,8 +86,8 @@ type Minion = {
 	dead: boolean,
 }
 
--- An enemy: another minion, or a tagged Combatant (a Model with a Humanoid, or with a "Health" attribute).
-type Target = Minion | Model
+-- An enemy: a tagged Combatant of the other team (a Model with a Humanoid, or with a "Health" attribute).
+type Target = Model
 
 local minions: { Minion } = {}
 local byRoot: { [BasePart]: Minion } = {}
@@ -102,37 +102,23 @@ local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
 end
 
-local function isMinion(t: Target): boolean
-	return typeof(t) == "table"
-end
-
 local function positionOf(t: Target): Vector3
-	if isMinion(t) then
-		return (t :: Minion).position
-	end
-	return flat((t :: Model):GetPivot().Position)
+	return flat(t:GetPivot().Position)
 end
 
 local function radiusOf(t: Target): number
-	if isMinion(t) then
-		return SETTINGS.Radius
-	end
-	return (t :: Model):GetAttribute("Radius") or 1.5
+	return t:GetAttribute("Radius") or 1.5
 end
 
 local function alive(t: Target): boolean
-	if isMinion(t) then
-		return not (t :: Minion).dead
-	end
-	local model = t :: Model
-	if not model.Parent then
+	if not t.Parent then
 		return false
 	end
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local humanoid = t:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		return humanoid.Health > 0
 	end
-	return (model:GetAttribute("Health") or 0) > 0
+	return (t:GetAttribute("Health") or 0) > 0
 end
 
 local function kill(m: Minion)
@@ -167,17 +153,13 @@ local function hurtMinion(m: Minion, amount: number, player: Instance?)
 	end
 end
 
--- `amount` of a minion's damage on `t`, physical or `magic` (on a hero, his Armor or Resist takes it down).
-local function hurt(t: Target, amount: number, magic: boolean)
-	if isMinion(t) then
-		hurtMinion(t :: Minion, amount, nil)
-		return
-	end
-	local model = t :: Model
+-- `amount` of a minion's damage on `model`, physical or `magic` (on a hero, his Armor or Resist takes it down).
+local function hurt(model: Target, amount: number, magic: boolean)
 	if model:GetAttribute("Master") then
 		amount *= SETTINGS.VsMaster
 	elseif model:GetAttribute("Hero") then
 		amount = Damage.mitigated(model, amount, magic, nil)
+		ProgressService.hurtByMinion(model)
 	end
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
@@ -187,13 +169,14 @@ local function hurt(t: Target, amount: number, magic: boolean)
 	end
 end
 
--- How much `m` wants `t`: 1 a hero who attacked it, one of its heroes or its Master, 2 every other enemy.
+-- How much `m` wants `t`, most first: 1 a hero who attacked it, one of its heroes or its Master, 2 any other enemy
+-- hero, 3 the enemy Master.
 local function rankOf(m: Minion, t: Target, now: number): number
-	local expires = m.callers[t :: Model]
+	local expires = m.callers[t]
 	if expires and now < expires then
 		return 1
 	end
-	return 2
+	return if t:GetAttribute("Master") then 3 else 2
 end
 
 -- `m` turns on the hero `attacker` for CallTime seconds.
@@ -221,11 +204,6 @@ local function chooseTarget(m: Minion, combatants: { Model }, now: number): (Tar
 		local gap = (positionOf(t) - m.position).Magnitude - radiusOf(t) - SETTINGS.Radius
 		if gap < reach and (rank < bestRank or gap < bestGap) and alive(t) then
 			best, bestRank, bestGap = t, rank, gap
-		end
-	end
-	for _, other in minions do
-		if other.team ~= m.team and not other.dead then
-			consider(other)
 		end
 	end
 	for _, model in combatants do
@@ -290,18 +268,10 @@ end
 
 local findPath: (from: Vector3, to: Vector3, quiet: boolean?) -> { Vector3 }
 
--- The enemy nearest to `m` anywhere in the arena (minion, hero or Master); nil when none is left.
+-- The enemy hero or Master nearest to `m` anywhere in the arena; nil when none is left.
 local function quarryOf(m: Minion, combatants: { Model }): Target?
 	local best: Target? = nil
 	local bestDistance = math.huge
-	for _, other in minions do
-		if other.team ~= m.team and not other.dead then
-			local distance = (other.position - m.position).Magnitude
-			if distance < bestDistance then
-				best, bestDistance = other, distance
-			end
-		end
-	end
 	for _, model in combatants do
 		if model:GetAttribute("Team") ~= m.team and alive(model) then
 			local distance = (positionOf(model) - m.position).Magnitude
@@ -351,17 +321,16 @@ end
 
 local function attack(m: Minion, t: Target, gap: number, now: number)
 	m.nextAttack = now + m.stats.Interval
-	local targetInstance: Instance = if isMinion(t) then (t :: Minion).root else t :: Model
 	if m.kind == "Spitter" then
 		local travel = math.max(0.1, gap / (m.stats.SpitSpeed or 40))
-		attackEvent:FireAllClients(m.root, targetInstance, travel)
+		attackEvent:FireAllClients(m.root, t, travel)
 		task.delay(travel, function()
 			if alive(t) then
 				hurt(t, m.stats.Damage, m.stats.Magic == true)
 			end
 		end)
 	else
-		attackEvent:FireAllClients(m.root, targetInstance, BITE_HIT)
+		attackEvent:FireAllClients(m.root, t, BITE_HIT)
 		task.delay(BITE_HIT, function()
 			if not m.dead and alive(t) then
 				hurt(t, m.stats.Damage, m.stats.Magic == true)
@@ -604,8 +573,8 @@ function MinionService.start(layout: Layout)
 	folder.Name = "Minions"
 	folder.Parent = Workspace
 
-	-- In Studio, tests reach the minions through ServerStorage.Dev: DamageMinion (root, amount, player) and
-	-- HeroAttacked (attacker, victim).
+	-- In Studio, tests reach the minions through ServerStorage.Dev: DamageMinion (root, amount, player), HeroAttacked
+	-- (attacker, victim) and SpawnMinion (team, kind, position), a minion whose path ends where it stands.
 	if RunService:IsStudio() then
 		local dev = ServerStorage:FindFirstChild("Dev") or Instance.new("Folder")
 		dev.Name = "Dev"
@@ -616,6 +585,14 @@ function MinionService.start(layout: Layout)
 			bindable.OnInvoke = hook
 			bindable.Parent = dev
 		end
+		local spawnMinion = Instance.new("BindableFunction")
+		spawnMinion.Name = "SpawnMinion"
+		spawnMinion.OnInvoke = function(team: string, kind: string, at: Vector3)
+			local door = CFrame.new(at)
+			paths[door] = { flat(at) }
+			spawn(team, kind, door)
+		end
+		spawnMinion.Parent = dev
 	end
 
 	local blocking = {}

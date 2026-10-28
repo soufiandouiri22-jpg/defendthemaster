@@ -1,7 +1,9 @@
 -- Shows the team minions: a copy of the rock minion template (ReplicatedStorage.MinionTemplates) on every root the
 -- server moves in Workspace.Minions, smoothed between the server's steps. The minions hop while they walk, lunge when
 -- they bite, spit fireballs in their team's fire that burst on their target, fade in at their doorway and crumble into
--- chunks when they die. Each carries a small HP bar in its team's colour.
+-- chunks when they die. Each carries a small HP bar in its team's colour. Every hop lands with a step on the sand
+-- (Config.Minions.Steps); the fireballs whoosh off and burst, the bites knock stone, and a minion crumbling breaks
+-- like rock with its crystals shattering, all heard only near (UiSound).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -9,10 +11,13 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local HeroSounds = require(script.Parent.HeroSounds)
+local UiSound = require(script.Parent.UiSound)
 
 local MinionView = {}
 
 local HEIGHT = Config.Minions.Height
+local STEPS = Config.Minions.Steps
 -- Hops per second of walking, and how high.
 local HOP_RATE, HOP_HEIGHT = 2.6, 0.7
 local LUNGE_TIME, LUNGE_DISTANCE = 0.32, 1.3
@@ -130,6 +135,8 @@ local function crumble(view: View)
 		bar:Destroy()
 	end
 	local centre = view.cframe.Position + Vector3.new(0, HEIGHT * 0.45, 0)
+	UiSound.at("MinionCrumble", centre)
+	UiSound.at("MinionShards", centre)
 	local crystal = view.model:FindFirstChild("Crystal") :: BasePart?
 	for _, d in view.model:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -186,6 +193,7 @@ local function remove(root: BasePart)
 		return
 	end
 	views[root] = nil
+	HeroSounds.forget(root)
 	if not view.dying then
 		view.model:Destroy()
 		return
@@ -368,6 +376,7 @@ local function explode(position: Vector3, colors: { Color3 })
 	light.Brightness = 2
 	light.Parent = flash
 	flash.Parent = holder
+	UiSound.at("MinionBurst", position)
 	tween(flash, 0.22, { Size = Vector3.one * 3.4, Transparency = 1 })
 	tween(light, 0.35, { Brightness = 0 })
 	burst(position, FIRE_TEXTURE, 18, {
@@ -392,6 +401,7 @@ local function spit(view: View, target: Instance, travel: number)
 	local fireball = newFireball(colors)
 	fireball.CFrame = CFrame.new(from)
 	fireball.Parent = holder
+	UiSound.at("MinionSpit", from)
 	local emitters = {}
 	for _, d in fireball:GetChildren() do
 		if d:IsA("ParticleEmitter") then
@@ -440,6 +450,12 @@ local function onAttack(root: BasePart, target: Instance, travel: number)
 		end
 	else
 		view.lungeSign = 1
+		-- At the lunge's furthest reach.
+		task.delay(LUNGE_TIME / 2, function()
+			if not view.dying then
+				UiSound.at("MinionBite", view.body)
+			end
+		end)
 	end
 end
 
@@ -456,12 +472,19 @@ local function step(dt: number)
 		local before = view.cframe.Position
 		view.cframe = view.cframe:Lerp(goal, smoothing)
 		local speed = (view.cframe.Position - before).Magnitude / math.max(dt, 1e-3)
+		local hops = math.floor(view.phase / math.pi)
 		if speed > 1.5 then
 			view.phase += dt * HOP_RATE * math.pi
 		else
 			-- Land at the end of the hop it is in.
 			local rest = math.ceil(view.phase / math.pi) * math.pi
 			view.phase = math.min(rest, view.phase + dt * HOP_RATE * math.pi)
+		end
+		if math.floor(view.phase / math.pi) > hops then
+			local bank = HeroSounds.bank(STEPS.Pack)
+			if bank then
+				HeroSounds.step(root, view.body, bank, STEPS.Volume)
+			end
 		end
 		local hop = math.abs(math.sin(view.phase))
 		local lunge = 0

@@ -15,6 +15,63 @@
 				"Rig": {
 					"$path": "Vendor/ShadowDuelist/Animations/Included Rig.rbxmx"
 				}
+			},
+			"GreataxeBerserker": {
+				"$className": "Folder",
+				"Rig": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0023/Included Rig.rbxmx"
+				},
+				"Attack1": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0023/Motion/with-greataxe.rbxmx"
+				},
+				"Attack2": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0024/Motion/with-greataxe.rbxmx"
+				},
+				"Attack3": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0025/Motion/with-greataxe.rbxmx"
+				},
+				"Death": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0033/Motion/with-greataxe.rbxmx"
+				},
+				"Slam": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0044/Motion/with-greataxe.rbxmx"
+				},
+				"Frenzy": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0049/Motion/with-greataxe.rbxmx"
+				},
+				"Guard": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0018/Motion/with-greataxe.rbxmx"
+				},
+				"Stance": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0015/Motion/with-greataxe.rbxmx"
+				},
+				"Unguard": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0019/Motion/with-greataxe.rbxmx"
+				},
+				"Hit": {
+					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0026/Motion/with-greataxe.rbxmx"
+				}
+			},
+			"Armorer": {
+				"$className": "Folder",
+				"Walk": {
+					"$path": "Vendor/Armorer/ANM-KBX-RA-ARM-0001/Motion/body-only.rbxmx"
+				},
+				"WalkBack": {
+					"$path": "Vendor/Armorer/ANM-KBX-RA-ARM-0002/Motion/body-only.rbxmx"
+				},
+				"WalkLeft": {
+					"$path": "Vendor/Armorer/ANM-KBX-RA-ARM-0003/Motion/body-only.rbxmx"
+				},
+				"WalkRight": {
+					"$path": "Vendor/Armorer/ANM-KBX-RA-ARM-0004/Motion/body-only.rbxmx"
+				},
+				"TurnLeft": {
+					"$path": "Vendor/Armorer/ANM-KBX-RA-ARM-0009/Motion/body-only.rbxmx"
+				},
+				"TurnRight": {
+					"$path": "Vendor/Armorer/ANM-KBX-RA-ARM-0010/Motion/body-only.rbxmx"
+				}
 			}
 		},
 		"ServerScriptService": {

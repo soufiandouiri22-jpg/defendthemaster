@@ -46,7 +46,9 @@ def upload(path, name):
     if "response" not in status:
         sys.exit(f"The upload failed: {json.dumps(status)[:500]}")
     moderation = status["response"].get("moderationResult", {}).get("moderationState", "?")
-    print(f"rbxassetid://{status['response']['assetId']} ({moderation})")
+    asset = f"rbxassetid://{status['response']['assetId']}"
+    print(f"{asset} ({moderation})")
+    return asset
 
 
 if __name__ == "__main__":

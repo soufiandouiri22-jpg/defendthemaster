@@ -3,6 +3,7 @@
 -- ScreenGui to the real one.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -22,6 +23,8 @@ UiStyle.Colors = {
 	HealthDark = Color3.fromRGB(46, 160, 40),
 	Xp = Color3.fromRGB(255, 214, 64),
 	XpDark = Color3.fromRGB(226, 150, 20),
+	-- What a hit takes off a health bar, for a moment (UiStyle.bar's trail).
+	Trail = Color3.fromRGB(255, 92, 72),
 	Blue = Config.Teams.Blue.Color,
 	BlueDark = Config.Teams.Blue.DarkColor,
 	Red = Config.Teams.Red.Color,
@@ -146,7 +149,11 @@ export type Bar = {
 	set: (self: Bar, share: number) -> (),
 }
 
--- A dark bar with a glossy fill from `top` to `bottom` and a dark edge; `set` fills a share of it.
+-- A health bar's lost part stays in `trail` colour this long after a hit, then drains in TRAIL_DRAIN seconds.
+local TRAIL_HOLD, TRAIL_DRAIN = 0.35, 0.4
+
+-- A dark bar with a glossy fill from `top` to `bottom` and a dark edge; `set` fills a share of it. With `trail`, what
+-- the fill loses shows in that colour for a moment before it drains away (a hit on a health bar).
 function UiStyle.bar(
 	parent: Instance,
 	size: UDim2,
@@ -154,18 +161,29 @@ function UiStyle.bar(
 	top: Color3,
 	bottom: Color3,
 	anchor: Vector2?,
-	rightToLeft: boolean?
+	rightToLeft: boolean?,
+	trail: Color3?
 ): Bar
 	local frame = UiStyle.frame(parent, size, position, anchor)
 	frame.BackgroundColor3 = C.Night
 	frame.ClipsDescendants = true
 	UiStyle.corner(frame, 6)
 	UiStyle.stroke(frame, C.Edge, 3)
+	local lag: Frame? = nil
+	if trail then
+		local made = UiStyle.frame(frame, UDim2.fromScale(1, 1))
+		made.Name = "Trail"
+		made.BackgroundColor3 = trail
+		UiStyle.corner(made, 5)
+		lag = made
+	end
 	local fill = UiStyle.frame(frame, UDim2.fromScale(1, 1))
 	fill.Name = "Fill"
-	if rightToLeft then
-		fill.AnchorPoint = Vector2.new(1, 0)
-		fill.Position = UDim2.fromScale(1, 0)
+	for _, f in { fill, lag } do
+		if rightToLeft then
+			f.AnchorPoint = Vector2.new(1, 0)
+			f.Position = UDim2.fromScale(1, 0)
+		end
 	end
 	UiStyle.corner(fill, 5)
 	UiStyle.gradient(fill, top, bottom)
@@ -173,10 +191,27 @@ function UiStyle.bar(
 	shine.BackgroundTransparency = 0.6
 	UiStyle.corner(shine, 4)
 	local bar = { frame = frame, fill = fill }
+	local current = 1
+	local drain: Tween? = nil
 	function bar.set(self: Bar, share: number)
 		local s = math.clamp(share, 0, 1)
 		self.fill.Size = UDim2.fromScale(s, 1)
 		self.fill.Visible = s > 0
+		if lag and s ~= current then
+			if drain then
+				drain:Cancel()
+			end
+			if s > current or lag.Size.X.Scale < s then
+				lag.Size = UDim2.fromScale(s, 1)
+			else
+				local info =
+					TweenInfo.new(TRAIL_DRAIN, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, TRAIL_HOLD)
+				drain = TweenService:Create(lag, info, { Size = UDim2.fromScale(s, 1) })
+				drain:Play()
+			end
+			lag.Visible = s > 0 or lag.Size.X.Scale > 0
+		end
+		current = s
 	end
 	return bar :: Bar
 end

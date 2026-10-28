@@ -1,7 +1,8 @@
 -- The bots (Config.Bots): AI heroes that fill both teams up to TeamSize, as many fewer on a team as it has players. A
--- bot is an Actor (a Configuration in ServerStorage.Bots) whose hero the server moves: it walks its lane (east or west,
--- in turn) behind its team's minions, turns on the nearest enemy hero in sight, else the nearest other enemy, and
--- fights with its whole kit through CombatService, as a player would: leap and flurry on heroes up close, the dagger
+-- bot is an Actor (a Configuration in ServerStorage.Bots) whose hero the server moves: it goes after an enemy hero no
+-- one of its team fights yet, anywhere in the arena, and helps with one only when all are taken; with none alive it
+-- fights the other enemies (Config.Bots). It fights with its whole kit through CombatService, as a player would: leap
+-- and flurry on heroes up close, the dagger
 -- at range, the dash to close in, the combo in reach; with a person's reaction time, rests and misses (Config.Bots),
 -- not perfectly. It levels up as players do and spends its points itself; while Buys is on it buys its Build at
 -- the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its potions. It comes back on a
@@ -33,8 +34,6 @@ local SETTINGS = Config.Bots
 local TICK = 0.1
 -- How often a bot works out its way round the walls again, and how far its goal may move before it does sooner.
 local PATH_REFRESH, PATH_SLACK = 2, 6
--- How far behind its foremost minion a bot walks its lane.
-local BEHIND = 6
 -- A bot that gains less than STUCK_STEP studs in STUCK_TIME seconds walking takes a path for DETOUR seconds.
 local STUCK_TIME, STUCK_STEP, DETOUR = 1, 1, 3
 
@@ -71,6 +70,8 @@ type Bot = {
 	calmUntil: number,
 	swingAt: number,
 	focus: Instance?,
+	-- The enemy hero it goes after.
+	prey: Instance?,
 }
 
 type Target = {
@@ -83,15 +84,10 @@ type Target = {
 
 local bots: { Bot } = {}
 local folder: Folder
-local fronts: { [string]: Vector3 } = {}
 local stalls: { [string]: { Vector3 } } = {}
 local made = 0
 local walls = RaycastParams.new()
 walls.FilterType = Enum.RaycastFilterType.Exclude
-
-local function enemyOf(team: string): string
-	return if team == "Blue" then "Red" else "Blue"
-end
 
 local function alive(b: Bot): boolean
 	return b.character ~= nil and b.character.Parent ~= nil and b.humanoid ~= nil and b.humanoid.Health > 0
@@ -311,32 +307,63 @@ local function fight(b: Bot, target: Target, others: { Target }, now: number)
 	end
 end
 
--- Walks the bot's lane: a few steps behind its team's foremost minion there, or at the lane's gate when there is none.
-local function advance(b: Bot, now: number)
-	local front = fronts[enemyOf(b.team)]
-	local foremost: BasePart? = nil
-	local best = math.huge
-	local minions = Workspace:FindFirstChild("Minions")
-	if minions then
-		for _, root in minions:GetChildren() do
-			if
-				root:IsA("BasePart")
-				and root:GetAttribute("Team") == b.team
-				and not root:GetAttribute("Dead")
-				and math.sign(root.Position.X) == b.side
-			then
-				local distance = HeroKit.flat(root.Position - front).Magnitude
-				if distance < best then
-					foremost, best = root, distance
-				end
-			end
+-- Walks the bot, with no enemy hero alive, to the nearest of the enemy minions (`enemies`, anywhere in the arena), or
+-- to its lane's gate when there are none.
+local function advance(b: Bot, enemies: { Target }, now: number)
+	local minions = {}
+	for _, t in enemies do
+		if t.instance:IsA("BasePart") then
+			table.insert(minions, t)
 		end
 	end
-	local goal = Vector3.new(b.side * Config.Minions.LaneRadius, 0, 0)
-	if foremost then
-		goal = foremost.Position - HeroKit.flat(front - foremost.Position).Unit * BEHIND
+	local minion = nearest(minions, (b.root :: BasePart).Position)
+	walkTo(b, if minion then minion.position else Vector3.new(b.side * Config.Minions.LaneRadius, 0, 0), now)
+end
+
+-- Whether a living player's hero of `team` stands within Taken studs of `hero`.
+local function playerNear(team: string, hero: Target): boolean
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if
+			character
+			and humanoid
+			and humanoid.Health > 0
+			and character:GetAttribute("Team") == team
+			and HeroKit.flat(character:GetPivot().Position - hero.position).Magnitude <= SETTINGS.Taken
+		then
+			return true
+		end
 	end
-	walkTo(b, goal, now)
+	return false
+end
+
+-- The enemy hero `b` goes after, of `heroes` (Config.Bots): the one it chose while nobody else of its team fights him
+-- too or no free one is left, else the nearest free one, else the nearest to help.
+local function choosePrey(b: Bot, heroes: { Target }): Target?
+	local root = b.root :: BasePart
+	local free = {}
+	local current: Target? = nil
+	for _, hero in heroes do
+		if hero.instance == b.prey then
+			current = hero
+		end
+		local taken = playerNear(b.team, hero)
+		for _, other in bots do
+			if taken then
+				break
+			end
+			taken = other ~= b and other.team == b.team and other.prey == hero.instance and alive(other)
+		end
+		if not taken then
+			table.insert(free, hero)
+		end
+	end
+	local choice = if current and (#free == 0 or table.find(free, current))
+		then current
+		else nearest(free, root.Position) or nearest(heroes, root.Position)
+	b.prey = if choice then choice.instance else nil
+	return choice
 end
 
 -- Spends the bot's points: the ultimate when it may, else the lower of its other ranks.
@@ -436,6 +463,7 @@ end
 
 local function think(b: Bot, now: number)
 	if not alive(b) then
+		b.prey = nil
 		if SETTINGS.Buys then
 			shop(b)
 		end
@@ -460,8 +488,14 @@ local function think(b: Bot, now: number)
 		end
 		return
 	end
-	local heroes, others = enemiesNear(b.team, root.Position, SETTINGS.Sight)
-	local target = nearest(heroes, root.Position) or nearest(others, root.Position)
+	local heroes, enemies = enemiesNear(b.team, root.Position, math.huge)
+	local others = {}
+	for _, t in enemies do
+		if HeroKit.flat(t.position - root.Position).Magnitude <= SETTINGS.Sight then
+			table.insert(others, t)
+		end
+	end
+	local target = choosePrey(b, heroes) or nearest(others, root.Position)
 	-- A hero it turns on gets a moment before the first ability, as a person needs to see him coming.
 	if target and target.hero and target.instance ~= b.focus then
 		b.calmUntil = math.max(b.calmUntil, now + reaction())
@@ -470,7 +504,7 @@ local function think(b: Bot, now: number)
 	if target then
 		fight(b, target, others, now)
 	else
-		advance(b, now)
+		advance(b, enemies, now)
 	end
 end
 
@@ -570,6 +604,7 @@ local function addBot(team: string)
 		calmUntil = 0,
 		swingAt = 0,
 		focus = nil,
+		prey = nil,
 	}
 	table.insert(bots, b)
 	task.spawn(spawnHero, b)
@@ -616,7 +651,6 @@ export type Layout = {
 }
 
 function BotService.start(layout: Layout)
-	fronts = layout.daisFront
 	for team, list in layout.shops do
 		stalls[team] = {}
 		for _, spot in list do

@@ -1,6 +1,6 @@
 -- The hero's items in the HUD, right of the ability bar: the six slots of his bag in two rows of three on a parchment
 -- panel (Shared.Items), a potion with how many he carries and the Q that drinks one (Net.Shop "Drink"); while a potion
--- heals, its slot fills with green from the top for the time it has left.
+-- heals, its slot fills with green from the top for the time it has left. A potion drunk pops its cork.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,6 +11,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Items = require(ReplicatedStorage.Shared.Items)
+local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 
 local ItemBar = {}
@@ -141,9 +142,17 @@ function ItemBar.start()
 	task.spawn(function()
 		shopEvent = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Shop") :: RemoteEvent
 	end)
+	-- The server lengthens PotionUntil by a potion's time for each one drunk.
+	local potionUntil = player:GetAttribute("PotionUntil") or 0
 	player.AttributeChanged:Connect(function(name)
 		if name:match("^Item") or name:match("^Count") then
 			show()
+		elseif name == "PotionUntil" then
+			local untilNow = player:GetAttribute("PotionUntil") or 0
+			if untilNow > potionUntil then
+				UiSound.play("Potion")
+			end
+			potionUntil = untilNow
 		end
 	end)
 	show()

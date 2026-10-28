@@ -1,6 +1,7 @@
 -- The bar over every other hero's head (design 05): his health in his team's colour, the only thing that tells the
 -- teams apart, with his level in the round knob at its left end. A hero's bar goes when he dies (the "Combatant" tag
--- goes with his life).
+-- goes with his life). The Sun Crown's carrier (his "Crown" attribute, CrownService) has his bar raised over the crown
+-- that turns over his head (CrownView).
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -10,6 +11,8 @@ local HeroBars = {}
 
 local C = UiStyle.Colors
 local WIDTH, HEIGHT, KNOB = 132, 16, 28
+-- The bar floats this many studs over the hero's root, or `CROWNED` while he carries the crown.
+local OVER, CROWNED = 4.4, 6
 
 local bars: { [Model]: BillboardGui } = {}
 
@@ -37,9 +40,8 @@ local function build(model: Model)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "HeroBar"
 	gui.Size = UDim2.fromOffset(WIDTH + KNOB / 2, KNOB)
-	gui.StudsOffsetWorldSpace = Vector3.new(0, 4.4, 0)
 	gui.LightInfluence = 0
-	-- Only the heroes near enough to matter, measured from the camera: further bars would crowd the screen.
+	-- Only the heroes near enough to matter: further bars would crowd the screen.
 	gui.MaxDistance = 75
 	gui.Adornee = root
 
@@ -49,7 +51,9 @@ local function build(model: Model)
 		UDim2.new(0, KNOB / 2, 0.5, 0),
 		colour:Lerp(Color3.new(1, 1, 1), 0.2),
 		colour:Lerp(C[team .. "Dark"], 0.4),
-		Vector2.new(0, 0.5)
+		Vector2.new(0, 0.5),
+		nil,
+		C.Trail
 	);
 	(bar.frame:FindFirstChildOfClass("UIStroke") :: UIStroke).Thickness = 2
 	local knob = UiStyle.frame(gui, UDim2.fromOffset(KNOB, KNOB))
@@ -65,9 +69,11 @@ local function build(model: Model)
 	local function update()
 		bar:set(if humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 0)
 		level.Text = tostring(levelOf(model))
+		gui.StudsOffsetWorldSpace = Vector3.new(0, if model:GetAttribute("Crown") == true then CROWNED else OVER, 0)
 	end
 	humanoid.HealthChanged:Connect(update)
 	humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(update)
+	model:GetAttributeChangedSignal("Crown"):Connect(update)
 	local owner = Players:GetPlayerFromCharacter(model)
 	if owner then
 		owner:GetAttributeChangedSignal("Level"):Connect(update)

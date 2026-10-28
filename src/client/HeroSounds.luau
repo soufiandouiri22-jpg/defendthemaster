@@ -1,7 +1,8 @@
 -- A hero's sounds from its animation pack's sound add-on (Shared.PackSounds.<Pack>, made by Tools/hero_sounds.py): every
 -- recording sits in one uploaded file and plays as its own region of it, from the hero's root part so it is heard
 -- where the hero is. The clips' cues come through Shared.Motion; the game's own events (a dagger let go) through
--- HeroSounds.event.
+-- HeroSounds.event. Roblox's own character sounds (its death voice, plastic footsteps, jumps and landings) are turned
+-- off, so the heroes sound only as their packs do.
 
 local ContentProvider = game:GetService("ContentProvider")
 local Debris = game:GetService("Debris")
@@ -63,20 +64,26 @@ local function play(root: BasePart, bank: Bank, id: string, volume: number)
 	Debris:AddItem(sound, region[2] + 0.5)
 end
 
+-- Plays `walker`'s next footstep on the sand from `at`, its contacts alternating.
+function HeroSounds.step(walker: Instance, at: BasePart, bank: Bank, volume: number)
+	local next = (contact[walker] or 0) % #bank.Footsteps + 1
+	contact[walker] = next
+	local choices = bank.Footsteps[next]
+	if choices and #choices > 0 then
+		play(at, bank, choices[math.random(#choices)], volume)
+	end
+end
+
 -- Plays a clip's cue on `character`: one of its recordings, or the next footstep.
 function HeroSounds.cue(character: Model, bank: Bank, cue: any)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
 		return
 	end
-	local choices = cue.Sounds
 	if cue.Footstep then
-		local next = (contact[character] or 0) % #bank.Footsteps + 1
-		contact[character] = next
-		choices = bank.Footsteps[next]
-	end
-	if choices and #choices > 0 then
-		play(root, bank, choices[math.random(#choices)], cue.Volume)
+		HeroSounds.step(character, root, bank, cue.Volume)
+	elseif cue.Sounds and #cue.Sounds > 0 then
+		play(root, bank, cue.Sounds[math.random(#cue.Sounds)], cue.Volume)
 	end
 end
 
@@ -90,8 +97,27 @@ function HeroSounds.event(character: Model, packName: string, name: string)
 	end
 end
 
-function HeroSounds.forget(character: Model)
-	contact[character] = nil
+function HeroSounds.forget(walker: Instance)
+	contact[walker] = nil
+end
+
+-- Stops Roblox's RbxCharacterSounds and takes away the sounds it already gave the players' characters. A script of
+-- that name in StarterPlayerScripts no longer stands in for it: Roblox puts its own back.
+function HeroSounds.start()
+	task.spawn(function()
+		local scripts = Players.LocalPlayer:WaitForChild("PlayerScripts")
+		local roblox = scripts:WaitForChild("RbxCharacterSounds", 10)
+		if roblox and roblox:IsA("LocalScript") then
+			roblox.Enabled = false
+		end
+		for _, player in Players:GetPlayers() do
+			for _, sound in if player.Character then player.Character:GetDescendants() else {} do
+				if sound:IsA("Sound") and string.find(sound.SoundId, "rbxasset://sounds/", 1, true) == 1 then
+					sound:Destroy()
+				end
+			end
+		end
+	end)
 end
 
 return HeroSounds

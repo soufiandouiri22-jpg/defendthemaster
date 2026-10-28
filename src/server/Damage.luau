@@ -1,10 +1,13 @@
 -- What items do to damage (Config.Items): a hero's Armor and Resist take the physical and magic damage he takes down to
 -- 100 / (100 + them), his Lifesteal heals him by a share of what he deals, and the legendary effects that change a
 -- hit: Kingsbane on the enemy Master, Stormcrown on magic, Void Scepter through Resist, Crown Bulwark near the hero's
--- own Master and Bloodthorn while he is low. Attackers and victims are players or bots (Actors).
+-- own Master and Bloodthorn while he is low; and the Sun Crown's extra damage for its carrier and his team
+-- (CrownService).
+-- Attackers and victims are players or bots (Actors).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
@@ -36,6 +39,15 @@ function Damage.outgoing(attacker: Instance, amount: number, magic: boolean, tar
 	end
 	if magic then
 		amount *= 1 + (Items.effect(attacker, "Stormcrown") or 0)
+	end
+	local character = Actors.character(attacker)
+	if
+		character
+		and Workspace:GetAttribute("Crown") == "Carried"
+		and Workspace:GetAttribute("CrownTeam") == character:GetAttribute("Team")
+	then
+		local carries = character:GetAttribute("Crown") == true
+		amount *= 1 + (if carries then Config.Crown.Carrier else Config.Crown.Damage)
 	end
 	return amount
 end

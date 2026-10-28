@@ -657,17 +657,16 @@ export type Layout = {
 	map: Folder,
 }
 
-function ColosseumBuilder.build(): Layout
+local function emptyLayout(): Layout
 	for _, name in { "Baseplate", "SpawnLocation", "Map" } do
 		local existing = Workspace:FindFirstChild(name)
 		if existing then
 			existing:Destroy()
 		end
 	end
-
 	local map = Instance.new("Folder")
 	map.Name = "Map"
-	local layout: Layout = {
+	return {
 		spawnPads = {},
 		masterSpawn = {},
 		thrones = {},
@@ -677,6 +676,11 @@ function ColosseumBuilder.build(): Layout
 		minionDoors = { Blue = {}, Red = {} },
 		map = map,
 	}
+end
+
+function ColosseumBuilder.build(): Layout
+	local layout = emptyLayout()
+	local map = layout.map
 	buildFloor(map)
 	buildRing(map, layout.minionDoors)
 	buildCentre(map)
@@ -693,6 +697,49 @@ function ColosseumBuilder.build(): Layout
 	scatterRubble(map)
 	map.Parent = Workspace
 	print("[ColosseumBuilder] overlapping pieces:", checkOverlaps(map))
+	setupLighting()
+	return layout
+end
+
+-- Studio's test ground (TestGround): both throne rooms on open sand as they stand in the colosseum, and the Blue
+-- heroes' spawn on the sand before the Red one, `TEST_SPAWN` studs out from its dais, beyond its Master's zone. Blue's
+-- armory is that spawn, with its stall just behind it facing the Red throne, so the HUD and the armory work as in a
+-- match.
+local TEST_SPAWN = 72
+
+function ColosseumBuilder.buildTestGround(): Layout
+	local layout = emptyLayout()
+	local map = layout.map
+	local floor = folder(map, "Floor")
+	local sand = disc(floor, Vector3.zero, R + 30, 4, COLORS.Sand, Enum.Material.Sand)
+	sand.Name = "Sand"
+	sand:SetAttribute("Floor", true)
+	disc(floor, Vector3.new(0, -0.05, 0), R + 600, 4, COLORS.Grass, Enum.Material.Grass).Name = "Grass"
+
+	for _, team in Config.TeamOrder do
+		local base = buildBase(map, team)
+		layout.spawnPads[team] = base.pads
+		layout.masterSpawn[team] = base.spawn
+		layout.thrones[team] = base.throne
+		layout.masterHome[team] = base.home
+		layout.daisFront[team] = base.front
+		layout.shops[team] = base.shops
+	end
+
+	local front = layout.daisFront.Red
+	local spot = front - front.Unit * TEST_SPAWN
+	local facing = Vector3.new(front.X, 0, front.Z)
+	local pads = {}
+	for _, side in { -6, 6 } do
+		local at = spot + Vector3.new(side, 3, 0)
+		table.insert(pads, CFrame.lookAt(at, facing + Vector3.new(side, 3, 0)))
+	end
+	layout.spawnPads.Blue = pads
+	local shop = CFrame.lookAt(spot, facing)
+	layout.shops.Blue = { shop }
+	kit(folder(map, "TestArmory"), "armory_stall_blue", shop * CFrame.new(0, 0, 6), byHeight("armory_stall_blue", 12))
+
+	map.Parent = Workspace
 	setupLighting()
 	return layout
 end

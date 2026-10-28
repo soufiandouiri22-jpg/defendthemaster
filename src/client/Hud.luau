@@ -1,6 +1,8 @@
 -- The HUD of design 05 round the ability bar (AbilityBar): at the top each team's Master's health under its crown,
--- blue left and red right, and between them the score (enemy heroes killed) over the match's clock (MatchService);
--- at the bottom left the hero's portrait with his level, health and XP (Shared.Leveling); at the bottom right the
+-- blue left and red right, and between them the score (enemy heroes killed) over the match's clock (MatchService),
+-- with the time left on the Sun Crown beside it while the player's team has it;
+-- at the bottom left the hero's portrait with his level (a chime as it rises), his kills / deaths / assists
+-- (ProgressService), health and XP (Shared.Leveling); at the bottom right the
 -- round minimap with every hero, minion and throne on it, over the coin counter.
 
 local CollectionService = game:GetService("CollectionService")
@@ -13,6 +15,7 @@ local Workspace = game:GetService("Workspace")
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
+local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 
 local Hud = {}
@@ -31,6 +34,12 @@ local BOARD_WIDTH, BOARD_HEIGHT, TAB_HEIGHT, BOARD_PAD = 672, 88, 48, 4
 local BOARD_TOP = 20
 local BAR_HEIGHT, BAR_MIDDLE, BAR_GAP = 52, 97, 34
 local CROWN_X, CROWN_Y = 62, 88
+-- A Master's crown (Art/UI/hud_crown_*.png drawn at 100 x 94) is solid to CROWN_EDGE from its middle, but its points
+-- rise over the bar's top: the bar starts under the last point, BAR_UNDER from the crown's middle, so none of it shows
+-- between them. Its health runs from the crown's edge on (CROWN_COVER of the track, which lies 6 inside the rim), so
+-- the bar is empty only as he dies; the fill tucks its rounded end FILL_TUCK under the crown.
+local CROWN_EDGE, BAR_UNDER, FILL_TUCK = 42, 22, 9
+local CROWN_COVER = CROWN_EDGE - BAR_UNDER - 6
 local SCORE_GAP = 92
 local TOP_BAR_MIN = 420
 
@@ -51,13 +60,16 @@ local TOP_COLOURS = {
 	},
 }
 
--- A Master's bar as in design 05: a light gold rim, a black line inside it, a dark grey track and a glossy fill.
+-- A Master's bar as in design 05: a light gold rim, a black line inside it, a dark grey track and a glossy fill, with
+-- its crown held on the rim's end so the two stay together on every screen.
 local function masterBar(parent: Frame, team: string, left: boolean): Frame
 	local colours = TOP_COLOURS[team]
 	local rim = UiStyle.frame(
 		parent,
-		UDim2.new(0.5, -(BOARD_WIDTH / 2 + BAR_GAP + CROWN_X), 0, BAR_HEIGHT),
-		if left then UDim2.fromOffset(CROWN_X, BAR_MIDDLE) else UDim2.new(1, -CROWN_X, 0, BAR_MIDDLE),
+		UDim2.new(0.5, -(BOARD_WIDTH / 2 + BAR_GAP + CROWN_X + BAR_UNDER), 0, BAR_HEIGHT),
+		if left
+			then UDim2.fromOffset(CROWN_X + BAR_UNDER, BAR_MIDDLE)
+			else UDim2.new(1, -(CROWN_X + BAR_UNDER), 0, BAR_MIDDLE),
 		if left then Vector2.new(0, 0.5) else Vector2.new(1, 0.5)
 	)
 	rim.Name = team .. "Master"
@@ -70,9 +82,10 @@ local function masterBar(parent: Frame, team: string, left: boolean): Frame
 	UiStyle.stroke(track, Color3.fromRGB(14, 12, 10), 3)
 	local fill = UiStyle.frame(track, UDim2.fromScale(1, 1))
 	fill.Name = "Fill"
+	fill.Position = UDim2.fromOffset(CROWN_COVER - FILL_TUCK, 0)
 	if not left then
 		fill.AnchorPoint = Vector2.new(1, 0)
-		fill.Position = UDim2.fromScale(1, 0)
+		fill.Position = UDim2.new(1, -(CROWN_COVER - FILL_TUCK), 0, 0)
 	end
 	UiStyle.corner(fill, 9)
 	local gloss = UiStyle.gradient(fill, colours.shine, colours.fill)
@@ -89,9 +102,9 @@ local function masterBar(parent: Frame, team: string, left: boolean): Frame
 	crown.Image = colours.crown
 	crown.Size = UDim2.fromOffset(100, 94)
 	crown.AnchorPoint = Vector2.new(0.5, 0.5)
-	crown.Position = if left then UDim2.fromOffset(CROWN_X, CROWN_Y) else UDim2.new(1, -CROWN_X, 0, CROWN_Y)
+	crown.Position = UDim2.new(if left then 0 else 1, if left then -BAR_UNDER else BAR_UNDER, 0.5, CROWN_Y - BAR_MIDDLE)
 	crown.ZIndex = 3
-	crown.Parent = parent
+	crown.Parent = rim
 	return fill
 end
 
@@ -146,7 +159,7 @@ local function buildTop(gui: Frame): () -> ()
 		for team, fill in fills do
 			local max = Workspace:GetAttribute("MasterMax" .. team) or Config.Master.Health
 			local share = math.clamp((Workspace:GetAttribute("Master" .. team) or max) / max, 0, 1)
-			fill.Size = UDim2.fromScale(share, 1)
+			fill.Size = UDim2.new(share, FILL_TUCK - share * CROWN_COVER, 1, 0)
 			fill.Visible = share > 0
 		end
 		blueScore.Text =
@@ -155,6 +168,57 @@ local function buildTop(gui: Frame): () -> ()
 			string.format("%d %s", Workspace:GetAttribute("Score" .. red) or 0, string.upper(Config.Teams[red].Name))
 		local start = Workspace:GetAttribute("MatchStart")
 		clock.Text = UiStyle.clock(if start then math.max(0, Workspace:GetServerTimeNow() - start) else 0)
+	end
+end
+
+-- While the player's team has the Sun Crown (CrownService), a pill beside the clock: the crown and the time until it
+-- fades, blinking for its last CROWN_BLINK seconds.
+local CROWN_BLINK = 10
+local function buildCrown(gui: Frame): () -> ()
+	local pill = UiStyle.frame(
+		gui,
+		UDim2.fromOffset(136, 42),
+		UDim2.new(0.5, 104, 0, BOARD_TOP + BOARD_HEIGHT + TAB_HEIGHT / 2 - 3),
+		Vector2.new(0, 0.5)
+	)
+	pill.Name = "CrownTimer"
+	pill.BackgroundColor3 = Color3.fromRGB(46, 32, 22)
+	pill.ZIndex = 3
+	pill.Visible = false
+	UiStyle.corner(pill, UDim.new(0.5, 0))
+	local edge = UiStyle.stroke(pill, C.Gold, 3)
+	local crown = Instance.new("ImageLabel")
+	crown.BackgroundTransparency = 1
+	crown.Image = Assets.SunCrown
+	crown.Size = UDim2.fromOffset(52, 52 * 275 / 484)
+	crown.AnchorPoint = Vector2.new(0, 0.5)
+	crown.Position = UDim2.new(0, 8, 0.5, 0)
+	crown.ZIndex = 4
+	crown.Parent = pill
+	local count = UiStyle.text(pill, "", 30, Color3.new(1, 1, 1), Color3.fromRGB(30, 16, 6))
+	count.AnchorPoint = Vector2.new(1, 0.5)
+	count.Size = UDim2.fromOffset(70, 40)
+	count.Position = UDim2.new(1, -10, 0.5, 0)
+	count.ZIndex = 4
+	-- The player's team, kept while he waits to respawn without a character.
+	local team: string? = nil
+
+	return function()
+		team = player.Character and player.Character:GetAttribute("Team") or team
+		local ends = Workspace:GetAttribute("CrownEnds")
+		local ours = Workspace:GetAttribute("Crown") == "Carried" and Workspace:GetAttribute("CrownTeam") == team
+		pill.Visible = ours and typeof(ends) == "number"
+		if not pill.Visible then
+			return
+		end
+		local left = math.max(0, ends - Workspace:GetServerTimeNow())
+		count.Text = UiStyle.clock(math.ceil(left))
+		local dim = left <= CROWN_BLINK and os.clock() % 0.5 < 0.25
+		count.TextColor3 = if left <= CROWN_BLINK then Color3.fromRGB(255, 110, 90) else Color3.new(1, 1, 1)
+		count.TextTransparency = if dim then 0.6 else 0
+		(count:FindFirstChildOfClass("UIStroke") :: UIStroke).Transparency = if dim then 0.6 else 0
+		crown.ImageTransparency = if dim then 0.6 else 0
+		edge.Color = if left <= CROWN_BLINK then Color3.fromRGB(255, 110, 90) else C.Gold
 	end
 end
 
@@ -171,7 +235,7 @@ local function showPortrait(image: ImageLabel, character: Model)
 	end
 end
 
--- The bottom left: portrait, level, health and XP.
+-- The bottom left: portrait, level, kills / deaths / assists, health and XP.
 local function buildPlayer(gui: ScreenGui): () -> ()
 	local outer, inner =
 		UiStyle.panel(gui, UDim2.fromOffset(560, 178), UDim2.new(0, 24, 1, -22), Vector2.new(0, 1), 18, 6)
@@ -192,12 +256,42 @@ local function buildPlayer(gui: ScreenGui): () -> ()
 	level.TextXAlignment = Enum.TextXAlignment.Left
 	level.Size = UDim2.fromOffset(200, 50)
 	level.Position = UDim2.fromOffset(172, 6)
-	local health = UiStyle.bar(inner, UDim2.fromOffset(360, 40), UDim2.fromOffset(170, 62), C.Health, C.HealthDark)
+	local health = UiStyle.bar(
+		inner,
+		UDim2.fromOffset(360, 40),
+		UDim2.fromOffset(170, 62),
+		C.Health,
+		C.HealthDark,
+		nil,
+		nil,
+		C.Trail
+	)
 	local xpLabel = UiStyle.text(inner, "XP", 32, C.Xp, C.Edge)
 	xpLabel.TextXAlignment = Enum.TextXAlignment.Left
 	xpLabel.Size = UDim2.fromOffset(50, 34)
 	xpLabel.Position = UDim2.fromOffset(170, 114)
 	local xp = UiStyle.bar(inner, UDim2.fromOffset(312, 26), UDim2.fromOffset(218, 118), C.Xp, C.XpDark)
+
+	local score = UiStyle.frame(inner, UDim2.fromOffset(250, 50), UDim2.new(1, -16, 0, 6), Vector2.new(1, 0))
+	score.Name = "Kda"
+	score.BackgroundTransparency = 1
+	local list = Instance.new("UIListLayout")
+	list.FillDirection = Enum.FillDirection.Horizontal
+	list.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	list.VerticalAlignment = Enum.VerticalAlignment.Center
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Padding = UDim.new(0, 8)
+	list.Parent = score
+	local caption = UiStyle.text(score, "KDA", 22, C.GoldDark)
+	caption.AutomaticSize = Enum.AutomaticSize.X
+	caption.Size = UDim2.fromOffset(0, 30)
+	caption.LayoutOrder = 1
+	local kda = UiStyle.text(score, "0 / 0 / 0", 36, C.Ink)
+	kda.RichText = true
+	kda.AutomaticSize = Enum.AutomaticSize.X
+	kda.Size = UDim2.fromOffset(0, 44)
+	kda.LayoutOrder = 2
+	local slash = string.format('<font color="#%s"> / </font>', C.GoldDark:ToHex())
 
 	local function added(character: Model)
 		showPortrait(image, character)
@@ -209,6 +303,14 @@ local function buildPlayer(gui: ScreenGui): () -> ()
 	if player.Character then
 		added(player.Character)
 	end
+	local reached = Leveling.level(player)
+	player:GetAttributeChangedSignal("Level"):Connect(function()
+		local lv = Leveling.level(player)
+		if lv > reached then
+			UiSound.play("LevelUp")
+		end
+		reached = lv
+	end)
 
 	return function()
 		local lv = Leveling.level(player)
@@ -217,6 +319,11 @@ local function buildPlayer(gui: ScreenGui): () -> ()
 		health:set(if humanoid and humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 0)
 		local step = Leveling.step(lv)
 		xp:set(if step then (player:GetAttribute("Xp") or 0) / step else 1)
+		kda.Text = table.concat({
+			tostring(player:GetAttribute("Kills") or 0),
+			tostring(player:GetAttribute("Deaths") or 0),
+			tostring(player:GetAttribute("Assists") or 0),
+		}, slash)
 	end
 end
 
@@ -301,6 +408,7 @@ local function buildMap(gui: ScreenGui): () -> ()
 	coin.Position = UDim2.new(0, -14, 0.5, 0)
 	coin.Parent = pill
 	local coins = UiStyle.text(pill, "0", 36, C.Cream, C.Edge)
+	local shown = player:GetAttribute("Coins") or 0
 	coins.Size = UDim2.new(1, -56, 1, 0)
 	coins.Position = UDim2.fromOffset(48, 0)
 
@@ -333,7 +441,11 @@ local function buildMap(gui: ScreenGui): () -> ()
 				d.frame.Visible = false
 			end
 		end
-		coins.Text = UiStyle.thousands(player:GetAttribute("Coins") or 0)
+		-- Coins count up to what the player has, less what is still flying home from a kill (KillFeed's "Held");
+		-- spending shows at once.
+		local target = math.max(0, (player:GetAttribute("Coins") or 0) - (pill:GetAttribute("Held") or 0))
+		shown = if target > shown then math.min(target, shown + math.max(1, (target - shown) * 0.15)) else target
+		coins.Text = UiStyle.thousands(shown)
 	end
 end
 
@@ -370,7 +482,7 @@ function Hud.start()
 	insets:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	scale:GetPropertyChangedSignal("Scale"):Connect(fit)
 	fit()
-	local updates = { buildTop(top), buildPlayer(gui), buildMap(gui) }
+	local updates = { buildTop(top), buildCrown(top), buildPlayer(gui), buildMap(gui) }
 	RunService.RenderStepped:Connect(function()
 		for _, update in updates do
 			update()

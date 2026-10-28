@@ -2,7 +2,8 @@
 -- hero's icon for it (Config.Heroes[hero].Icons) over the key, each darkening from the top while its cooldown runs with the seconds left on it, and lighting up while it is held to aim.
 -- Under M2, E and R a pill with the ability's rank as pips; with a point to spend it lights up with the key that
 -- raises it (1, 2, 3), which, or a click on the pill, raises the rank through Net.Upgrade (Shared.Leveling). An
--- ability not learned yet shows its icon greyed out.
+-- ability not learned yet shows its icon greyed out. A rank raised rings like an anvil, and the ultimate (R) coming off
+-- its cooldown sounds a blade drawn.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,6 +13,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
+local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 
 local AbilityBar = {}
@@ -38,6 +40,7 @@ type Slot = {
 	seconds: TextLabel,
 	endsAt: number,
 	total: number,
+	cooling: boolean,
 	rank: Rank?,
 }
 
@@ -102,6 +105,7 @@ local function slot(parent: Instance, key: string, index: number): Slot
 		seconds = seconds,
 		endsAt = 0,
 		total = 0,
+		cooling = false,
 	}
 	local upgradeIndex = table.find(Config.Progress.Upgrades, key)
 	if upgradeIndex then
@@ -236,7 +240,21 @@ function AbilityBar.start()
 	task.spawn(function()
 		upgradeEvent = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Upgrade") :: RemoteEvent
 	end)
-	player.AttributeChanged:Connect(showRanks)
+	local ranks: { [string]: number } = {}
+	for _, key in Config.Progress.Upgrades do
+		ranks[key] = Leveling.rank(player, key)
+	end
+	player.AttributeChanged:Connect(function(name)
+		local key = name:match("^Rank(.+)")
+		if key and ranks[key] then
+			local rank = Leveling.rank(player, key)
+			if rank > ranks[key] then
+				UiSound.play("RankUp")
+			end
+			ranks[key] = rank
+		end
+		showRanks()
+	end)
 	showRanks()
 	local function added(character: Model)
 		showIcons(character:GetAttribute("Hero"))
@@ -258,8 +276,17 @@ function AbilityBar.start()
 
 	RunService.RenderStepped:Connect(function()
 		local now = os.clock()
-		for _, s in slots do
+		for key, s in slots do
 			local left = s.endsAt - now
+			if left > 0 then
+				s.cooling = true
+			elseif s.cooling then
+				s.cooling = false
+				local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+				if key == "R" and humanoid and humanoid.Health > 0 then
+					UiSound.play("UltimateReady")
+				end
+			end
 			if left > 0 and s.total > 0 then
 				s.shade.Size = UDim2.fromScale(1, left / s.total)
 				s.seconds.Text = if left >= 1 then tostring(math.ceil(left)) else string.format("%.1f", left)

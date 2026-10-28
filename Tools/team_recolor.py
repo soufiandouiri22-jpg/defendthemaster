@@ -1,6 +1,8 @@
 # Makes the blue team copy of a red Meshy GLB: only the crimson pixels of its base colour turn royal blue, so gold,
 # stone and wood stay exactly the red piece's. Geometry, UVs and everything else in the GLB are copied unchanged.
 # python3 Tools/team_recolor.py <red.glb> <blue.glb> [preview.png]
+# python3 Tools/team_recolor.py --image <red.png> <blue.png> [--no-skin]   (a portrait or clothing template; a
+# painting's skin stays, unless --no-skin: for one without skin, whose light reds are lit crystal or glow)
 import io
 import json
 import struct
@@ -39,12 +41,16 @@ def write_glb(path, gltf, binary):
         f.write(struct.pack("<II", len(binary), 0x004E4942) + binary)
 
 
-def recolor(image):
+def recolor(image, spare_skin=False):
     hsv = np.asarray(image.convert("HSV")).astype(np.float32) / 255
-    h, s = hsv[..., 0], hsv[..., 1]
+    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     lo, hi = RED_HUES
     distance = np.where((h >= lo) | (h <= hi), 0, np.minimum(np.abs(h - lo), np.abs(h - hi)))
     weight = np.clip(1 - distance / FEATHER, 0, 1) * np.clip((s - MIN_SAT) / 0.15, 0, 1)
+    if spare_skin:
+        # A painting's lit skin is a light, soft orange-red: it keeps its colour.
+        skin = np.clip((v - 0.45) / 0.1, 0, 1) * np.clip((0.62 - s) / 0.08, 0, 1) * ((h <= 45 / 360) | (h >= 350 / 360))
+        weight = weight * (1 - skin)
     out = hsv.copy()
     out[..., 0] = np.where(weight > 0, BLUE_HUE, h)
     rgb_old = np.asarray(image.convert("RGB")).astype(np.float32)
@@ -54,6 +60,16 @@ def recolor(image):
 
 
 def main():
+    if sys.argv[1] == "--image":
+        source, target = sys.argv[2:4]
+        image = Image.open(source)
+        blue, weight = recolor(image, spare_skin="--no-skin" not in sys.argv[4:])
+        if image.mode == "RGBA":
+            blue = blue.convert("RGBA")
+            blue.putalpha(image.getchannel("A"))
+        blue.save(target)
+        print(f"{target}: {int((weight > 0.5).sum())} pixels turned blue")
+        return
     source, target = sys.argv[1:3]
     gltf, binary = read_glb(source)
     material = gltf["materials"][0]

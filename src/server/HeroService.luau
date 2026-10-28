@@ -7,8 +7,10 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Motion = require(ReplicatedStorage.Shared.Motion)
@@ -66,6 +68,30 @@ local function arm(character: Model, hero: string)
 	folder.Parent = character
 end
 
+-- Holds the root part of the dead hero `character` still, upright on the ground below where he died, with his body
+-- joints on, so that his pack's fall (HeroAnimator) lays him down there, as the Masters fall.
+local function lay(character: Model, humanoid: Humanoid)
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return
+	end
+	Motion.holdJoints(character)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	-- His own body too: he may have left the fight already (HeroService.discharge).
+	local ignore = HeroKit.leapIgnore()
+	table.insert(ignore, character)
+	params.FilterDescendantsInstances = ignore
+	local at = root.Position
+	local below = Workspace:Raycast(at, Vector3.new(0, -60, 0), params)
+	if below then
+		at = Vector3.new(at.X, below.Position.Y + humanoid.HipHeight + root.Size.Y / 2, at.Z)
+	end
+	local facing = HeroKit.direction(Vector3.zero, root.CFrame.LookVector, -Vector3.zAxis)
+	root.Anchored = true
+	root.CFrame = CFrame.lookAt(at, at + facing)
+end
+
 export type Layout = {
 	spawnPads: { [string]: { CFrame } },
 }
@@ -100,6 +126,9 @@ function HeroService.prepare(character: Model, hero: string, team: string, actor
 		humanoid.WalkSpeed = Items.walkSpeed(actor)
 		-- A hero falls down whole when he dies, as StarterPlayer has it for players; a bot's model would fall apart.
 		humanoid.BreakJointsOnDeath = false
+		humanoid.Died:Connect(function()
+			lay(character, humanoid)
+		end)
 		-- The HUD draws every hero's bar in its team's colour instead (HeroBars).
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	end

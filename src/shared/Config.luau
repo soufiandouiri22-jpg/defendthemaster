@@ -9,10 +9,120 @@ Config.Arena = {
 }
 
 -- The Master is an NPC king on his throne, a giant beside the heroes (three times their size); the throne room grows
--- with him.
+-- with him. He never heals (MasterService). He sits until an enemy (a hero, or a minion when no hero is there) comes
+-- within `Zone` studs of his dais' front, then stands up and fights: enemy heroes first, the nearest of them, else the
+-- nearest minion, never going further than `Leash` studs from that spot. With nobody left in his zone for `Calm`
+-- seconds he walks back and sits down again. He walks slowly (`WalkSpeed`, a hero walks Config.Combat.WalkSpeed).
+-- He moves with the Greataxe Berserker's clips (`Pack`, Shared.Sequence, Docs/Third_Party.md) and holds its weapon.
+-- His swing (`Swing`) cuts everyone in front of him within `Reach` studs of his middle, every `Every` seconds: its
+-- clips (`Motions`) take turns, each striking `Hits` seconds in and lasting `Length`. His ground slam (`Slam`) first
+-- shows a red circle of `Radius` studs round the spot `Ahead` studs before him while he works himself up (the `Frenzy`
+-- clip, `FrenzyLength` seconds) and swings (the `Motion` clip, striking `Impact` seconds in and lasting `Length`), then
+-- strikes everyone in it; he slams when `Crowd` enemies or more stand in it, or when a hero has stood alone before him
+-- for `Alone` seconds since the slam came off its `Cooldown`. Standing up from the throne takes `Rise` seconds; he
+-- falls with the `Death` clip. He is dressed from the catalogue as design 02 (`Look`): a toga with a red sash, the gold
+-- crown, a red cape, short brown hair and a grim face; the blue team's Master wears his reds in blue (`TeamLook`).
 Config.Master = {
 	Scale = 3,
 	Health = 20000,
+	Zone = 50,
+	Leash = 62,
+	Calm = 3,
+	WalkSpeed = 10,
+	Rise = 1.2,
+	Reach = 14,
+	Pack = "GreataxeBerserker",
+	-- The hip height its clips were authored at (their AuthoredHipHeight, which a game script may not read).
+	PackHipHeight = 2,
+	-- His gold greatsword in ServerStorage (Import 3D): its length in studs along X, the tip at +X, and where his fist
+	-- closes round its grip, just under the guard, as a share of that length from the centre towards the pommel at -X.
+	-- Until he draws it, it hangs on his back: that spot of the grip `At` from his upper torso (right, up, back), above
+	-- his right shoulder, the blade leaning `Lean` degrees from straight down towards his left.
+	Sword = {
+		Name = "MasterGreatsword",
+		Length = 13,
+		Grip = 0.285,
+		Back = { At = Vector3.new(2.6, 3.2, 2.3), Lean = 30 },
+	},
+	-- Once he stands he waits `Pause` seconds, reaches over his right shoulder for the grip in `Reach` seconds, and
+	-- draws it into his guard; he fights `Length` seconds after he stood up.
+	Draw = { Pause = 0.6, Reach = 0.5, Length = 1.8 },
+	-- Back before his throne he lowers his guard (the `Unguard` clip), reaches over his shoulder in `Reach` seconds to
+	-- put his sword on his back, and sits down `Length` seconds after he arrived.
+	Sheath = { Reach = 0.5, Length = 1.5 },
+	Swing = {
+		Every = 2.4,
+		Angle = 130,
+		Damage = 140,
+		Motions = { "Attack1", "Attack2", "Attack3" },
+		Hits = { 0.5, 0.45, 0.45 },
+		Length = 1.33,
+	},
+	Slam = {
+		Cooldown = 10,
+		Frenzy = "Frenzy",
+		FrenzyLength = 2,
+		Motion = "Slam",
+		Impact = 1.3,
+		Length = 2.67,
+		Radius = 18,
+		Ahead = 5,
+		Damage = 260,
+		Crowd = 2,
+		Alone = 6,
+	},
+	Death = "Death",
+	-- He draws his sword into his guard with this clip, then stands in the `Stance` clip (a wide-legged battle stance,
+	-- looped) whenever he is armed and not swinging; while he walks his legs take the steps and the rest keeps it.
+	Guard = "Guard",
+	Stance = "Stance",
+	Unguard = "Unguard",
+	-- His steps while he is up, from a second pack (the Armorer's walks and turns, authored at `HipHeight`): forward,
+	-- back and sideways after where he moves against where he faces, played so the feet keep pace with the ground
+	-- (`Pace` studs a second at that size), and a turn on the spot when he turns faster than `Turning` radians a
+	-- second without moving. Each comes over the other in `Blend` seconds. That pack has no sounds: a foot that comes
+	-- down sounds with his fight pack's footsteps on sand (Shared.PackSounds), at `Steps` loudness as in his clips.
+	Walk = {
+		Pack = "Armorer",
+		HipHeight = 2,
+		Pace = 3.7,
+		Turning = 0.8,
+		Blend = 0.2,
+		Steps = 0.35,
+		Forward = "Walk",
+		Back = "WalkBack",
+		Left = "WalkLeft",
+		Right = "WalkRight",
+		TurnLeft = "TurnLeft",
+		TurnRight = "TurnRight",
+	},
+	-- He reels from a hit of at least `Least` while he is not attacking, at most once every `Every` seconds; it only
+	-- shows, his fight goes on.
+	Flinch = { Motion = "Hit", Least = 80, Every = 5 },
+	Look = {
+		Shirt = 139322358870952,
+		Pants = 89849376904198,
+		HatAccessory = "137749277743768",
+		BackAccessory = "16247693850",
+		-- The hair is listed in the catalogue as a face accessory, as the face is.
+		FaceAccessory = "104894753016090,14806562837",
+		Skin = Color3.fromRGB(234, 184, 146),
+	},
+	-- What a team's Master wears instead: the blue one the same cape in blue (the catalogue's own colour of it) and
+	-- the toga's shirt with its red turned blue (Art/Clothing, by Tools/team_recolor.py's recolouring), worn as its
+	-- template.
+	TeamLook = {
+		Blue = { BackAccessory = "16247734805", ShirtTemplate = "rbxassetid://124992788134534" } :: {
+			BackAccessory: string?,
+			ShirtTemplate: string?,
+		},
+	},
+	-- Each team's Master's painted portrait, made as the heroes' are (Art/Portraits: the red one from a Play
+	-- screenshot of him, the blue one that recoloured); `Face` is the square round his head and shoulders.
+	Portraits = {
+		Red = { Image = "rbxassetid://86808592989754", Face = { 230, 30, 700 } },
+		Blue = { Image = "rbxassetid://110619426711939", Face = { 230, 30, 700 } },
+	},
 }
 
 -- Coins, in League of Legends' proportions (a hero kill is worth 14 Melee or 21 Spitter last hits, a legendary item
@@ -299,6 +409,73 @@ Config.Match = {
 	WaitForPlayer = 20,
 }
 
+-- The Sun Crown, the objective on the plateau in the middle: it appears `FirstAt` seconds into the fight and floats
+-- `Float` studs over the plateau's top. The first hero to touch it (within `Reach` studs) takes it at once. While a
+-- hero carries it he deals `Carrier` more and the rest of his team `Damage` more, wherever they are. It fades `Lasts`
+-- seconds after it was first taken, and the next one comes `Gap` seconds later. A carrier who dies drops it where he
+-- fell, for anyone to take. Whenever it is taken, a banner (KillFeed) shows who took it, with `Texts` as seen by its
+-- taker, his team and his enemies, and another when it fades; while a team has it, its players see the time it has
+-- left (Hud).
+Config.Crown = {
+	FirstAt = 0,
+	Float = 4,
+	Reach = 4,
+	Damage = 0.08,
+	Carrier = 0.15,
+	Lasts = 90,
+	Gap = 60,
+	Texts = {
+		Own = "YOU HAVE THE SUN CROWN",
+		Ally = "YOUR TEAM HAS THE SUN CROWN",
+		Enemy = "THE ENEMY HAS THE SUN CROWN",
+		Fades = "THE SUN CROWN FADES",
+	},
+}
+
+-- The calls on a hero's death (ProgressService, shown by KillFeed). One call per kill, the first that fits: FirstBlood
+-- (the match's first kill), Quad, Triple and Double (the killer's kills each within `MultiWindow` seconds of the one
+-- before; four is a whole team alone), Shutdown (the victim had `ShutdownStreak` kills or more without dying), the
+-- killer's streak of kills without dying (`Streaks`, the highest reached), else Slain. A hero killed by a minion or a
+-- Master is "Died". When a death leaves the victim's whole team down, Wipeout follows as a second call, after a Quad
+-- as well. `Texts` is what the screen shows, `Tiers` how big (1 the plainest, 4 the biggest).
+Config.Kills = {
+	MultiWindow = 10,
+	ShutdownStreak = 3,
+	Streaks = {
+		{ kills = 3, call = "OnFire" },
+		{ kills = 5, call = "Unstoppable" },
+		{ kills = 7, call = "Legend" },
+	},
+	Texts = {
+		FirstBlood = "FIRST BLOOD!",
+		Shutdown = "SHUTDOWN!",
+		Wipeout = "WIPEOUT!",
+		Quad = "QUAD KILL!",
+		Triple = "TRIPLE KILL!",
+		Double = "DOUBLE KILL!",
+		OnFire = "ON FIRE!",
+		Unstoppable = "UNSTOPPABLE!",
+		Legend = "LEGEND!",
+		Slain = "ENEMY SLAIN",
+		Died = "SLAIN",
+		Own = "YOU HAVE BEEN SLAIN",
+	},
+	Tiers = {
+		Slain = 1,
+		Died = 1,
+		Own = 1,
+		FirstBlood = 2,
+		Double = 2,
+		OnFire = 2,
+		Shutdown = 3,
+		Triple = 3,
+		Unstoppable = 3,
+		Wipeout = 4,
+		Quad = 4,
+		Legend = 4,
+	},
+}
+
 -- Levels, as in League of Legends: when an enemy dies, the heroes of the other team within `Share` studs (and its
 -- killer, wherever he is) share its XP evenly. `Steps` is the XP from each level to the next. Every level adds
 -- `Health` and `Damage` of the hero's base, and a point to spend on raising M2, E or R one rank with the keys 1, 2 and 3
@@ -306,10 +483,10 @@ Config.Match = {
 -- start unlearned (rank 0) and are learned with their first rank. A rank past the first adds `RankDamage` to its
 -- ability's damage and takes `RankCooldown` off its cooldown; rank `n` of an ability needs the hero level
 -- `Needs[key][n]`: as in League, a basic ability's rank is at most half the level rounded up, and the ultimate comes
--- later.
+-- at a third of `MaxLevel`. `MaxLevel` is the number of ranks, so every rank is full exactly at the top level.
 Config.Progress = {
-	MaxLevel = 10,
-	Steps = { 120, 160, 200, 240, 280, 320, 360, 400, 440 },
+	MaxLevel = 12,
+	Steps = { 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520 },
 	Share = 36,
 	MinionXp = { Melee = 40, Spitter = 30 },
 	HeroXp = 140,
@@ -332,7 +509,7 @@ Config.Progress = {
 
 -- The team minions (concept G, rock creatures with crystals): a wave leaves both of a team's doorways on its own half every
 -- `WaveInterval` seconds, the first `FirstWave` seconds after the fight began, and marches on the other team's Master,
--- fighting every enemy it meets on the way. Only the last hit earns the bounty. Ranges are from edge to edge, speeds in
+-- fighting every enemy hero it meets on the way; minions never fight each other. Only the last hit earns the bounty. Ranges are from edge to edge, speeds in
 -- studs a second (a hero walks 16).
 Config.Minions = {
 	FirstWave = 10,
@@ -344,7 +521,7 @@ Config.Minions = {
 	LaneRadius = 82,
 	Radius = 1.8,
 	Height = 5.2,
-	-- A minion turns on an enemy this close, and gives up the chase this far from where it left its path.
+	-- A minion turns on an enemy hero or Master this close, and gives up the chase this far from where it left its path.
 	Acquire = 18,
 	Leash = 30,
 	-- An enemy hero who attacks a hero this close to a minion becomes its target, for this many seconds.
@@ -352,6 +529,16 @@ Config.Minions = {
 	CallTime = 3,
 	-- Minions do this share of their damage to a Master.
 	VsMaster = 0.5,
+	-- Every hop lands on the sand with the footsteps of this pack's sounds (Shared.PackSounds), this loud: softer than
+	-- a hero's step, as there are many of them.
+	Steps = { Pack = "GreataxeBerserker", Volume = 0.25 },
+	-- Each team's minions' painted portrait, the killer's in the kill feed when a minion fells a hero (made as the
+	-- heroes' are, Art/Portraits: the red one from a Play screenshot of a red minion, the blue one that recoloured
+	-- with Tools/team_recolor.py --no-skin); `Face` is the square round its body and crystals.
+	Portraits = {
+		Red = { Image = "rbxassetid://82001793757256", Face = { 150, 40, 880 } },
+		Blue = { Image = "rbxassetid://121972646515298", Face = { 150, 40, 880 } },
+	},
 	-- A Melee minion's bite is physical damage, a Spitter's spit magic (Config.Items: Armor and Resist).
 	Kinds = {
 		Melee = { Health = 450, Damage = 12, Interval = 1.25, Range = 1.2, Speed = 11, Bounty = 21, Magic = false },
@@ -376,7 +563,8 @@ Config.Minions = {
 -- A hero moves and attacks with the motions of a bought animation pack (`Pack`, a folder in ReplicatedStorage with the
 -- pack's player and rig, Docs/Third_Party.md). The pack's rig has the R15 proportions of BodyTypeScale 0 and
 -- ProportionScale 0, so the hero's body has them too, and wears the pack's weapons (`Weapons`, from the rig's
--- Components). `Motions` names the pack's clips the hero moves with.
+-- Components). `Motions` names the pack's clips the hero moves with; `Death` is the pack's own fall, which carries his
+-- weapons down with him and is held once it ends.
 --
 -- The kit: M1 a combo of hits, M2, E and R abilities. Times are seconds into the motion at speed 1 (`Speed` plays it
 -- faster), ranges in studs from the hero to the target's edge, angles the cone's full width in degrees. Every hit
@@ -432,6 +620,7 @@ Config.Heroes = {
 			Takeoff = "RA-SHD-011",
 			Air = "RA-SHD-012",
 			Land = "RA-SHD-013",
+			Death = "RA-SHD-033",
 		},
 		Kit = {
 			M1 = {
@@ -532,8 +721,11 @@ Config.Respawn = {
 	StreakMax = 9,
 }
 
--- Bots fill both teams up to `TeamSize` heroes, all playing `Hero`. A bot fights the nearest enemy hero within `Sight`
--- studs, else the nearest other enemy there, else walks its lane behind its minions. It plays as a person would, not
+-- Bots fill both teams up to `TeamSize` heroes, all playing `Hero`. A bot goes after an enemy hero anywhere in the
+-- arena: the nearest one nobody of its team fights yet (no other bot chose him and no player of its team is within
+-- `Taken` studs of him), and only when every one is taken the nearest of them, to help. With no enemy hero alive it
+-- fights the nearest other enemy within `Sight` studs, else the nearest enemy minion, else waits at its lane's gate. It
+-- plays as a person would, not
 -- perfectly: after an ability, and on a new target, it waits `Reaction` seconds (between Min and Max) before its next
 -- ability; between its swings it rests up to `Rest` seconds; its dagger leads its target by `Lead` of the way and
 -- flies up to `Miss` degrees off, its leaps and dashes land up to `Stray` studs from where it aimed. Only while
@@ -543,6 +735,7 @@ Config.Bots = {
 	TeamSize = 4,
 	Hero = "Shadowren",
 	Sight = 25,
+	Taken = 20,
 	Reaction = { Min = 1.3, Max = 2.6 },
 	Rest = 0.9,
 	Lead = 0.2,

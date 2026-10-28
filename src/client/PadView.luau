@@ -2,7 +2,8 @@
 -- with a soft light and motes drifting up. A hero healing on it (Net.PadHeal) stands in a column of light with sparks
 -- rising round him, and the player sees his own heals as green numbers (HitFeedback.heal). A hero coming back
 -- (Net.HeroSpawned) arrives in a burst: a pillar of light, two rings sweeping out over the ground, sparks, and a glow
--- on him that fades.
+-- on him that fades. Both sound where they happen: a soft chime as a hero's healing begins, a sparkling rush as he
+-- comes back.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,6 +14,7 @@ local Workspace = game:GetService("Workspace")
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HitFeedback = require(script.Parent.HitFeedback)
+local UiSound = require(script.Parent.UiSound)
 
 local PadView = {}
 
@@ -178,6 +180,7 @@ local function healed(character: Model, amount: number)
 		base.Parent = effects
 		h = { base = base, beam = beam, sparks = sparks, expires = 0 }
 		healing[character] = h
+		UiSound.at("PadHeal", root)
 	end
 	local entry = h :: Healing
 	entry.expires = os.clock() + Config.Pads.Tick + COLUMN_LINGER
@@ -191,6 +194,7 @@ local function burst(character: Model)
 	local colour = lightOf(character:GetAttribute("Team"))
 	local feet = feetOf(root)
 	local info = TweenInfo.new(BURST, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	UiSound.at("Respawn", feet)
 
 	local pillar = column("RespawnPillar", feet, PILLAR_HEIGHT, 5, colour)
 	pillar.Transparency = 0.25

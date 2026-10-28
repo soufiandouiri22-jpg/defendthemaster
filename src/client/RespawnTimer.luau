@@ -1,5 +1,6 @@
 -- While the player's hero is dead the world turns grey and the middle of the screen counts down to his return (the
--- hero's "RespawnAt" attribute, in server time, from ProgressService.heroDied).
+-- hero's "RespawnAt" attribute, in server time, from ProgressService.heroDied). While the player's own kill banner
+-- shows there (KillFeed sets PlayerGui's "KillBanner") the count fades out of its way and keeps running underneath.
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -14,6 +15,8 @@ local RespawnTimer = {}
 local C = UiStyle.Colors
 local FADE = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local GREY = -0.85
+-- How fast the count fades out of the kill banner's way and back (its full fade per second).
+local MAKE_WAY = 5
 
 function RespawnTimer.start()
 	local player = Players.LocalPlayer
@@ -62,9 +65,19 @@ function RespawnTimer.start()
 		task.spawn(watch, player.Character)
 	end
 
-	RunService.RenderStepped:Connect(function()
+	local shown = 1
+	local texts = { title, count }
+	RunService.RenderStepped:Connect(function(dt)
 		if not dead or not character then
 			return
+		end
+		local target = if player.PlayerGui:GetAttribute("KillBanner") then 0 else 1
+		shown = if target > shown
+			then math.min(target, shown + MAKE_WAY * dt)
+			else math.max(target, shown - MAKE_WAY * dt)
+		for _, label in texts do
+			label.TextTransparency = 1 - shown;
+			(label:FindFirstChildOfClass("UIStroke") :: UIStroke).Transparency = 1 - shown
 		end
 		local at = character:GetAttribute("RespawnAt")
 		count.Text = if at then tostring(math.max(1, math.ceil(at - Workspace:GetServerTimeNow()))) else ""

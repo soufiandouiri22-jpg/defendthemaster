@@ -9,6 +9,9 @@ return {
 	CrosshairEnemy = "rbxassetid://107422997181186",
 	CrosshairAlly = "rbxassetid://129075895576362",
 	HudCrown = "rbxassetid://101598854323035",
+	-- The Sun Crown from the front (Art/Icons/Crown/SunCrownFront.png, Tools/render_crown_icon.py), worn by the
+	-- portrait on the banner when a hero takes it (KillFeed).
+	SunCrown = "rbxassetid://108877337730260",
 	HudCoin = "rbxassetid://127769238687652",
 	-- The top bar of design 05 (Tools/ui_textures.py): each team's crown, and the score board with the clock's tab.
 	HudCrownBlue = "rbxassetid://127147223279087",
@@ -26,4 +29,33 @@ return {
 	BuySting = "rbxassetid://1842178392",
 	CountTick = "rbxassetid://1846284931",
 	FightBoom = "rbxassetid://9125484526",
+	-- The bigger kills' sting (triple kill, shutdown), the first roll of a tribal drum sting from the same library.
+	DrumSting = "rbxassetid://1836741188",
+	-- The interface's and the arena's cues (UiSound), from the same library (Docs/Third_Party.md): Roblox's own
+	-- interface set, Pro Sound Effects' recordings and an APM boom.
+	UiHover = "rbxassetid://10066931761",
+	UiSelect = "rbxassetid://10128760939",
+	UiSwipe = "rbxassetid://10128766965",
+	UiBack = "rbxassetid://10066914500",
+	ClothSwing = "rbxassetid://9114369924",
+	PaperHandling = "rbxassetid://9125723307",
+	ChainMail = "rbxassetid://9113759193",
+	CoinJingle = "rbxassetid://9113849492",
+	CoinBounce = "rbxassetid://9113848469",
+	WoodThud = "rbxassetid://9126267420",
+	MagicTwirl = "rbxassetid://9125644310",
+	MagicGlow = "rbxassetid://9116394545",
+	MagicExit = "rbxassetid://9125635650",
+	FallingShimmer = "rbxassetid://9116418035",
+	PowerClunk = "rbxassetid://9117885276",
+	CorkPull = "rbxassetid://9113944349",
+	SwordDraw = "rbxassetid://9119742466",
+	EvilBell = "rbxassetid://9114352428",
+	CrownDrop = "rbxassetid://9116554603",
+	FireWhoosh = "rbxassetid://9114446852",
+	FireBurst = "rbxassetid://9114443884",
+	RockKnock = "rbxassetid://9118608925",
+	RockBreak = "rbxassetid://9118588165",
+	GlassShards = "rbxassetid://9114591567",
+	DeepThud = "rbxassetid://1843025759",
 }

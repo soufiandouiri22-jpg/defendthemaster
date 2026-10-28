@@ -44,6 +44,8 @@ type Clip = {
 	fresh: boolean,
 	-- Played without the clip carrying the body over the ground (the game moves the hero itself).
 	inPlace: boolean,
+	-- Kept at its last pose once it ends (a fall), instead of fading back to the base.
+	hold: boolean,
 }
 
 export type Cue = { Time: number, [string]: any }
@@ -59,8 +61,9 @@ export type Motion = typeof(setmetatable(
 		character: Model,
 		player: any,
 		joints: { [string]: Joint },
-		-- The part the root joint moves (the pack rig's lower torso).
+		-- The part the root joint moves (the pack rig's lower torso), and how the pack turns that joint's frame.
 		rootPart: string?,
+		rootTurn: CFrame,
 		bones: { [string]: Bone },
 		meshes: { [string]: { MeshPart } },
 		base: Clip?,
@@ -104,6 +107,16 @@ function Motion.rootShift(character: Model): CFrame
 	return CFrame.new(0, PACK_ROOT_HEIGHT - (humanoid.HipHeight + root.Size.Y / 2), 0)
 end
 
+-- Switches the body joints of the dead `character` back on, so a clip can lay him down: the Humanoid lets go of them
+-- when he dies, for Roblox's ragdoll.
+function Motion.holdJoints(character: Model)
+	for _, d in character:GetDescendants() do
+		if d:IsA("AnimationConstraint") then
+			d.Enabled = true
+		end
+	end
+end
+
 -- The character's joint that moves the part named `part1`, with its two frames.
 local function findJoint(character: Model, part0: string, part1: string): (Instance?, CFrame, CFrame)
 	local part = character:FindFirstChild(part1)
@@ -123,6 +136,27 @@ local function findJoint(character: Model, part0: string, part1: string): (Insta
 	return nil, CFrame.identity, CFrame.identity
 end
 
+-- Takes `d` into what the clips move if it is a bone or mesh of one of the character's weapons.
+local function takeWeapon(self: Motion, d: Instance)
+	local weapons = self.character:FindFirstChild("Weapons")
+	if not weapons or not d:IsDescendantOf(weapons) then
+		return
+	end
+	local component = d
+	while component.Parent ~= weapons do
+		component = component.Parent :: Instance
+	end
+	if d:IsA("Bone") then
+		self.bones[d.Name] = d
+	elseif d:IsA("MeshPart") then
+		local meshes = self.meshes[component.Name] or {}
+		self.meshes[component.Name] = meshes
+		if not table.find(meshes, d) then
+			table.insert(meshes, d)
+		end
+	end
+end
+
 function Motion.new(character: Model, packName: string): Motion
 	local p = pack(packName)
 	local self = setmetatable({
@@ -130,6 +164,7 @@ function Motion.new(character: Model, packName: string): Motion
 		player = p.player,
 		joints = {},
 		rootPart = nil,
+		rootTurn = CFrame.identity,
 		bones = {},
 		meshes = {},
 		base = nil,
@@ -149,6 +184,7 @@ function Motion.new(character: Model, packName: string): Motion
 			if j.part0 == "HumanoidRootPart" then
 				packC0 = shift * packC0
 				self.rootPart = j.part1
+				self.rootTurn = packC0.Rotation
 			end
 			self.joints[j.part1] = {
 				instance = instance,
@@ -159,20 +195,14 @@ function Motion.new(character: Model, packName: string): Motion
 			warn("[Motion] no joint for", j.part1, "in", character:GetFullName())
 		end
 	end
-	local weapons = character:FindFirstChild("Weapons")
-	if weapons then
-		for _, component in weapons:GetChildren() do
-			local meshes = {}
-			for _, d in component:GetDescendants() do
-				if d:IsA("Bone") then
-					self.bones[d.Name] = d
-				elseif d:IsA("MeshPart") then
-					table.insert(meshes, d)
-				end
-			end
-			self.meshes[component.Name] = meshes
-		end
+	-- A hero who just (re)spawned can reach the client a piece at a time, his weapons after the rest of him, so their
+	-- bones and meshes are taken in as they arrive.
+	for _, d in character:GetDescendants() do
+		takeWeapon(self, d)
 	end
+	character.DescendantAdded:Connect(function(d)
+		takeWeapon(self, d)
+	end)
 	return self
 end
 
@@ -191,13 +221,25 @@ end
 
 function Motion.sample(self: Motion, clip: Clip): Pose
 	local sample = self.player.Sample(nil, clip.id, clipTime(clip))
-	local body = sample.body
+	local body, bones = sample.body, sample.bones
 	local root = self.rootPart and body[self.rootPart]
 	if clip.inPlace and root then
 		body = table.clone(body)
 		body[self.rootPart :: string] = CFrame.new(0, root.Position.Y, 0) * root.Rotation
+		-- The weapons hang from the root part, not the body, so their bones lose the same travel over the ground.
+		local travel = self.rootTurn * Vector3.new(-root.Position.X, 0, -root.Position.Z)
+		bones = table.clone(bones)
+		for name, bone in self.bones do
+			local mesh = bone.Parent
+			local binding = mesh and mesh:FindFirstChild("ComponentBinding")
+			local pose = bones[name]
+			if pose and mesh and mesh:IsA("BasePart") and binding and binding:IsA("Weld") then
+				local turn = (binding.C0 * binding.C1:Inverse() * bone.CFrame).Rotation
+				bones[name] = CFrame.new(turn:VectorToObjectSpace(travel)) * pose
+			end
+		end
 	end
-	return { body = body, bones = sample.bones, opacity = sample.opacity }
+	return { body = body, bones = bones, opacity = sample.opacity }
 end
 
 local function blend(a: Pose, b: Pose, w: number): Pose
@@ -220,7 +262,7 @@ end
 
 local function newClip(self: Motion, id: string, speed: number, time: number?): Clip
 	local _, meta = self.player.Sample(nil, id, 0)
-	return { id = id, time = time or 0, speed = speed, meta = meta, fresh = true, inPlace = false }
+	return { id = id, time = time or 0, speed = speed, meta = meta, fresh = true, inPlace = false, hold = false }
 end
 
 -- Moves `clip`'s clock on by `delta` seconds and hands over the cues it passes.
@@ -281,11 +323,19 @@ function Motion.baseDone(self: Motion): boolean
 	return base ~= nil and not base.meta.loop and base.time >= base.meta.duration
 end
 
--- Plays `id` once over the base, from `startTime` seconds in, `inPlace` without the clip's travel over the ground;
--- returns how long it lasts at `speed`.
-function Motion.play(self: Motion, id: string, speed: number, startTime: number?, inPlace: boolean?): number
+-- Plays `id` once over the base, from `startTime` seconds in, `inPlace` without the clip's travel over the ground,
+-- `hold` keeping its last pose when it ends; returns how long it lasts at `speed`.
+function Motion.play(
+	self: Motion,
+	id: string,
+	speed: number,
+	startTime: number?,
+	inPlace: boolean?,
+	hold: boolean?
+): number
 	self.action = newClip(self, id, speed, startTime)
 	self.action.inPlace = inPlace == true
+	self.action.hold = hold == true
 	self.actionWeight = if startTime and startTime > 0 then 1 else self.actionWeight
 	return self.action.meta.duration / speed
 end
@@ -318,7 +368,7 @@ function Motion.step(self: Motion, dt: number)
 	local action = self.action
 	if action then
 		advance(self, action, dt * action.speed, true)
-		if action.time >= action.meta.duration then
+		if action.time >= action.meta.duration and not action.hold then
 			self:stop()
 		else
 			self.actionWeight = math.min(1, self.actionWeight + dt / ACTION_FADE_IN)

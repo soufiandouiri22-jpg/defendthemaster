@@ -5,9 +5,13 @@
 -- with its icon, name and what it costs the hero now (his parts counted), dark while he cannot buy it; on the right
 -- the chosen item with its stats, its build path and the green buy button; the bag along the bottom with the undo
 -- button. A card is chosen with a click and bought with a right click or the button; a slot of the bag is chosen and
--- sold the same way. Purchases go through Net.Shop, and everything shown comes from the server's attributes (Items).
+-- sold the same way. The other items in the build path (its parts, or what it builds into) are chosen and bought the
+-- same way, the grid turning to their tab and scrolling them into view. Purchases go through Net.Shop, and everything shown comes from the server's attributes (Items).
+-- It sounds (UiSound) as the mouse passes over what can be clicked, as a card, slot or tab is chosen, as the board
+-- unrolls and rolls up, and as coins change hands, or a dull knock when what is asked cannot be done.
 -- Laid out on a 1920 x 1080 board, measured off the design (1024 x 576) at 1.875 times, drawn at SIZE of the screen.
 
+local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -18,6 +22,7 @@ local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Items = require(ReplicatedStorage.Shared.Items)
 local HeroCamera = require(script.Parent.HeroCamera)
+local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 
 local Shop = {}
@@ -62,6 +67,8 @@ local shopEvent: RemoteEvent? = nil
 local isOpen = false
 local prompts: { [Instance]: ProximityPrompt } = {}
 local refit: () -> () = function() end
+local goTo: (id: string) -> () = function() end
+local buy: (id: string) -> () = function() end
 
 -- On screen: the foot of the score board's clock tab, and the top of the ability bar's outline.
 local function hudBand(): (number?, number?)
@@ -147,6 +154,13 @@ local function panel(
 	local gradient = inner:FindFirstChildOfClass("UIGradient") :: UIGradient
 	gradient.Color = ColorSequence.new(top, bottom)
 	return outer, inner, gradient
+end
+
+-- Sounds as the mouse comes over `button`.
+local function hoverable(button: GuiButton)
+	button.MouseEnter:Connect(function()
+		UiSound.play("Hover")
+	end)
 end
 
 -- A click area over all of `frame`.
@@ -243,12 +257,32 @@ local function divider(parent: Instance, y: number)
 	line.BackgroundTransparency = 0.3
 end
 
--- A small card in the build path: the item's icon, name and price; green-edged when the hero holds it.
-local function pathCard(parent: Instance, id: string, width: number, x: number, held: boolean)
+-- A small card in the build path: the item's icon, name and price; green-edged when the hero holds it. With `open`
+-- it chooses the item on a click and buys it on a right click, its edge lighting up under the mouse.
+local function pathCard(parent: Instance, id: string, width: number, x: number, held: boolean, open: boolean)
 	local card = UiStyle.frame(parent, UDim2.fromOffset(width, 150), UDim2.fromOffset(x, 0))
 	UiStyle.corner(card, 10)
 	UiStyle.gradient(card, CARD_TOP, CARD_BOTTOM)
-	UiStyle.stroke(card, if held then STAT else C.GoldDark, if held then 4 else 2)
+	local edge, thickness = if held then STAT else C.GoldDark, if held then 4 else 2
+	local stroke = UiStyle.stroke(card, edge, thickness)
+	if open then
+		local button = clickable(card)
+		hoverable(button)
+		button.MouseEnter:Connect(function()
+			stroke.Color, stroke.Thickness = PICKED, 5
+		end)
+		button.MouseLeave:Connect(function()
+			stroke.Color, stroke.Thickness = edge, thickness
+		end)
+		button.Activated:Connect(function()
+			UiSound.play("Pick")
+			goTo(id)
+		end)
+		button.MouseButton2Click:Connect(function()
+			goTo(id)
+			buy(id)
+		end)
+	end
 	local name = UiStyle.text(card, Config.Items[id].Name, 18, C.Ink)
 	name.Size = UDim2.new(1, -8, 0, 22)
 	name.Position = UDim2.fromOffset(4, 4)
@@ -362,7 +396,7 @@ local function showDetail()
 			have = true
 			used[part] = (used[part] or 0) + 1
 		end
-		pathCard(detail.path, part, width, x, have)
+		pathCard(detail.path, part, width, x, have, part ~= id)
 		if i < n then
 			local middle = x + width + gap / 2
 			if #parts > 0 and i == n - 1 then
@@ -431,9 +465,16 @@ local function pickItem(id: string)
 	paint()
 end
 
-local function buy(id: string)
+function buy(id: string)
 	pickItem(id)
+	local ok = Items.check(player, id)
+	UiSound.play(if ok and player:GetAttribute("AtShop") == true then "Buy" else "Denied")
 	send("Buy", id)
+end
+
+local function sell(index: number)
+	UiSound.play(if player:GetAttribute("AtShop") == true then "Sell" else "Denied")
+	send("Sell", index)
 end
 
 -- Puts the cards of `name`'s items in the grid.
@@ -477,7 +518,9 @@ local function showCategory(name: string)
 		UiStyle.corner(band, 10)
 		local row, text = price(band, 34, C.Ink)
 		row.Position = UDim2.fromOffset(0, 3)
+		hoverable(button)
 		button.Activated:Connect(function()
+			UiSound.play("Pick")
 			pickItem(id)
 		end)
 		button.MouseButton2Click:Connect(function()
@@ -489,6 +532,33 @@ local function showCategory(name: string)
 		pickedItem = list[1]
 	end
 	paint()
+end
+
+-- Chooses the item `id`, turning the grid to its tab when the grid does not hold it and scrolling its card into view.
+function goTo(id: string)
+	pickedItem, pickedSlot = id, nil
+	local tab = Config.Items[id].Category
+	if not cards[id] and tab and tabs[tab] then
+		showCategory(tab)
+	else
+		paint()
+	end
+	-- Once the grid has laid the card out; CanvasPosition is in the same screen pixels as AbsolutePosition.
+	RunService.RenderStepped:Once(function()
+		local card = cards[id]
+		if not card then
+			return
+		end
+		local top = card.button.AbsolutePosition.Y - grid.AbsolutePosition.Y + grid.CanvasPosition.Y
+		local bottom = top + card.button.AbsoluteSize.Y
+		local window = grid.AbsoluteWindowSize.Y
+		local at = grid.CanvasPosition.Y
+		if top < at then
+			grid.CanvasPosition = Vector2.new(0, top - 12)
+		elseif bottom > at + window then
+			grid.CanvasPosition = Vector2.new(0, bottom - window + 12)
+		end
+	end)
 end
 
 local function build()
@@ -535,7 +605,9 @@ local function build()
 	-- The back button.
 	local back, backInner = panel(board, Vector2.new(122, 109), Vector2.new(28, 19), DARK_TOP, DARK_BOTTOM, 16, 6)
 	arrow(backInner, C.Cream, 64, UDim2.fromScale(0.5, 0.5))
-	clickable(back).Activated:Connect(function()
+	local backButton = clickable(back)
+	hoverable(backButton)
+	backButton.Activated:Connect(function()
 		Shop.close()
 	end)
 
@@ -578,7 +650,12 @@ local function build()
 		local limit = Instance.new("UITextSizeConstraint")
 		limit.MaxTextSize = 38
 		limit.Parent = label
-		clickable(outer).Activated:Connect(function()
+		local tabButton = clickable(outer)
+		hoverable(tabButton)
+		tabButton.Activated:Connect(function()
+			if category ~= tab.id or pickedSlot then
+				UiSound.play("Tab")
+			end
 			pickedSlot = nil
 			showCategory(tab.id)
 		end)
@@ -670,14 +747,16 @@ local function build()
 	buttonPrice.AutomaticSize = Enum.AutomaticSize.X
 	buttonPrice.Size = UDim2.fromOffset(0, 80)
 	buttonPrice.LayoutOrder = 2
+	hoverable(buyButton)
 	buyButton.Activated:Connect(function()
 		if not buyButton:GetAttribute("Enabled") then
+			UiSound.play("Denied")
 			return
 		end
 		if buyButton:GetAttribute("Mode") == "Sell" and pickedSlot then
-			send("Sell", pickedSlot)
+			sell(pickedSlot)
 		elseif pickedItem then
-			send("Buy", pickedItem)
+			buy(pickedItem)
 		end
 	end)
 	detail = {
@@ -703,7 +782,10 @@ local function build()
 	local undoLabel = UiStyle.text(undoOuter, "UNDO", 34, C.Ink)
 	undoLabel.Size = UDim2.fromScale(1, 1)
 	undoLabel.ZIndex = 3
-	clickable(undoOuter).Activated:Connect(function()
+	local undoButton = clickable(undoOuter)
+	hoverable(undoButton)
+	undoButton.Activated:Connect(function()
+		UiSound.play("Undo")
 		send("Undo")
 	end)
 	for i = 1, Config.Shop.Slots do
@@ -729,8 +811,14 @@ local function build()
 		local count = UiStyle.text(badge, "", 26, C.Cream)
 		count.Size = UDim2.fromScale(1, 1)
 		count.ZIndex = 4
+		button.MouseEnter:Connect(function()
+			if Items.bag(player)[i] then
+				UiSound.play("Hover")
+			end
+		end)
 		button.Activated:Connect(function()
 			if Items.bag(player)[i] then
+				UiSound.play("Pick")
 				pickedSlot = i
 				paint()
 			end
@@ -738,7 +826,7 @@ local function build()
 		button.MouseButton2Click:Connect(function()
 			if Items.bag(player)[i] then
 				pickedSlot = i
-				send("Sell", i)
+				sell(i)
 			end
 		end)
 		slots[i] = { button = button, gradient = gradient, stroke = edge, icon = art, badge = badge, count = count }
@@ -763,6 +851,7 @@ function Shop.open()
 	end
 	isOpen = true
 	gui.Enabled = true
+	UiSound.play("ShopOpen")
 	refit()
 	HeroCamera.setEnabled(false)
 	showCategory(category)
@@ -775,6 +864,7 @@ function Shop.close()
 	end
 	isOpen = false
 	gui.Enabled = false
+	UiSound.play("ShopClose")
 	HeroCamera.setEnabled(true)
 	showPrompts()
 end
@@ -799,6 +889,23 @@ end
 
 function Shop.start()
 	build()
+	-- Loaded now, so the board and every item's icon show at once the first time the shop opens or an item is bought.
+	local images: { any } = { gui }
+	for _, item in Config.Items do
+		table.insert(images, item.Icon)
+	end
+	task.spawn(ContentProvider.PreloadAsync, ContentProvider, images)
+	-- Roblox only readies an image for drawing once it is on screen, and lets it go again while the shop is closed: each
+	-- icon stays drawn as a near-clear pixel in the corner so it shows at once.
+	local held = UiStyle.screen("ShopIcons", player:WaitForChild("PlayerGui"), -10)
+	for _, item in Config.Items do
+		local pixel = Instance.new("ImageLabel")
+		pixel.BackgroundTransparency = 1
+		pixel.Image = item.Icon
+		pixel.ImageTransparency = 0.99
+		pixel.Size = UDim2.fromOffset(1, 1)
+		pixel.Parent = held
+	end
 	task.spawn(function()
 		shopEvent = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Shop") :: RemoteEvent
 	end)

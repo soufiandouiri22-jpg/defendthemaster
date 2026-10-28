@@ -1,7 +1,10 @@
 -- The heroes' levels (Config.Progress, Shared.Leveling): XP when enemies die nearby, a level-up raising the hero's
 -- health, and the points a player spends on ranks through ReplicatedStorage.Net.Upgrade (the ability's key). A hero's
 -- death scores for the other team, and its killing blow (the last player to hurt him, within KillCredit seconds) earns
--- the bounty, and the other enemies who hurt him within KillCredit seconds share the assist. Bots (Actors) level up the same way, and spend their points themselves (ProgressService.raise).
+-- the bounty, and the other enemies who hurt him within KillCredit seconds share the assist. Bots (Actors) level up the
+-- same way, and spend their points themselves (ProgressService.raise). Every hero's death is told to the clients
+-- (Net.Kill, see `announce`) with the one call it earns (Config.Kills), and counted on the player or bot for the
+-- scoreboard: "Kills" for the killing blow, "Assists" for the others who hurt him, "Deaths" for every death.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,6 +23,13 @@ local ProgressService = {}
 
 -- Per hurt hero: who hurt him last, and when each enemy last did (os.clock).
 local credit: { [Model]: { last: Instance, at: number, by: { [Instance]: number } } } = {}
+-- Per hurt hero: when a Master last struck him, and when a minion last did (os.clock).
+local masterHits: { [Model]: number } = {}
+local minionHits: { [Model]: number } = {}
+-- Per killer: his kills in a row within Config.Kills.MultiWindow of each other, and when the last was.
+local multi: { [Instance]: { count: number, at: number } } = {}
+local firstBlood = false
+local killEvent: RemoteEvent
 
 local function living(character: Model?): (Humanoid?, BasePart?)
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -117,6 +127,16 @@ function ProgressService.hurt(victim: Model, player: Instance)
 	credit[victim] = entry
 end
 
+-- A Master struck the hero `victim`.
+function ProgressService.hurtByMaster(victim: Model)
+	masterHits[victim] = os.clock()
+end
+
+-- A minion struck the hero `victim`.
+function ProgressService.hurtByMinion(victim: Model)
+	minionHits[victim] = os.clock()
+end
+
 -- When an enemy hero last hurt `victim` (os.clock), if he did since `victim` came back.
 function ProgressService.hurtAt(victim: Model): number?
 	local last = credit[victim]
@@ -148,6 +168,88 @@ local function respawnTime(player: Instance): number
 	return settings.Base + settings.PerLevel * (level - 1) + math.min(settings.StreakMax, settings.Streak * streak)
 end
 
+-- Whether a hero of `team` other than `except` is alive.
+local function anyAlive(team: string, except: Model): boolean
+	for _, actor in Actors.all() do
+		local character = Actors.character(actor)
+		if character and character ~= except and character:GetAttribute("Team") == team and living(character) then
+			return true
+		end
+	end
+	return false
+end
+
+-- The one call a kill earns, the first that fits (Config.Kills): the match's first kill, a multi-kill, ending a
+-- streak, the killer's own streak, else a plain kill.
+local function call(killer: Instance, victimStreak: number): string
+	local settings = Config.Kills
+	local now = os.clock()
+	local run = multi[killer]
+	local count = if run and now - run.at <= settings.MultiWindow then run.count + 1 else 1
+	multi[killer] = { count = count, at = now }
+	local streak = killer:GetAttribute("KillsSinceDeath") or 0
+	if not firstBlood then
+		firstBlood = true
+		return "FirstBlood"
+	elseif count >= 4 then
+		return "Quad"
+	elseif count == 3 then
+		return "Triple"
+	elseif count == 2 then
+		return "Double"
+	elseif victimStreak >= settings.ShutdownStreak then
+		return "Shutdown"
+	end
+	local named = nil
+	for _, step in settings.Streaks do
+		if streak >= step.kills then
+			named = step.call
+		end
+	end
+	return named or "Slain"
+end
+
+local function count(actor: Instance, key: string)
+	actor:SetAttribute(key, (actor:GetAttribute(key) or 0) + 1)
+end
+
+local function display(actor: Instance?, character: Model?): string?
+	if actor and actor:IsA("Player") then
+		return actor.DisplayName
+	end
+	return character and character:GetAttribute("Hero")
+end
+
+-- Tells every client of the death of `player`'s hero `character` at `position` (Net.Kill): the call, whether Wipeout
+-- follows it, both sides' players (nil for bots), names, heroes and teams, and the bounty. Felled by a Master or a
+-- minion, the killer's hero is `by`: "Master" or "Minion".
+local function announce(
+	character: Model,
+	player: Instance,
+	position: Vector3,
+	killer: Instance?,
+	kind: string,
+	wipe: boolean,
+	worth: number,
+	by: string?
+)
+	local killerCharacter = killer and Actors.character(killer)
+	killEvent:FireAllClients({
+		kind = kind,
+		wipe = wipe,
+		killer = if killer and killer:IsA("Player") then killer else nil,
+		killerName = by or display(killer, killerCharacter),
+		killerHero = by or killerCharacter and killerCharacter:GetAttribute("Hero"),
+		killerTeam = MatchService.enemyOf(character:GetAttribute("Team") or "Blue"),
+		victim = if player:IsA("Player") then player else nil,
+		victimName = display(player, character),
+		victimHero = character:GetAttribute("Hero"),
+		victimTeam = character:GetAttribute("Team"),
+		coins = if killer then worth else 0,
+		at = position,
+	})
+end
+
 -- The hero `character` of `player` died at `position`. Returns how many seconds he stays dead; the hero carries when
 -- he comes back (the "RespawnAt" attribute, in server time) for the HUD's countdown.
 function ProgressService.heroDied(character: Model, player: Instance, position: Vector3): number
@@ -157,6 +259,25 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 	credit[character] = nil
 	local now = os.clock()
 	local killer = if entry and now - entry.at <= SETTINGS.KillCredit and entry.last.Parent then entry.last else nil
+	-- A Master's blow after every enemy hero's is his kill: nobody earns the bounty.
+	local masterAt = masterHits[character]
+	masterHits[character] = nil
+	local byMaster = masterAt ~= nil
+		and now - masterAt <= SETTINGS.KillCredit
+		and (killer == nil or masterAt > (entry :: any).at)
+	if byMaster then
+		killer = nil
+	end
+	-- With no enemy hero's blow to credit, a minion's last blow (after any Master's) makes it the minion's kill.
+	local minionAt = minionHits[character]
+	minionHits[character] = nil
+	local byMinion = killer == nil
+		and minionAt ~= nil
+		and now - minionAt <= SETTINGS.KillCredit
+		and (not byMaster or minionAt > (masterAt :: number))
+	if byMinion then
+		byMaster = false
+	end
 	local assists = {}
 	for actor, at in if entry then entry.by else {} do
 		if actor ~= killer and actor.Parent and now - at <= SETTINGS.KillCredit then
@@ -164,13 +285,29 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 		end
 	end
 	local worth = bounty(player)
+	local kind = "Died"
 	if killer then
 		Economy.give(killer :: any, worth, "killed " .. player.Name)
 		killer:SetAttribute("KillsSinceDeath", (killer:GetAttribute("KillsSinceDeath") or 0) + 1)
 		killer:SetAttribute("DeathsSinceKill", 0)
+		kind = call(killer, player:GetAttribute("KillsSinceDeath") or 0)
+		count(killer, "Kills")
 	end
+	count(player, "Deaths")
+	local wiped = not anyAlive(character:GetAttribute("Team") or "Blue", character)
+	announce(
+		character,
+		player,
+		position,
+		killer,
+		kind,
+		wiped,
+		worth,
+		if byMinion then "Minion" elseif byMaster then "Master" else nil
+	)
 	for _, actor in assists do
 		Economy.give(actor, math.round(worth * Config.Economy.Assist / #assists), "assist on " .. player.Name)
+		count(actor, "Assists")
 	end
 	share(enemy, position, SETTINGS.HeroXp + SETTINGS.HeroXpPerLevel * (Leveling.level(player :: any) - 1), killer)
 	player:SetAttribute("KillsSinceDeath", 0)
@@ -180,7 +317,7 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 	return wait
 end
 
--- A new player or bot starts at level 1 with StartPoints to spend and M2, E and R unlearned.
+-- A new player or bot starts at level 1 with StartPoints to spend, M2, E and R unlearned and no kills.
 function ProgressService.join(player: Instance)
 	if player:GetAttribute("Level") ~= nil then
 		return
@@ -188,6 +325,9 @@ function ProgressService.join(player: Instance)
 	player:SetAttribute("Level", 1)
 	player:SetAttribute("Xp", 0)
 	player:SetAttribute("Points", SETTINGS.StartPoints)
+	for _, key in { "Kills", "Deaths", "Assists" } do
+		player:SetAttribute(key, 0)
+	end
 	for _, key in SETTINGS.Upgrades do
 		player:SetAttribute("Rank" .. key, 0)
 	end
@@ -212,6 +352,9 @@ function ProgressService.start()
 	local net = ReplicatedStorage:FindFirstChild("Net") or Instance.new("Folder")
 	net.Name = "Net"
 	net.Parent = ReplicatedStorage
+	killEvent = Instance.new("RemoteEvent")
+	killEvent.Name = "Kill"
+	killEvent.Parent = net
 	local upgrade = Instance.new("RemoteEvent")
 	upgrade.Name = "Upgrade"
 	upgrade.Parent = net

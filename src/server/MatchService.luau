@@ -78,8 +78,15 @@ export type Layout = {
 	thrones: { [string]: CFrame },
 }
 
-function MatchService.start(layout: Layout)
-	task.spawn(buyPhase)
+-- With `immediate` (the test ground) there is no buy phase: the fight is on at once.
+function MatchService.start(layout: Layout, immediate: boolean?)
+	if immediate then
+		local now = Workspace:GetServerTimeNow()
+		Workspace:SetAttribute("FightAt", now)
+		Workspace:SetAttribute("MatchStart", now)
+	else
+		task.spawn(buyPhase)
+	end
 	for _, team in Config.TeamOrder do
 		Workspace:SetAttribute("Throne" .. team, layout.thrones[team].Position)
 		Workspace:SetAttribute("Score" .. team, 0)
