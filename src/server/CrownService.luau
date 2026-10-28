@@ -61,6 +61,8 @@ local function take(hero: Hero)
 	hero.character:SetAttribute("Crown", true)
 	if not Workspace:GetAttribute("CrownEnds") then
 		Workspace:SetAttribute("CrownEnds", now() + SETTINGS.Lasts)
+		-- Each crown counts once for whoever takes it first (MatchEnd).
+		hero.actor:SetAttribute("Crowns", (hero.actor:GetAttribute("Crowns") or 0) + 1)
 	end
 	Workspace:SetAttribute("CrownTeam", hero.team)
 	place("Carried", nil)

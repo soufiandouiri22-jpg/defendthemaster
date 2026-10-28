@@ -132,6 +132,14 @@ local function damage(player: Instance, character: Model, enemy: Enemy, amount: 
 		return
 	end
 	local model = target :: Model
+	-- What a hero did to enemy heroes and Masters, for the match's end (MatchEnd).
+	local counter = if model:GetAttribute("Hero")
+		then "HeroDamage"
+		elseif model:GetAttribute("Master") then "MasterDamage"
+		else nil
+	if counter then
+		player:SetAttribute(counter, (player:GetAttribute(counter) or 0) + amount)
+	end
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid:TakeDamage(amount)

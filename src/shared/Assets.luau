@@ -13,6 +13,39 @@ return {
 	-- portrait on the banner when a hero takes it (KillFeed).
 	SunCrown = "rbxassetid://108877337730260",
 	HudCoin = "rbxassetid://127769238687652",
+	-- The menu's icons (one GenerateImage sheet in design 13's look, Art/Icons/concepts/menu_icons_sheet.jpg, cut by
+	-- Tools/cut_icons.py into Art/Icons/Menu): the back arrow, the settings gear, the pass's double-XP potion, the
+	-- ladder's trophy and the padlock of what is locked.
+	MenuBack = "rbxassetid://120094976844168",
+	MenuGear = "rbxassetid://122274012051947",
+	MenuBoost = "rbxassetid://114387804158897",
+	MenuTrophy = "rbxassetid://94424280113656",
+	MenuLock = "rbxassetid://127375543575027",
+	-- The hero mastery crests, level 1 to 10, each with an empty plate for the level (two Meshy sheets in the
+	-- logo's style, Art/Icons/concepts/mastery_crests_*, cut into Art/Icons/Mastery), and the grade seals by letter
+	-- (Art/Icons/concepts/grade_seals_sheet.png, cut by Tools/cut_icons.py into Art/Icons/Grades).
+	MasteryCrests = {
+		"rbxassetid://104991296629094",
+		"rbxassetid://133438180299995",
+		"rbxassetid://93941773947056",
+		"rbxassetid://77986656348925",
+		"rbxassetid://78495572122757",
+		"rbxassetid://120904976759375",
+		"rbxassetid://95419663770597",
+		"rbxassetid://87515712746283",
+		"rbxassetid://138571839930861",
+		"rbxassetid://98368399916607",
+	},
+	GradeSeals = {
+		S = "rbxassetid://134692970944818",
+		A = "rbxassetid://121349763981518",
+		B = "rbxassetid://137751335648155",
+		C = "rbxassetid://121373275704254",
+		D = "rbxassetid://119212802355380",
+	},
+	-- The end of a match's titles in the logo's style (Art/UI/MatchEnd, cut from Art/UI/concepts).
+	Victory = "rbxassetid://136548236195039",
+	Defeat = "rbxassetid://83527390608420",
 	-- The top bar of design 05 (Tools/ui_textures.py): each team's crown, and the score board with the clock's tab.
 	HudCrownBlue = "rbxassetid://127147223279087",
 	HudCrownRed = "rbxassetid://75076385558157",
@@ -24,6 +57,9 @@ return {
 	PadRing = "rbxassetid://88093541402245",
 	-- The match music, a seamless loop (Art/Music/determined_pursuit_loop.wav, uploaded by Tools/upload_audio.py).
 	Music = "rbxassetid://97712677913218",
+	-- The lobby's music until a match starts, "Ancient God" by Gary Boudreaux (CC BY 4.0, Docs/Third_Party.md), a loop
+	-- (Art/Music/ancient_god_loop.wav, uploaded by Tools/upload_audio.py).
+	MenuMusic = "rbxassetid://103026116508266",
 	-- The buy phase's sounds, Roblox's licensed library (Docs/Third_Party.md): the dark drum sting under "Purchase your
 	-- items!", the timpani of the last three seconds, and the deep boom of "FIGHT!".
 	BuySting = "rbxassetid://1842178392",
@@ -31,6 +67,10 @@ return {
 	FightBoom = "rbxassetid://9125484526",
 	-- The bigger kills' sting (triple kill, shutdown), the first roll of a tribal drum sting from the same library.
 	DrumSting = "rbxassetid://1836741188",
+	-- The end of a match: a war drum fanfare for the winners, a dark orchestral sting for the losers, from the same
+	-- library (picked by the owner on the test ground, 2026-10-28).
+	VictorySting = "rbxassetid://1842104084",
+	DefeatSting = "rbxassetid://1841258852",
 	-- The interface's and the arena's cues (UiSound), from the same library (Docs/Third_Party.md): Roblox's own
 	-- interface set, Pro Sound Effects' recordings and an APM boom.
 	UiHover = "rbxassetid://10066931761",

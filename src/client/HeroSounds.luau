@@ -9,6 +9,8 @@ local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Preferences = require(script.Parent.Preferences)
+
 local HeroSounds = {}
 
 local VOLUME = 1
@@ -59,6 +61,7 @@ local function play(root: BasePart, bank: Bank, id: string, volume: number)
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered
 	sound.RollOffMinDistance = NEAR
 	sound.RollOffMaxDistance = FAR
+	sound.SoundGroup = Preferences.group("Effects")
 	sound.Parent = root
 	sound:Play()
 	Debris:AddItem(sound, region[2] + 0.5)

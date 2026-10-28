@@ -1,8 +1,10 @@
 -- The players' heroes (Config.Heroes). The server loads each player's character with their hero's look instead of
 -- their own avatar, in the proportions of the hero's animation pack and with the pack's weapons, sets it on one of the
 -- team's spawn pads, and brings it back there after it dies (Config.Respawn, ProgressService.heroDied). Heroes carry the "Team"
--- attribute and the "Combatant" tag, so minions and other heroes can fight them. Until the draft and the teams exist,
--- every player plays Config.DefaultHero on the Blue team. Bots (BotService) get their heroes from here too.
+-- attribute and the "Combatant" tag, so minions and other heroes can fight them. A player plays the hero he drafted
+-- (his "Hero" attribute, DraftService) on his team (his "Team" attribute, MatchSetup); the heroes come into the arena
+-- once the draft is over (HeroService.release). Bots (BotService) get their heroes from here too; their look is
+-- HeroLook's.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -14,59 +16,13 @@ local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Motion = require(ReplicatedStorage.Shared.Motion)
+local Actors = require(script.Parent.Actors)
+local HeroLook = require(script.Parent.HeroLook)
 local ProgressService = require(script.Parent.ProgressService)
 
 local HeroService = {}
 
-local BODY_COLOURS = { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" }
-
--- The avatar of the hero `name`.
-function HeroService.description(name: string): HumanoidDescription
-	local look = Config.Heroes[name].Look
-	local description = Instance.new("HumanoidDescription")
-	description.Shirt = look.Shirt
-	description.Pants = look.Pants
-	description.HairAccessory = look.HairAccessory or ""
-	description.FaceAccessory = look.FaceAccessory or ""
-	for _, part in BODY_COLOURS do
-		(description :: any)[part] = look.Skin
-	end
-	-- The proportions of the animation packs' rigs.
-	description.BodyTypeScale = 0
-	description.ProportionScale = 0
-	return description
-end
-
--- Puts the hero's weapons from its animation pack's rig on `character`, bound to its root part as on the pack's rig.
-local function arm(character: Model, hero: string)
-	local settings = Config.Heroes[hero]
-	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not settings.Pack or not root then
-		return
-	end
-	local components = ReplicatedStorage[settings.Pack].Rig.Components
-	local shift = Motion.rootShift(character)
-	local folder = Instance.new("Folder")
-	folder.Name = "Weapons"
-	for _, name in settings.Weapons or {} do
-		local weapon = components[name]:Clone()
-		for _, d in weapon:GetDescendants() do
-			if d:IsA("BasePart") then
-				d.Anchored = false
-				d.CanCollide = false
-				d.CanQuery = false
-				d.CanTouch = false
-				d.Massless = true
-				d.CastShadow = true
-			elseif d:IsA("Weld") and d.Name == "ComponentBinding" then
-				d.Part0 = root
-				d.C0 = shift * d.C0
-			end
-		end
-		weapon.Parent = folder
-	end
-	folder.Parent = character
-end
+HeroService.description = HeroLook.description
 
 -- Holds the root part of the dead hero `character` still, upright on the ground below where he died, with his body
 -- joints on, so that his pack's fall (HeroAnimator) lays him down there, as the Masters fall.
@@ -110,15 +66,10 @@ end
 -- and speed, with his level and items; "AttackSpeed" is his items' speed-up of the M1 combo, for every client. It
 -- becomes a "Combatant" once it is in the world (HeroService.enlist).
 function HeroService.prepare(character: Model, hero: string, team: string, actor: Instance): Humanoid?
-	character:SetAttribute("Hero", hero)
 	character:SetAttribute("Team", team)
 	character:SetAttribute("Level", Leveling.level(actor :: any))
 	character:SetAttribute("AttackSpeed", Items.attackSpeed(actor))
-	local head = character:FindFirstChild("Head")
-	if Config.Heroes[hero].Look.HideHead and head and head:IsA("BasePart") then
-		head.Transparency = 1
-	end
-	arm(character, hero)
+	HeroLook.dress(character, hero)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.MaxHealth = Leveling.heroHealth(actor :: any, hero)
@@ -136,12 +87,22 @@ function HeroService.prepare(character: Model, hero: string, team: string, actor
 end
 
 local spawned: RemoteEvent? = nil
+local released = false
+local spawnAll: () -> () = function() end
+-- The players and bots whose hero has been in the arena before.
+local appeared: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
--- Puts the hero into the fight, and tells the clients he (re)appeared (Net.HeroSpawned) for the pad's burst of light.
+-- Puts the hero into the fight, and tells the clients he (re)appeared (Net.HeroSpawned) for the pad's burst of light,
+-- and whether he came back after dying (the burst's sound is for that only, not for the start of the match).
 function HeroService.enlist(character: Model)
 	CollectionService:AddTag(character, "Combatant")
+	local actor = Actors.owner(character)
+	local again = actor ~= nil and appeared[actor] == true
+	if actor then
+		appeared[actor] = true
+	end
 	if spawned then
-		spawned:FireAllClients(character)
+		spawned:FireAllClients(character, again)
 	end
 end
 
@@ -161,17 +122,21 @@ function HeroService.start(layout: Layout)
 	spawned = event
 
 	local function spawn(player: Player)
-		if not player.Parent then
+		if not player.Parent or not released then
 			return
 		end
 		local hero = player:GetAttribute("Hero") or Config.DefaultHero
+		if not Config.Heroes[hero] then
+			hero = Config.DefaultHero
+		end
+		local team = player:GetAttribute("Team") or "Blue"
 		player:LoadCharacterWithHumanoidDescription(HeroService.description(hero))
 		local character = player.Character
 		if not character then
 			return
 		end
-		local humanoid = HeroService.prepare(character, hero, "Blue", player)
-		character:PivotTo(HeroService.pad("Blue"))
+		local humanoid = HeroService.prepare(character, hero, team, player)
+		character:PivotTo(HeroService.pad(team))
 		if humanoid then
 			HeroService.enlist(character)
 			humanoid.Died:Connect(function()
@@ -185,9 +150,19 @@ function HeroService.start(layout: Layout)
 	end
 
 	Players.PlayerAdded:Connect(spawn)
-	for _, player in Players:GetPlayers() do
-		task.spawn(spawn, player)
+	spawnAll = function()
+		for _, player in Players:GetPlayers() do
+			if not player.Character then
+				task.spawn(spawn, player)
+			end
+		end
 	end
+end
+
+-- Brings every player's hero into the arena, and from now on every player who comes in.
+function HeroService.release()
+	released = true
+	spawnAll()
 end
 
 return HeroService

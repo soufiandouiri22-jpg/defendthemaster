@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local MinionView = require(script.Parent.MinionView)
+local Preferences = require(script.Parent.Preferences)
 local UiStyle = require(script.Parent.UiStyle)
 
 local HitFeedback = {}
@@ -157,6 +158,9 @@ local function sparks(anchor: BasePart, tier: Tier)
 end
 
 local function number(at: Vector3, text: string, tier: Tier)
+	if Preferences.get("DamageNumbers") == false then
+		return
+	end
 	local anchor = Instance.new("Part")
 	anchor.Anchored = true
 	anchor.CanCollide = false

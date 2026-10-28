@@ -34,6 +34,8 @@ shop (08), cursors (09). Talk to the owner in Dutch.
 - Every image for the owner (concepts, screenshots, designs) goes into the chat itself, embedded with its file path,
   not only named or saved (owner, 2026-10-26). Play captures are saved as a file first so they can be shown:
   `Tools/StudioShot/studio_shot.sh <out.png>` saves Studio's viewport, also when Studio is behind other windows.
+- Every file the owner has to use (imports, images, documents) is named by its full absolute path, never a relative
+  one (owner, 2026-10-28).
 - New Meshy models: first a concept (image-to-image) the owner approves, then 3D. Never generate without his go.
   Meshy is shared with RuneVille: never buy credits.
 - Portraits (heroes and Masters, owner 2026-10-27) are made one way: Meshy image-to-image (nano-banana-pro) from a
@@ -43,7 +45,26 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   straight at the camera but never to the left, and the weapon in the hand he holds it in in the game; the prompt
   names both. A blue
   team copy is the red one recoloured locally (only the saturated reds, never the skin), so it matches exactly.
+- Icons (abilities, shop items, ranks, menus) are always made the Cursor way (owner, 2026-10-28), never with Meshy;
+  this is for icons only, other pictures such as the portraits keep their own way above:
+  Cursor GenerateImage, one icon per image, square, with an existing icon of the set as the reference for the style
+  (Shadowren's `Art/Icons/Shadowren/*.png` for abilities, a shop icon for shop items), on one flat key colour that
+  the icon does not contain (pure green `#00FF00` for purple and red, magenta `#FF00FF` otherwise). The prompt asks
+  for the same outline, glossy cartoon shading and colours as the reference and "a perfectly flat, solid pure ...
+  background ... no shadow, no gradient, no texture, no vignette, nothing else in the image". Then
+  `python3 Tools/key_icons.py <drawing> <out.png> [--glow] [--like <icon of the set>]` (`--glow` for soft slashes,
+  smoke and trails) and `--check`; the green drawings stay in `Art/Icons/keyed/<set>/`. Every ability icon shows
+  what that ability does in the hero's kit.
 - Keys only in the macOS Keychain. Third-party assets need a recorded source and licence (`Docs/Third_Party.md`).
+- Nothing the owner or an agent made may ever be lost or put back to an older version (owner, 2026-10-28):
+  - Change code and docs only with the editor's edit tools (StrReplace, Write), never with scripts, `sed` or `cp` over
+    a file: Cursor's checkpoints only know the edit tools' changes, and restoring one puts every file back to the state
+    of its last tool edit, dropping what scripts changed after it (17:35 on 2026-10-28).
+  - `Tools/snapshot.sh` records the code under `refs/snapshots/` after every agent turn (a Cursor `stop` hook in
+    `~/.cursor/hooks.json`) without touching the branch or any file; run it yourself before anything risky. When a
+    file has lost work, take it back from the latest snapshot that has it (`Tools/snapshot.sh list`, `git show
+    <snapshot>:<path>`), never from a reconstruction, and first compare every file so nothing newer is overwritten.
+  - Never restore, check out or copy files over the working tree without first showing the owner what would change.
 
 ## Tools
 - Rojo 7.7.1, StyLua and selene through Rokit (`~/.rokit/bin`): `rojo serve`, `stylua src`, `selene src`.

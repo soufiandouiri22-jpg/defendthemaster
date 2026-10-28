@@ -1,5 +1,5 @@
 -- The look of the HUD (design 05): cream parchment panels in a gold frame with a dark brown edge, dark bars with a
--- glossy fill, and FredokaOne lettering in dark brown. Sizes are for a 1080-pixel-high screen; `scaled` fits a
+-- glossy fill, and FredokaOne lettering in dark brown. Sizes are for a 1920 by 1080 screen; `scaled` fits a
 -- ScreenGui to the real one.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,16 +32,18 @@ UiStyle.Colors = {
 }
 local C = UiStyle.Colors
 
-local REFERENCE_HEIGHT = 1080
+local REFERENCE = Vector2.new(1920, 1080)
 
--- Scales everything in `gui` with the screen's height.
+-- Scales everything in `gui` so the 1920 by 1080 design fits the screen both ways: a narrower screen (a 16:10 laptop,
+-- a 4:3 tablet) shrinks it by its width, so the panels along the sides never crowd the middle; a wider one keeps the
+-- height's scale and only gains room in between.
 function UiStyle.scaled(gui: ScreenGui)
 	local scale = Instance.new("UIScale")
 	scale.Parent = gui
 	local function fit()
 		local camera = Workspace.CurrentCamera
-		local height = if camera then camera.ViewportSize.Y else REFERENCE_HEIGHT
-		scale.Scale = math.clamp(height / REFERENCE_HEIGHT, 0.55, 1.25)
+		local size = if camera then camera.ViewportSize else REFERENCE
+		scale.Scale = math.clamp(math.min(size.X / REFERENCE.X, size.Y / REFERENCE.Y), 0.55, 1.25)
 	end
 	fit()
 	Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(fit)

@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
+local Preferences = require(script.Parent.Preferences)
 local Shop = require(script.Parent.Shop)
 local UiStyle = require(script.Parent.UiStyle)
 
@@ -45,6 +46,7 @@ local function sound(id: string, volume: number): Sound
 	local s = Instance.new("Sound")
 	s.SoundId = id
 	s.Volume = volume
+	s.SoundGroup = Preferences.group("Effects")
 	s.Parent = SoundService
 	return s
 end

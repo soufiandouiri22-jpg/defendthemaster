@@ -744,4 +744,19 @@ function ColosseumBuilder.buildTestGround(): Layout
 	return layout
 end
 
+-- The kit's helpers and the arena's light, for the lobby's hall (Lobby.LobbyBuilder).
+ColosseumBuilder.Kit = {
+	kit = kit,
+	kitSize = kitSize,
+	byHeight = byHeight,
+	byWidth = byWidth,
+	topOf = topOf,
+	flame = flame,
+	brazier = brazier,
+	disc = disc,
+	folder = folder,
+	colors = COLORS,
+}
+ColosseumBuilder.setupLighting = setupLighting
+
 return ColosseumBuilder

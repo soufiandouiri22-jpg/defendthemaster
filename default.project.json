@@ -77,7 +77,19 @@
 		"ServerScriptService": {
 			"$ignoreUnknownInstances": true,
 			"Server": {
-				"$path": "src/server"
+				"$path": "src/server",
+				"ProfileStore": {
+					"$path": "Lib/ProfileStore/ProfileStore.luau"
+				}
+			}
+		},
+		"ReplicatedFirst": {
+			"$ignoreUnknownInstances": true,
+			"Loading": {
+				"$path": "src/first/Loading.luau"
+			},
+			"LoadingScreen": {
+				"$path": "src/first/LoadingScreen.client.luau"
 			}
 		},
 		"StarterPlayer": {

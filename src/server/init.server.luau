@@ -1,12 +1,46 @@
--- Server entry point of Defend The Master.
+-- Server entry point of Defend The Master. The lobby (Shared.Places) builds the menu's hall and runs the menu, the
+-- party and the queue; a match builds the colosseum, waits for its players (MatchSetup), drafts the heroes
+-- (DraftService) and plays the match to its end (MatchEnd).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Places = require(ReplicatedStorage.Shared.Places)
+local Ladder = require(script.Ladder)
+local MenuService = require(script.MenuService)
+local ProfileService = require(script.ProfileService)
+local ShowcaseService = require(script.ShowcaseService)
+
+ProfileService.start()
+Ladder.start()
+MenuService.start()
+task.spawn(ShowcaseService.start)
+
+if Places.isLobby() then
+	local LobbyBuilder = require(script.Lobby.LobbyBuilder)
+	local PartyService = require(script.Lobby.PartyService)
+	local QueueService = require(script.Lobby.QueueService)
+	-- The menu has no characters: the hall is only seen through the menu's camera.
+	game:GetService("Players").CharacterAutoLoads = false
+	LobbyBuilder.build()
+	Workspace:SetAttribute("Role", "Lobby")
+	PartyService.start()
+	QueueService.start()
+	print("[DefendTheMaster] lobby started")
+	return
+end
+
+Workspace:SetAttribute("Role", "Match")
 local BotService = require(script.BotService)
 local ColosseumBuilder = require(script.ColosseumBuilder)
 local CombatService = require(script.CombatService)
 local CrownService = require(script.CrownService)
+local DraftService = require(script.DraftService)
 local Economy = require(script.Economy)
 local HeroService = require(script.HeroService)
 local MasterService = require(script.MasterService)
+local MatchEnd = require(script.MatchEnd)
 local MatchService = require(script.MatchService)
+local MatchSetup = require(script.MatchSetup)
 local MinionModel = require(script.MinionModel)
 local MinionService = require(script.MinionService)
 local PadService = require(script.PadService)
@@ -17,6 +51,8 @@ local TestGround = require(script.TestGround)
 
 local testing = TestGround.on()
 local layout = if testing then ColosseumBuilder.buildTestGround() else ColosseumBuilder.build()
+MatchSetup.start()
+DraftService.start()
 Economy.start()
 MatchService.start(layout, testing)
 ProgressService.start()
@@ -29,7 +65,18 @@ MasterService.start(layout, if testing then TestGround.MASTERS else nil)
 PadService.start(layout)
 ShopService.start(layout)
 CrownService.start(layout)
-if not testing then
-	BotService.start(layout)
-end
+MatchEnd.start()
 print(if testing then "[DefendTheMaster] server started on the test ground" else "[DefendTheMaster] server started")
+
+-- The test ground starts at once with the player's own hero; a match drafts first.
+if testing then
+	HeroService.release()
+	return
+end
+task.spawn(function()
+	MatchSetup.awaitPlayers()
+	DraftService.run(MatchSetup.slots())
+	BotService.start(layout, DraftService.botHeroes())
+	HeroService.release()
+	MatchService.begin()
+end)

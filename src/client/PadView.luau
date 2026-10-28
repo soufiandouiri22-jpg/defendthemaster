@@ -186,7 +186,8 @@ local function healed(character: Model, amount: number)
 	entry.expires = os.clock() + Config.Pads.Tick + COLUMN_LINGER
 end
 
-local function burst(character: Model)
+-- The burst of light where `character` appears on his pad, with its sound only when he comes back after dying (`again`).
+local function burst(character: Model, again: boolean)
 	local root = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
 	if not root or not character.Parent then
 		return
@@ -194,7 +195,9 @@ local function burst(character: Model)
 	local colour = lightOf(character:GetAttribute("Team"))
 	local feet = feetOf(root)
 	local info = TweenInfo.new(BURST, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	UiSound.at("Respawn", feet)
+	if again then
+		UiSound.at("Respawn", feet)
+	end
 
 	local pillar = column("RespawnPillar", feet, PILLAR_HEIGHT, 5, colour)
 	pillar.Transparency = 0.25
@@ -293,9 +296,9 @@ function PadView.start()
 		end
 	end)
 	local spawned = net:WaitForChild("HeroSpawned") :: RemoteEvent
-	spawned.OnClientEvent:Connect(function(character: Model?)
+	spawned.OnClientEvent:Connect(function(character: Model?, again: boolean?)
 		if character then
-			task.spawn(burst, character)
+			task.spawn(burst, character, again == true)
 		end
 	end)
 	RunService.RenderStepped:Connect(update)

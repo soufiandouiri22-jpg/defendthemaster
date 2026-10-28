@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
+local Preferences = require(script.Parent.Preferences)
 
 local UiSound = {}
 
@@ -42,6 +43,11 @@ local CUES: { [string]: Cue } = {
 	Sell = { asset = Assets.CoinJingle, start = 0, length = 0.35, gain = 1.8 },
 	Denied = { asset = Assets.WoodThud, start = 0, length = 0.3, gain = 0.45 },
 	Undo = { asset = Assets.UiBack, start = 0, length = 0.4, gain = 2.2 },
+
+	-- The end of a match, under the VICTORY or DEFEAT title. The victory's recording is about 4.5 dB quieter than the
+	-- others (RMS -19.7 dB against about -15); its gain brings it level, its loudest peak to 0.97.
+	Victory = { asset = Assets.VictorySting, start = 0, length = 6.5, gain = 1.65 },
+	Defeat = { asset = Assets.DefeatSting, start = 0, length = 7 },
 
 	-- The hero grows: a level, a rank of an ability, his ultimate ready again, a potion drunk; and the scoreboard
 	-- unfolded.
@@ -133,10 +139,11 @@ end
 
 -- A sound of the cue `name` at `volume` and `pitch`, parented to `parent` and playing as soon as it has loaded; nil
 -- when there is no such cue.
-local function start(name: string, parent: Instance, volume: number?, pitch: number?): (Sound?, Cue?)
+local function start(name: string, parent: Instance, volume: number?, pitch: number?, group: string): (Sound?, Cue?)
 	local speed = pitch or 1
 	local sound = Instance.new("Sound")
 	sound.PlaybackSpeed = speed
+	sound.SoundGroup = Preferences.group(group)
 	local region = bank and bank.Regions[name]
 	if bank and region then
 		sound.SoundId = bank.Asset
@@ -181,7 +188,7 @@ end
 
 -- Plays `name` flat, at `volume` (1 when not given) and a little higher or lower by `pitch` (1 is as recorded).
 function UiSound.play(name: string, volume: number?, pitch: number?)
-	start(name, SoundService, volume, pitch)
+	start(name, SoundService, volume, pitch, "Interface")
 end
 
 -- Plays `name` in the world: from `where`, a part (following it) or a point, fading out with distance.
@@ -196,7 +203,7 @@ function UiSound.at(name: string, where: BasePart | Vector3, volume: number?, pi
 	else
 		parent = where
 	end
-	local sound, cue = start(name, parent, volume, pitch)
+	local sound, cue = start(name, parent, volume, pitch, "Effects")
 	if sound then
 		sound.RollOffMode = Enum.RollOffMode.InverseTapered
 		sound.RollOffMinDistance = cue and cue.near or NEAR

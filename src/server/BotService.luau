@@ -6,7 +6,8 @@
 -- at range, the dash to close in, the combo in reach; with a person's reaction time, rests and misses (Config.Bots),
 -- not perfectly. It levels up as players do and spends its points itself; while Buys is on it buys its Build at
 -- the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its potions. It comes back on a
--- spawn pad after it dies.
+-- spawn pad after it dies. It plays the hero the draft picked for its place (BotService.start), and a bot that takes over
+-- from a player who left plays his hero.
 
 local CollectionService = game:GetService("CollectionService")
 local PathfindingService = game:GetService("PathfindingService")
@@ -50,6 +51,7 @@ type Move = {
 type Bot = {
 	actor: Configuration,
 	team: string,
+	hero: string,
 	-- The lane it plays: 1 east, -1 west.
 	side: number,
 	active: boolean,
@@ -86,6 +88,8 @@ local bots: { Bot } = {}
 local folder: Folder
 local stalls: { [string]: { Vector3 } } = {}
 local made = 0
+-- Per team the heroes still to be played by its next bots.
+local waiting: { [string]: { string } } = {}
 local walls = RaycastParams.new()
 walls.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -536,7 +540,7 @@ local function spawnHero(b: Bot)
 	if not b.active then
 		return
 	end
-	local hero = SETTINGS.Hero
+	local hero = b.hero
 	local character =
 		Players:CreateHumanoidModelFromDescription(HeroService.description(hero), Enum.HumanoidRigType.R15)
 	if not b.active then
@@ -584,9 +588,15 @@ local function addBot(team: string)
 			onTeam += 1
 		end
 	end
+	local queued = waiting[team]
+	local hero = if queued and #queued > 0 then table.remove(queued, 1) :: string else SETTINGS.Hero
+	if not Config.Heroes[hero] then
+		hero = SETTINGS.Hero
+	end
 	local b: Bot = {
 		actor = actor,
 		team = team,
+		hero = hero,
 		side = if onTeam % 2 == 0 then 1 else -1,
 		active = true,
 		character = nil,
@@ -625,10 +635,16 @@ local function removeBot(b: Bot)
 	b.actor:Destroy()
 end
 
--- Every team has TeamSize heroes: as many bots as it lacks players. Until the teams exist every player is Blue.
+-- Every team has TeamSize heroes: as many bots as it lacks players (by their "Team", MatchSetup). A player who leaves
+-- is played on by a new bot.
 local function balance()
 	for _, team in Config.TeamOrder do
-		local players = if team == "Blue" then #Players:GetPlayers() else 0
+		local players = 0
+		for _, player in Players:GetPlayers() do
+			if player:GetAttribute("Team") == team then
+				players += 1
+			end
+		end
 		local wanted = math.max(0, SETTINGS.TeamSize - players)
 		local mine = {}
 		for _, b in bots do
@@ -650,7 +666,11 @@ export type Layout = {
 	shops: { [string]: { CFrame } },
 }
 
-function BotService.start(layout: Layout)
+-- `heroes`: per team the heroes the draft picked for its bots' places.
+function BotService.start(layout: Layout, heroes: { [string]: { string } }?)
+	for team, list in heroes or {} do
+		waiting[team] = table.clone(list)
+	end
 	for team, list in layout.shops do
 		stalls[team] = {}
 		for _, spot in list do
@@ -661,8 +681,15 @@ function BotService.start(layout: Layout)
 	folder.Name = "Bots"
 	folder.Parent = ServerStorage
 
-	Players.PlayerAdded:Connect(balance)
-	Players.PlayerRemoving:Connect(function()
+	Players.PlayerAdded:Connect(function()
+		task.defer(balance)
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		local team, hero = player:GetAttribute("Team"), player:GetAttribute("Hero")
+		if typeof(team) == "string" and typeof(hero) == "string" then
+			waiting[team] = waiting[team] or {}
+			table.insert(waiting[team], 1, hero)
+		end
 		task.defer(balance)
 	end)
 	balance()
