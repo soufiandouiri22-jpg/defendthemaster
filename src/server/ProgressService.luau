@@ -16,6 +16,7 @@ local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Economy = require(script.Parent.Economy)
 local Actors = require(script.Parent.Actors)
 local MatchService = require(script.Parent.MatchService)
+local TestGround = require(script.Parent.TestGround)
 
 local SETTINGS = Config.Progress
 
@@ -317,7 +318,8 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 	return wait
 end
 
--- A new player or bot starts at level 1 with StartPoints to spend, M2, E and R unlearned and no kills.
+-- A new player or bot starts at level 1 with StartPoints to spend, M2, E and R unlearned and no kills. On the test
+-- ground every ability is learned from the start, at its first rank.
 function ProgressService.join(player: Instance)
 	if player:GetAttribute("Level") ~= nil then
 		return
@@ -328,8 +330,9 @@ function ProgressService.join(player: Instance)
 	for _, key in { "Kills", "Deaths", "Assists" } do
 		player:SetAttribute(key, 0)
 	end
+	local learned = if TestGround.on() then 1 else 0
 	for _, key in SETTINGS.Upgrades do
-		player:SetAttribute("Rank" .. key, 0)
+		player:SetAttribute("Rank" .. key, learned)
 	end
 end
 

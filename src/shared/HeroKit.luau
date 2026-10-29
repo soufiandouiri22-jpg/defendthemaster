@@ -11,6 +11,23 @@ function HeroKit.flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
 end
 
+-- The times a Throw lets go, in order: its `Releases`, or its one `Release`.
+function HeroKit.releases(kit: any): { number }
+	return kit.Releases or { kit.Release }
+end
+
+-- Whether the hits of `kit` go where the crosshair points as each lands or leaves his hand rather than where it
+-- pointed at the cast, so turning while the attack plays hits whoever he turns to: every swing, throw, shot and sweep
+-- does. A leap lands on the spot chosen at its cast and a dash keeps its path; only a dash's shot follows.
+function HeroKit.follows(kit: any): boolean
+	if kit.Kind == "Leap" then
+		return false
+	elseif kit.Kind == "Dash" then
+		return kit.Shot ~= nil
+	end
+	return true
+end
+
 -- The flat direction from `from` towards `to`; `fallback` when they stand on one spot.
 function HeroKit.direction(from: Vector3, to: Vector3, fallback: Vector3): Vector3
 	local offset = HeroKit.flat(to - from)

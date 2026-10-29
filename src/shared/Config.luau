@@ -152,21 +152,29 @@ Config.Shop = {
 	Slots = 6,
 	Sell = 0.7,
 	Reach = 16,
-	Potion = { Heal = 120, Time = 15, Stack = 5 },
+	-- The arena is small and fights are quick, so a potion heals in half League's time (owner, 2026-10-29).
+	Potion = { Heal = 120, Time = 7.5, Stack = 5 },
 	GuardReach = 40,
+	-- How long a wound (Bitter Thorn and the items built from it) keeps a hero's healing down.
+	WoundTime = 3,
 }
 
--- The items of the armory (Config.Shop), with their icons (Art/Icons/Items, cut by Tools/cut_icons.py from three Meshy
--- sheets). `Cost` is an item's whole price, its parts (`From`) included. Stats: Attack and Magic add to the hero's
+-- The items of the armory (Config.Shop), with their icons (Art/Icons/Items: the first 25 cut by Tools/cut_icons.py from
+-- three Meshy sheets, the later ones keyed by Tools/key_icons.py from Art/Icons/keyed/Items). `Cost` is an item's whole price, its parts (`From`) included. Stats: Attack and Magic add to the hero's
 -- damage as his kit's `Ratio` of them (a kit scales with its hero's `Scales`); Health adds to his health; Armor and
 -- Resist take physical and magic damage down to 100 / (100 + them); AttackSpeed speeds up his M1 combo by that share;
 -- Haste shortens his cooldowns to 100 / (100 + it); Lifesteal heals him by that share of the damage he deals; MoveSpeed
--- adds studs a second to his walk. A legendary's `Effect` is its own (CombatService, Damage).
+-- adds studs a second to his walk. An item's `Effect` is its own (Damage, CombatService); of several items with the
+-- same kind of effect only the strongest counts. A wounded hero (Wound, Thorns) heals that share less from lifesteal,
+-- potions and pads for Shop.WoundTime seconds. `Classes` are the classes
+-- (Config.Classes) it is made for, which the armory's class filters show it under; without them it is for every class.
+-- Every hero may buy every item.
 Config.Items = {
 	IronSword = {
 		Name = "Iron Sword",
 		Tier = "Basic",
 		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
 		Cost = 350,
 		Stats = { Attack = 10 },
 		Icon = "rbxassetid://99540283517950",
@@ -175,6 +183,7 @@ Config.Items = {
 		Name = "Spell Tome",
 		Tier = "Basic",
 		Category = "Magic",
+		Classes = { "Mage" },
 		Cost = 400,
 		Stats = { Magic = 20 },
 		Icon = "rbxassetid://116217108739196",
@@ -183,6 +192,7 @@ Config.Items = {
 		Name = "War Helmet",
 		Tier = "Basic",
 		Category = "Defense",
+		Classes = { "Warrior", "Tank" },
 		Cost = 400,
 		Stats = { Health = 150 },
 		Icon = "rbxassetid://133779764052643",
@@ -191,6 +201,7 @@ Config.Items = {
 		Name = "Steel Shield",
 		Tier = "Basic",
 		Category = "Defense",
+		Classes = { "Warrior", "Tank" },
 		Cost = 300,
 		Stats = { Armor = 15 },
 		Icon = "rbxassetid://108574198285662",
@@ -199,6 +210,7 @@ Config.Items = {
 		Name = "Moon Ring",
 		Tier = "Basic",
 		Category = "Defense",
+		Classes = { "Mage", "Tank" },
 		Cost = 450,
 		Stats = { Resist = 25 },
 		Icon = "rbxassetid://99349652229609",
@@ -207,6 +219,7 @@ Config.Items = {
 		Name = "Swift Gloves",
 		Tier = "Basic",
 		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
 		Cost = 300,
 		Stats = { AttackSpeed = 0.12 },
 		Icon = "rbxassetid://113284480767952",
@@ -215,6 +228,7 @@ Config.Items = {
 		Name = "Sand Glass",
 		Tier = "Basic",
 		Category = "Magic",
+		Classes = { "Mage", "Assassin" },
 		Cost = 400,
 		Stats = { Haste = 10 },
 		Icon = "rbxassetid://131491517491063",
@@ -235,14 +249,34 @@ Config.Items = {
 		Cost = 50,
 		Potion = true,
 		Stats = {},
-		Text = "Q: heals 120 health over 15 seconds",
+		Text = "Q: heals 120 health over 7.5 seconds",
 		Icon = "rbxassetid://72428616348938",
+	},
+	HuntingBow = {
+		Name = "Hunting Bow",
+		Tier = "Basic",
+		Category = "Attack",
+		Classes = { "Archer" },
+		Cost = 350,
+		Stats = { Attack = 6, AttackSpeed = 0.06 },
+		Icon = "rbxassetid://82284547904948",
+	},
+	BitterThorn = {
+		Name = "Bitter Thorn",
+		Tier = "Basic",
+		Category = "Defense",
+		Cost = 450,
+		Stats = { Health = 100 },
+		Effect = { Kind = "Wound", Value = 0.25 },
+		Text = "Your hits wound heroes: 25% less healing for 3 seconds",
+		Icon = "rbxassetid://139493454234605",
 	},
 
 	KnightsBlade = {
 		Name = "Knight's Blade",
 		Tier = "Epic",
 		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
 		Cost = 1100,
 		From = { "IronSword", "SwiftGloves" },
 		Stats = { Attack = 20, AttackSpeed = 0.15 },
@@ -252,6 +286,7 @@ Config.Items = {
 		Name = "Hunter's Fang",
 		Tier = "Epic",
 		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
 		Cost = 1000,
 		From = { "IronSword" },
 		Stats = { Attack = 15, Lifesteal = 0.08 },
@@ -261,6 +296,7 @@ Config.Items = {
 		Name = "Great Axe",
 		Tier = "Epic",
 		Category = "Attack",
+		Classes = { "Warrior", "Assassin" },
 		Cost = 1300,
 		From = { "IronSword", "IronSword" },
 		Stats = { Attack = 25, Haste = 10 },
@@ -270,6 +306,7 @@ Config.Items = {
 		Name = "Magic Staff",
 		Tier = "Epic",
 		Category = "Magic",
+		Classes = { "Mage" },
 		Cost = 850,
 		From = { "SpellTome" },
 		Stats = { Magic = 40 },
@@ -279,6 +316,7 @@ Config.Items = {
 		Name = "Arcane Orb",
 		Tier = "Epic",
 		Category = "Magic",
+		Classes = { "Mage" },
 		Cost = 1100,
 		From = { "SpellTome", "SandGlass" },
 		Stats = { Magic = 30, Haste = 15 },
@@ -288,6 +326,7 @@ Config.Items = {
 		Name = "Tower Shield",
 		Tier = "Epic",
 		Category = "Defense",
+		Classes = { "Warrior", "Tank" },
 		Cost = 1000,
 		From = { "SteelShield", "WarHelmet" },
 		Stats = { Armor = 25, Health = 200 },
@@ -297,6 +336,7 @@ Config.Items = {
 		Name = "Moon Cloak",
 		Tier = "Epic",
 		Category = "Defense",
+		Classes = { "Mage", "Tank" },
 		Cost = 1000,
 		From = { "MoonRing", "WarHelmet" },
 		Stats = { Resist = 30, Health = 200 },
@@ -306,6 +346,7 @@ Config.Items = {
 		Name = "Swift Boots",
 		Tier = "Epic",
 		Category = "Speed",
+		Classes = { "Warrior", "Archer", "Assassin" },
 		Cost = 900,
 		From = { "Boots" },
 		Boots = true,
@@ -316,6 +357,7 @@ Config.Items = {
 		Name = "Iron Boots",
 		Tier = "Epic",
 		Category = "Speed",
+		Classes = { "Warrior", "Tank" },
 		Cost = 1000,
 		From = { "Boots" },
 		Boots = true,
@@ -326,17 +368,86 @@ Config.Items = {
 		Name = "Sage Boots",
 		Tier = "Epic",
 		Category = "Speed",
+		Classes = { "Mage", "Assassin" },
 		Cost = 950,
 		From = { "Boots" },
 		Boots = true,
 		Stats = { MoveSpeed = 2.5, Haste = 15 },
 		Icon = "rbxassetid://124364107652496",
 	},
+	WardenBoots = {
+		Name = "Warden Boots",
+		Tier = "Epic",
+		Category = "Speed",
+		Classes = { "Warrior", "Mage", "Tank" },
+		Cost = 950,
+		From = { "Boots" },
+		Boots = true,
+		Stats = { MoveSpeed = 2.5, Resist = 25 },
+		Icon = "rbxassetid://78919707960600",
+	},
+	HuntersQuiver = {
+		Name = "Hunter's Quiver",
+		Tier = "Epic",
+		Category = "Attack",
+		Classes = { "Archer" },
+		Cost = 1100,
+		From = { "HuntingBow", "SwiftGloves" },
+		Stats = { Attack = 15, AttackSpeed = 0.2, MoveSpeed = 0.5 },
+		Icon = "rbxassetid://127111671855520",
+	},
+	BrambleMail = {
+		Name = "Bramble Mail",
+		Tier = "Epic",
+		Category = "Defense",
+		Classes = { "Warrior", "Tank" },
+		Cost = 1100,
+		From = { "SteelShield", "BitterThorn" },
+		Stats = { Armor = 30, Health = 150 },
+		Effect = { Kind = "Thorns", Value = 0.25 },
+		Text = "Heroes who hit you are wounded: 25% less healing for 3 seconds",
+		Icon = "rbxassetid://85232802312831",
+	},
+	EmberWand = {
+		Name = "Ember Wand",
+		Tier = "Epic",
+		Category = "Magic",
+		Classes = { "Mage" },
+		Cost = 1050,
+		From = { "SpellTome", "WarHelmet" },
+		Stats = { Magic = 25, Health = 200 },
+		Icon = "rbxassetid://118512480367209",
+	},
+	BitterBlade = {
+		Name = "Bitter Blade",
+		Tier = "Epic",
+		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
+		Cost = 1000,
+		From = { "IronSword", "BitterThorn" },
+		Stats = { Attack = 20 },
+		Effect = { Kind = "Wound", Value = 0.25 },
+		Text = "Your hits wound heroes: 25% less healing for 3 seconds",
+		Icon = "rbxassetid://100532090760818",
+	},
+	RendingPick = {
+		Name = "Rending Pick",
+		Tier = "Epic",
+		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
+		Cost = 1000,
+		From = { "IronSword" },
+		Stats = { Attack = 15 },
+		Effect = { Kind = "ArmorPierce", Value = 0.15 },
+		Text = "Your hits ignore 15% of the target's Armor",
+		Icon = "rbxassetid://107648747950795",
+	},
 
 	Kingsbane = {
 		Name = "Kingsbane",
 		Tier = "Legendary",
 		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
 		Cost = 3000,
 		From = { "KnightsBlade", "HuntersFang" },
 		Stats = { Attack = 45, AttackSpeed = 0.25, Lifesteal = 0.1 },
@@ -348,6 +459,7 @@ Config.Items = {
 		Name = "Eclipse Edge",
 		Tier = "Legendary",
 		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
 		Cost = 2900,
 		From = { "GreatAxe", "KnightsBlade" },
 		Stats = { Attack = 55, Haste = 15 },
@@ -359,6 +471,7 @@ Config.Items = {
 		Name = "Bloodthorn",
 		Tier = "Legendary",
 		Category = "Attack",
+		Classes = { "Warrior", "Tank", "Archer", "Assassin" },
 		Cost = 3000,
 		From = { "HuntersFang", "TowerShield" },
 		Stats = { Attack = 35, Health = 400, Lifesteal = 0.1 },
@@ -370,6 +483,7 @@ Config.Items = {
 		Name = "Stormcrown",
 		Tier = "Legendary",
 		Category = "Magic",
+		Classes = { "Mage" },
 		Cost = 3000,
 		From = { "MagicStaff", "ArcaneOrb" },
 		Stats = { Magic = 90, Haste = 15 },
@@ -381,6 +495,7 @@ Config.Items = {
 		Name = "Void Scepter",
 		Tier = "Legendary",
 		Category = "Magic",
+		Classes = { "Mage" },
 		Cost = 2800,
 		From = { "MagicStaff", "MoonRing", "SpellTome" },
 		Stats = { Magic = 75, Resist = 25 },
@@ -392,12 +507,132 @@ Config.Items = {
 		Name = "Crown Bulwark",
 		Tier = "Legendary",
 		Category = "Defense",
+		Classes = { "Tank" },
 		Cost = 2800,
 		From = { "TowerShield", "MoonCloak" },
 		Stats = { Armor = 40, Resist = 40, Health = 350 },
 		Effect = { Kind = "CrownBulwark", Value = 20 },
 		Text = "+20 Armor and Resist near your own Master",
 		Icon = "rbxassetid://127387090758352",
+	},
+	FarshotLongbow = {
+		Name = "Farshot Longbow",
+		Tier = "Legendary",
+		Category = "Attack",
+		Classes = { "Archer" },
+		Cost = 2900,
+		From = { "HuntersQuiver", "KnightsBlade" },
+		Stats = { Attack = 40, AttackSpeed = 0.2, MoveSpeed = 1 },
+		Effect = { Kind = "Farshot", Value = 0.2, From = 10, To = 30 },
+		Text = "Up to 20% more damage the farther the target: from 10 studs, all of it from 30",
+		Icon = "rbxassetid://87982741118168",
+	},
+	TempestString = {
+		Name = "Tempest String",
+		Tier = "Legendary",
+		Category = "Attack",
+		Classes = { "Archer" },
+		Cost = 2800,
+		From = { "HuntersQuiver", "SwiftGloves" },
+		Stats = { Attack = 30, AttackSpeed = 0.35 },
+		Effect = { Kind = "Tempest", Value = 0.6, Every = 3 },
+		Text = "Every third M1 hit on the same target deals 60% more",
+		Icon = "rbxassetid://113062874760291",
+	},
+	ThornwallAegis = {
+		Name = "Thornwall Aegis",
+		Tier = "Legendary",
+		Category = "Defense",
+		Classes = { "Warrior", "Tank" },
+		Cost = 2800,
+		From = { "BrambleMail", "TowerShield" },
+		Stats = { Armor = 60, Health = 350 },
+		Effect = { Kind = "Thorns", Value = 0.4, Reflect = 0.2 },
+		Text = "Heroes who hit you are wounded (40% less healing for 3 seconds) and take 20% of their M1 damage back",
+		Icon = "rbxassetid://83892402651761",
+	},
+	IronrootHeart = {
+		Name = "Ironroot Heart",
+		Tier = "Legendary",
+		Category = "Defense",
+		Classes = { "Warrior", "Tank" },
+		Cost = 2900,
+		From = { "TowerShield", "WarHelmet" },
+		Stats = { Health = 600, Armor = 20, Resist = 20 },
+		Effect = { Kind = "Ironroot", Value = 0.5, Below = 0.3, Time = 3, Cooldown = 60 },
+		Text = "Falling below 30% health, you take 50% less damage for 3 seconds (once a minute)",
+		Icon = "rbxassetid://104103897880381",
+	},
+	SoulfireStaff = {
+		Name = "Soulfire Staff",
+		Tier = "Legendary",
+		Category = "Magic",
+		Classes = { "Mage" },
+		Cost = 2900,
+		From = { "EmberWand", "MagicStaff" },
+		Stats = { Magic = 70, Health = 300 },
+		Effect = { Kind = "Soulfire", Value = 0.2, Below = 0.4 },
+		Text = "Magic damage is 20% higher on heroes below 40% health",
+		Icon = "rbxassetid://133108180278311",
+	},
+	ColossusMaul = {
+		Name = "Colossus Maul",
+		Tier = "Legendary",
+		Category = "Attack",
+		Classes = { "Warrior" },
+		Cost = 3000,
+		From = { "GreatAxe", "TowerShield" },
+		Stats = { Attack = 40, Health = 350 },
+		Effect = { Kind = "Colossus", Value = 0.02 },
+		Text = "Your hits on heroes deal 2% of their max health more",
+		Icon = "rbxassetid://121643324960921",
+	},
+	NightveilDagger = {
+		Name = "Nightveil Dagger",
+		Tier = "Legendary",
+		Category = "Attack",
+		Classes = { "Assassin" },
+		Cost = 2900,
+		From = { "GreatAxe", "SandGlass" },
+		Stats = { Attack = 50, Haste = 15 },
+		Effect = { Kind = "Nightveil", Value = 0.3, After = 8 },
+		Text = "Your first hit on a hero you have not hit for 8 seconds deals 30% more",
+		Icon = "rbxassetid://78787182037688",
+	},
+	Witherblade = {
+		Name = "Witherblade",
+		Tier = "Legendary",
+		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
+		Cost = 2800,
+		From = { "BitterBlade", "KnightsBlade" },
+		Stats = { Attack = 35, AttackSpeed = 0.2 },
+		Effect = { Kind = "Wound", Value = 0.4 },
+		Text = "Your hits wound heroes: 40% less healing for 3 seconds",
+		Icon = "rbxassetid://96292967360603",
+	},
+	Sunderer = {
+		Name = "Sunderer",
+		Tier = "Legendary",
+		Category = "Attack",
+		Classes = { "Warrior", "Archer", "Assassin" },
+		Cost = 2900,
+		From = { "RendingPick", "GreatAxe" },
+		Stats = { Attack = 45, Haste = 10 },
+		Effect = { Kind = "ArmorPierce", Value = 0.35 },
+		Text = "Your hits ignore 35% of the target's Armor",
+		Icon = "rbxassetid://91543949753374",
+	},
+	SpellwardMantle = {
+		Name = "Spellward Mantle",
+		Tier = "Legendary",
+		Category = "Defense",
+		Cost = 2500,
+		From = { "MoonCloak", "MoonRing" },
+		Stats = { Health = 300, Resist = 40, Haste = 10 },
+		Effect = { Kind = "Spellward", Value = 200, Refill = 15 },
+		Text = "A shield takes the first 200 magic damage; it fills again after 15 seconds without magic damage",
+		Icon = "rbxassetid://76723264550981",
 	},
 }
 
@@ -569,7 +804,14 @@ Config.Minions = {
 -- The kit: M1 a combo of hits, M2, E and R abilities. Times are seconds into the motion at speed 1 (`Speed` plays it
 -- faster), ranges in studs from the hero to the target's edge, angles the cone's full width in degrees. Every hit
 -- lands at its time in the motion, on the server. Indicators (design 06): "Arrow" (a skillshot), "Zone" (a range
--- round the hero and the spot aimed at), "Cone".
+-- round the hero and the spot aimed at), "Cone". A combo hit with a `ProjectileSpeed` is a shot instead of a swing,
+-- and its `Recover` the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
+-- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
+-- `Pierce` strikes everyone it passes once. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
+-- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
+-- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first.
+--
+-- In the armory his class's build is recommended (Config.ClassBuilds), or his own `Build` when he has one.
 --
 -- In the menu (the lobby): `Role` is his class (Config.Classes), `Description` his line on the cards. A `Starter`
 -- hero is every player's from the start; one with a `Price` is sold for coins in the heroes' shop (Shared.HeroShop),
@@ -585,18 +827,6 @@ Config.Heroes = {
 		Health = 900,
 		-- His kit deals physical damage, growing with Attack (each key's `Ratio` of it, Config.Items).
 		Scales = "Attack",
-		-- The armory's Recommended tab, in buying order (Config.Items).
-		Build = {
-			"IronSword",
-			"HealthPotion",
-			"Boots",
-			"HuntersFang",
-			"KnightsBlade",
-			"SwiftBoots",
-			"Kingsbane",
-			"EclipseEdge",
-			"Bloodthorn",
-		},
 		Look = {
 			Shirt = 13403820292,
 			Pants = 10703036251,
@@ -621,6 +851,15 @@ Config.Heroes = {
 		},
 		Pack = "ShadowDuelist",
 		Weapons = { "DaggerRight", "DaggerLeft" },
+		-- His thrown dagger in flight (HeroControls): the pack's left dagger, spinning end over end in shadow.
+		Projectile = {
+			Component = "DaggerLeft",
+			Spin = 22,
+			Turn = CFrame.Angles(-math.pi / 2, 0, 0),
+			Trail = { Color3.fromRGB(120, 60, 200), Color3.fromRGB(20, 10, 40) },
+			Glow = Color3.fromRGB(120, 60, 200),
+			Burst = true,
+		},
 		Motions = {
 			Idle = "RA-SHD-015",
 			Run = "RA-SHD-005",
@@ -709,6 +948,130 @@ Config.Heroes = {
 			},
 		},
 	},
+	Rowan = {
+		Role = "Archer",
+		Description = "Rains arrows on his foes from afar.",
+		Starter = true,
+		Showcase = { Motion = "RA-RNG-014", Aura = Color3.fromRGB(110, 200, 120) },
+		Health = 760,
+		Scales = "Attack",
+		Look = {
+			Shirt = 6985101011,
+			Pants = 102410804434863,
+			HairAccessory = "136456876434698",
+			-- Roblox's default head comes with a smile painted on; his face is only a short dark stripe for a mouth, in
+			-- the middle of his face. A picture on the round head lands askew, so the stripe is a thin strip on it.
+			BlankFace = true,
+			Mouth = { Length = 0.26, Thickness = 0.032, Height = -0.33, Colour = Color3.fromRGB(24, 18, 16) },
+			Skin = Color3.fromRGB(232, 196, 168),
+		},
+		Portrait = { Image = "rbxassetid://97165426487285", Face = { 160, 40, 620 } },
+		Icons = {
+			M1 = "rbxassetid://74397042098977",
+			M2 = "rbxassetid://94119815193611",
+			E = "rbxassetid://113948018234539",
+			R = "rbxassetid://117092938457390",
+			Dash = "rbxassetid://104572602673907",
+		},
+		Pack = "Ranger",
+		-- The bow and the arrow are skinned to the pack's bones, the quiver is rigid on his back (Shared.Motion).
+		Weapons = { "Bow", "Arrow", "Quiver" },
+		-- His arrows in flight (HeroControls): the pack's arrow, point first (its +X), with a streak of leaf-green wind
+		-- behind it and a soft green light, as on his icons.
+		Projectile = {
+			Component = "Arrow",
+			Turn = CFrame.Angles(0, math.pi / 2, 0),
+			Trail = { Color3.fromRGB(176, 236, 92), Color3.fromRGB(84, 160, 42) },
+			TrailHalf = 0.18,
+			TrailFade = 0.25,
+			Glow = Color3.fromRGB(150, 230, 90),
+		},
+		Motions = {
+			Idle = "RA-RNG-015",
+			Run = "RA-RNG-005",
+			RunLeft = "RA-RNG-006",
+			RunRight = "RA-RNG-007",
+			Back = "RA-RNG-002",
+			Takeoff = "RA-RNG-011",
+			Air = "RA-RNG-012",
+			Land = "RA-RNG-013",
+			Death = "RA-RNG-030",
+		},
+		-- The times below are when the pack's clips let the arrow go (its opacity), seconds at speed 1.
+		Kit = {
+			-- One shot per click, at the first enemy in its way. About three quarters of Shadowren's combo damage per
+			-- second (48 against 67), as the price of hitting from 34 studs instead of 6.
+			M1 = {
+				Kind = "Combo",
+				Speed = 0.8,
+				Ratio = 0.5,
+				Reset = 1.5,
+				Hits = {
+					{ Motion = "RA-RNG-036", Hit = 0.40, Damage = 30, Range = 34, ProjectileSpeed = 110, Width = 1.5 },
+				},
+			},
+			-- A drawn-out heavy shot that goes through everyone in its line.
+			M2 = {
+				Kind = "Throw",
+				Motion = "RA-RNG-040",
+				Indicator = "Arrow",
+				Cooldown = 8,
+				Release = 0.867,
+				ProjectileSpeed = 130,
+				Range = 45,
+				Width = 2,
+				Pierce = true,
+				Damage = 120,
+				Ratio = 1.2,
+			},
+			-- Five arrows in quick turn, each where he aims as it goes. All five a little more than Shadowren's dagger
+			-- (130 against 110), as they must all hit over more than a second.
+			E = {
+				Kind = "Throw",
+				Motion = "RA-RNG-041",
+				Indicator = "Arrow",
+				Cooldown = 10,
+				Releases = { 0.300, 0.633, 0.900, 1.100, 1.333 },
+				ProjectileSpeed = 110,
+				Range = 38,
+				Width = 1.5,
+				Damage = 26,
+				Ratio = 0.25,
+			},
+			-- A somersault, and at its top a fan of arrows that each go through everyone they meet; each enemy is
+			-- struck once, by the first arrow of the fan to reach him. Less on one enemy than Shadowren's ultimate
+			-- (160 against 240), as it reaches many from afar.
+			R = {
+				Kind = "Throw",
+				Motion = "RA-RNG-048",
+				Indicator = "Cone",
+				Cooldown = 40,
+				Release = 0.967,
+				Count = 7,
+				Spread = 60,
+				ProjectileSpeed = 100,
+				Range = 40,
+				Width = 2,
+				Pierce = true,
+				Damage = 160,
+				Ratio = 1.2,
+			},
+			-- A quick hop to where he aims (Shift), shooting an arrow that way in the air.
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-RNG-058",
+				Speed = 1.2,
+				Cooldown = 6,
+				Range = 14,
+				Width = 3,
+				Trail = false,
+				Start = 0.08,
+				Move = 0.55,
+				Stop = 0.7,
+				Shot = { Release = 0.30, Damage = 35, Ratio = 0.4, Range = 34, ProjectileSpeed = 110, Width = 1.5 },
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -731,16 +1094,20 @@ Config.Respawn = {
 	StreakMax = 9,
 }
 
--- Bots fill both teams up to `TeamSize` heroes, all playing `Hero`. A bot goes after an enemy hero anywhere in the
+-- Bots fill both teams up to `TeamSize` heroes, playing `Hero` unless the draft gave them another (a player who
+-- leaves is played on by a bot with his hero), each with its own hero's kit. A bot goes after an enemy hero anywhere in the
 -- arena: the nearest one nobody of its team fights yet (no other bot chose him and no player of its team is within
 -- `Taken` studs of him), and only when every one is taken the nearest of them, to help. With no enemy hero alive it
 -- fights the nearest other enemy within `Sight` studs, else the nearest enemy minion, else waits at its lane's gate. It
 -- plays as a person would, not
 -- perfectly: after an ability, and on a new target, it waits `Reaction` seconds (between Min and Max) before its next
--- ability; between its swings it rests up to `Rest` seconds; its dagger leads its target by `Lead` of the way and
--- flies up to `Miss` degrees off, its leaps and dashes land up to `Stray` studs from where it aimed. Only while
--- `Buys` is on does a bot shop: at the armory it buys `Build` in order, its parts first while the whole is too dear,
--- and it drinks a potion below `PotionAt` of its health.
+-- ability; between its swings it rests up to `Rest` seconds; what it shoots or throws at a hero leads him by `Lead` of
+-- the way and flies up to `Miss` degrees off, its leaps and dashes land up to `Stray` studs from where it aimed. An
+-- archer (a hero whose combo shoots, as Rowan) keeps `Keep` studs from an enemy hero, hops away from one within
+-- `Flee`, looses his fan of arrows at a hero within `Fan` of its range, and into minions when 3 stand within `Crowd`
+-- studs of the one he aims at. Only while `Buys` is on does a bot shop: at the armory it buys its hero's build in
+-- `Builds`, or else the one the armory recommends him (Config.ClassBuilds), in order, its parts first while the whole
+-- is too dear, and it drinks a potion below `PotionAt` of its health.
 Config.Bots = {
 	TeamSize = 4,
 	Hero = "Shadowren",
@@ -751,18 +1118,24 @@ Config.Bots = {
 	Lead = 0.2,
 	Miss = 15,
 	Stray = 6,
+	Keep = 18,
+	Flee = 8,
+	Fan = 0.6,
+	Crowd = 8,
 	Buys = false,
-	Build = {
-		"IronSword",
-		"HealthPotion",
-		"HealthPotion",
-		"Boots",
-		"HuntersFang",
-		"KnightsBlade",
-		"Kingsbane",
-		"SwiftBoots",
-		"EclipseEdge",
-		"Bloodthorn",
+	Builds = {
+		Shadowren = {
+			"IronSword",
+			"HealthPotion",
+			"HealthPotion",
+			"Boots",
+			"HuntersFang",
+			"KnightsBlade",
+			"Kingsbane",
+			"SwiftBoots",
+			"EclipseEdge",
+			"Bloodthorn",
+		},
 	},
 	PotionAt = 0.45,
 }
@@ -842,8 +1215,70 @@ Config.Teams = {
 }
 Config.TeamOrder = { "Blue", "Red" }
 
--- The heroes' classes, in the order of the menu's filters.
+-- The heroes' classes, in the order of the menu's and the armory's filters.
 Config.Classes = { "Warrior", "Mage", "Archer", "Tank", "Assassin" }
+
+-- Each class's build in buying order (Config.Items), as League's recommended items: the armory's Recommended tab shows
+-- the build of the hero's class, or another class's when its filter is chosen. A hero's own `Build` (Config.Heroes)
+-- goes before his class's.
+Config.ClassBuilds = {
+	Warrior = {
+		"IronSword",
+		"HealthPotion",
+		"Boots",
+		"GreatAxe",
+		"IronBoots",
+		"TowerShield",
+		"ColossusMaul",
+		"Bloodthorn",
+		"EclipseEdge",
+	},
+	Mage = {
+		"SpellTome",
+		"HealthPotion",
+		"Boots",
+		"MagicStaff",
+		"SageBoots",
+		"Stormcrown",
+		"EmberWand",
+		"SoulfireStaff",
+		"VoidScepter",
+	},
+	Archer = {
+		"HuntingBow",
+		"HealthPotion",
+		"SwiftGloves",
+		"HuntersQuiver",
+		"Boots",
+		"SwiftBoots",
+		"KnightsBlade",
+		"FarshotLongbow",
+		"TempestString",
+		"Kingsbane",
+	},
+	Tank = {
+		"WarHelmet",
+		"HealthPotion",
+		"Boots",
+		"BitterThorn",
+		"BrambleMail",
+		"IronBoots",
+		"ThornwallAegis",
+		"IronrootHeart",
+		"CrownBulwark",
+	},
+	Assassin = {
+		"IronSword",
+		"HealthPotion",
+		"Boots",
+		"GreatAxe",
+		"SandGlass",
+		"SwiftBoots",
+		"NightveilDagger",
+		"EclipseEdge",
+		"Kingsbane",
+	},
+}
 
 -- The experience's places (Shared.Places): the lobby with the menu, where players come in and queue, and the match
 -- place, whose reserved servers play one match each. Both carry the same code. They may be one place: its public

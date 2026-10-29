@@ -1,8 +1,10 @@
 -- The armory screen (design 08, server: ShopService): at one of his team's armory stalls the hero holds F on its
 -- prompt to open it, or presses B; B also opens it while he is dead. B or the back button closes it, and walking away
 -- from the stall does too. The mouse is free while it is open. The back button and ARMORY plaque at the top with the coins on the right; the tabs on the left
--- (Recommended, the hero's Build, then Attack, Defense, Magic and Speed); the grid of item cards in the middle, each
--- with its icon, name and what it costs the hero now (his parts counted), dark while he cannot buy it; on the right
+-- (Recommended, his class's build (Items.build), then Attack, Defense, Magic and Speed); the grid of item cards in the
+-- middle under the class filters (All and Config.Classes, as League's), which keep to the items made for the chosen
+-- class and on Recommended show its build, each card with its icon, name and what it costs the hero now (his parts
+-- counted), dark while he cannot buy it; on the right
 -- the chosen item with its stats, its build path and the green buy button; the bag along the bottom with the undo
 -- button. A card is chosen with a click and bought with a right click or the button; a slot of the bag is chosen and
 -- sold the same way. The other items in the build path (its parts, or what it builds into) are chosen and bought the
@@ -57,6 +59,12 @@ local PICKED = Color3.fromRGB(255, 232, 92)
 local STAT = Color3.fromRGB(44, 136, 38)
 local WARN = Color3.fromRGB(176, 58, 36)
 local CARD = 197
+-- The class filters in the grid's well (931 wide inside its border): their row's top and height, the room at either
+-- side (the cards' too) and between them, and where the cards begin below them. All names in one size, the longest
+-- (ASSASSIN) still fitting.
+local FILTER_TOP, FILTER_HEIGHT, FILTER_TEXT = 30, 62, 24
+local FILTER_MARGIN, FILTER_GAP = 38, 12
+local GRID_TOP = FILTER_TOP + FILTER_HEIGHT + 8
 -- E is the dagger throw, so the stall's prompt is held on F.
 local PROMPT_KEY = Enum.KeyCode.F
 local PROMPT_HOLD = 0.3
@@ -86,11 +94,14 @@ local function hudBand(): (number?, number?)
 	return score.AbsolutePosition.Y + score.AbsoluteSize.Y, bar.AbsolutePosition.Y - outline
 end
 local category = "Recommended"
+-- The class filter (nil for All); on Recommended, All is the hero's own build.
+local class: string? = nil
 -- What the right panel shows: an item of the grid, or a slot of the bag.
 local pickedItem: string? = nil
 local pickedSlot: number? = nil
 
 local tabs: { [string]: { gradient: UIGradient } } = {}
+local filters: { [string]: UIGradient } = {}
 local cards: {
 	[string]: {
 		button: TextButton,
@@ -105,6 +116,8 @@ local cards: {
 local slots: { { button: TextButton, gradient: UIGradient, stroke: UIStroke, icon: ImageLabel, badge: Frame, count: TextLabel } } =
 	{}
 local grid: ScrollingFrame
+-- In the grid's place when the class filter leaves the tab empty.
+local empty: TextLabel
 local coinsText: TextLabel
 local countdown: Frame
 local countdownText: TextLabel
@@ -477,7 +490,7 @@ local function sell(index: number)
 	send("Sell", index)
 end
 
--- Puts the cards of `name`'s items in the grid.
+-- Puts the cards of `name`'s items for the class filter in the grid.
 local function showCategory(name: string)
 	category = name
 	for id, tab in tabs do
@@ -485,11 +498,18 @@ local function showCategory(name: string)
 			then ColorSequence.new(GOLD_TOP, GOLD_BOTTOM)
 			else ColorSequence.new(CARD_TOP, CARD_BOTTOM)
 	end
+	local settings = Config.Heroes[hero()]
+	local lit = class or if name == "Recommended" and settings then settings.Role else "All"
+	for id, gradient in filters do
+		gradient.Color = if id == lit
+			then ColorSequence.new(GOLD_TOP, GOLD_BOTTOM)
+			else ColorSequence.new(CARD_TOP, CARD_BOTTOM)
+	end
 	for _, card in cards do
 		card.button:Destroy()
 	end
 	table.clear(cards)
-	local list = Items.list(name, hero())
+	local list = Items.list(name, hero(), class)
 	local seen = {}
 	for order, id in list do
 		if seen[id] or not Config.Items[id] then
@@ -528,17 +548,23 @@ local function showCategory(name: string)
 		end)
 		cards[id] = { button = button, gradient = gradient, stroke = stroke, icon = art, name = label, price = text }
 	end
-	if not pickedSlot and not (pickedItem and cards[pickedItem]) then
+	empty.Visible = #list == 0 and class ~= nil
+	empty.Text = "No " .. name .. " items for " .. (class or "") .. "s"
+	if not pickedSlot and not (pickedItem and cards[pickedItem]) and list[1] then
 		pickedItem = list[1]
 	end
 	paint()
 end
 
--- Chooses the item `id`, turning the grid to its tab when the grid does not hold it and scrolling its card into view.
+-- Chooses the item `id`, turning the grid to its tab (and the filter to All when it is not made for the class) when
+-- the grid does not hold it, and scrolling its card into view.
 function goTo(id: string)
 	pickedItem, pickedSlot = id, nil
 	local tab = Config.Items[id].Category
 	if not cards[id] and tab and tabs[tab] then
+		if not Items.fits(id, class) then
+			class = nil
+		end
 		showCategory(tab)
 	else
 		paint()
@@ -662,20 +688,55 @@ local function build()
 		tabs[tab.id] = { gradient = gradient }
 	end
 
-	-- The grid.
+	-- The grid, with the class filters along its top below the buy phase's countdown.
 	local _, well = panel(board, Vector2.new(947, 703), Vector2.new(384, 141), DARK_TOP, DARK_BOTTOM, 18, 8)
+	local names = { "All" }
+	for _, name in Config.Classes do
+		table.insert(names, name)
+	end
+	local filterWidth = (931 - 2 * FILTER_MARGIN - (#names - 1) * FILTER_GAP) / #names
+	for i, name in names do
+		local outer, inner, gradient = panel(
+			well,
+			Vector2.new(filterWidth, FILTER_HEIGHT),
+			Vector2.new(FILTER_MARGIN + (i - 1) * (filterWidth + FILTER_GAP), FILTER_TOP),
+			CARD_TOP,
+			CARD_BOTTOM,
+			12,
+			4
+		)
+		local label = UiStyle.text(inner, string.upper(name), FILTER_TEXT, C.Ink)
+		label.Size = UDim2.fromScale(1, 1)
+		local filterButton = clickable(outer)
+		hoverable(filterButton)
+		filterButton.Activated:Connect(function()
+			local chosen = if name == "All" then nil else name
+			if class ~= chosen or pickedSlot then
+				UiSound.play("Tab")
+			end
+			class, pickedSlot = chosen, nil
+			showCategory(category)
+		end)
+		filters[name] = gradient
+	end
 	grid = Instance.new("ScrollingFrame")
 	grid.BackgroundTransparency = 1
 	grid.BorderSizePixel = 0
-	grid.Size = UDim2.fromScale(1, 1)
+	grid.Size = UDim2.new(1, 0, 1, -GRID_TOP)
+	grid.Position = UDim2.fromOffset(0, GRID_TOP)
+	empty = UiStyle.text(well, "", 32, C.Cream, C.Edge)
+	empty.Size = UDim2.new(1, -2 * FILTER_MARGIN, 0, 60)
+	empty.Position = UDim2.new(0.5, 0, 0, GRID_TOP + 120)
+	empty.AnchorPoint = Vector2.new(0.5, 0)
+	empty.Visible = false
 	grid.ScrollBarThickness = 8
 	grid.ScrollBarImageColor3 = C.Gold
 	grid.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	grid.CanvasSize = UDim2.new()
 	grid.Parent = well
 	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 38)
-	padding.PaddingTop = UDim.new(0, 34)
+	padding.PaddingLeft = UDim.new(0, FILTER_MARGIN)
+	padding.PaddingTop = UDim.new(0, 16)
 	padding.PaddingBottom = UDim.new(0, 26)
 	padding.Parent = grid
 	local layout = Instance.new("UIGridLayout")

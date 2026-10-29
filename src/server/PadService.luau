@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Actors = require(script.Parent.Actors)
+local Damage = require(script.Parent.Damage)
 local ProgressService = require(script.Parent.ProgressService)
 
 local PadService = {}
@@ -55,7 +56,7 @@ local function heal()
 			and (not hurt or now - hurt >= SETTINGS.CombatPause)
 			and onOwnPad(character:GetAttribute("Team"), root.Position)
 		then
-			local amount = math.min(missing, humanoid.MaxHealth * SETTINGS.Heal * SETTINGS.Tick)
+			local amount = math.min(missing, humanoid.MaxHealth * SETTINGS.Heal * SETTINGS.Tick * Damage.healing(actor))
 			humanoid.Health += amount
 			healEvent:FireAllClients(character, math.round(amount))
 		end

@@ -16,6 +16,18 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   fine, no trading. Teams are told apart only by the HP bar (red or blue).
 - Attacks: left mouse a three-hit combo, right mouse and E specials, R the ultimate; built on the bought animation
   packs, damage lands on the hit frame. League-style indicators: hold to aim (arrow, circle, cone), release to cast.
+- Every hit goes where the crosshair points at the moment it lands or leaves the hero's hand, not where it pointed at
+  the click (owner, 2026-10-29): swings, throws, shots, volleys, sweeps and a dash's shot, so turning while an attack
+  plays hits whoever the player turns to and the hero never throws one way while his shot flies another. Only what
+  moves the hero keeps the aim of its cast: a leap's landing spot and a dash's path. `HeroKit.follows` decides it for
+  every kit, also new ones.
+- Every hero's numbers (health, damage, ratios, speeds, ranges, cooldowns) are set against every other hero and his
+  own class (owner, 2026-10-29), so they make sense together: compare key by key, his sustained damage (M1 per
+  second) and his burst (his whole kit at once, also at point-blank range and on one target), and check his class's
+  part: an Assassin the highest burst up close and little health, an Archer steady damage from range and the least
+  health, paying for range with damage, a Tank the most health and little damage, and so on. Do this for every new
+  hero and every change to one, test the doubtful cases in Play (a test dummy, hits counted), and write the
+  comparison next to the numbers in `Config` (as Rowan's M1, E and R).
 - Abilities rank up with 1, 2 and 3. A shop at the own base (coins, 6 inventory slots). Own crosshair and cursor.
 - The scoreboard follows League of Legends, mixed with the game's own design (owner, 2026-10-27): held on Tab, both
   teams with every hero's portrait, level, items and kills / deaths / assists; the player's own KDA stays in his HUD.

@@ -1,11 +1,11 @@
 -- The bots (Config.Bots): AI heroes that fill both teams up to TeamSize, as many fewer on a team as it has players. A
 -- bot is an Actor (a Configuration in ServerStorage.Bots) whose hero the server moves: it goes after an enemy hero no
 -- one of its team fights yet, anywhere in the arena, and helps with one only when all are taken; with none alive it
--- fights the other enemies (Config.Bots). It fights with its whole kit through CombatService, as a player would: leap
--- and flurry on heroes up close, the dagger
--- at range, the dash to close in, the combo in reach; with a person's reaction time, rests and misses (Config.Bots),
--- not perfectly. It levels up as players do and spends its points itself; while Buys is on it buys its Build at
--- the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its potions. It comes back on a
+-- fights the other enemies (Config.Bots). It fights with its own hero's whole kit through CombatService, as a player
+-- would: a fighter up close goes in with it, an archer keeps his distance; with a person's reaction time, rests and
+-- misses (Config.Bots), not perfectly. It levels up as players do and spends its points itself; while Buys is on it
+-- buys its hero's build at the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its
+-- potions. It comes back on a
 -- spawn pad after it dies. It plays the hero the draft picked for its place (BotService.start), and a bot that takes over
 -- from a player who left plays his hero.
 
@@ -234,7 +234,7 @@ local function use(b: Bot, key: string, aim: Vector3): boolean
 	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
 	local ok, landing = CombatService.act(b.actor, key, aim)
 	if ok and landing then
-		local kit = Config.Heroes[SETTINGS.Hero].Kit[key]
+		local kit = Config.Heroes[b.hero].Kit[key]
 		local dash = kit.Kind == "Dash"
 		b.move = {
 			started = os.clock(),
@@ -274,9 +274,17 @@ local function miss(from: Vector3, at: Vector3): Vector3
 	return from + turn:VectorToWorldSpace(at - from)
 end
 
-local function fight(b: Bot, target: Target, others: { Target }, now: number)
+-- Where a projectile flying `speed` studs a second, shot at the hero `target` `gap` studs away, is aimed: ahead of
+-- him by Lead of the way he walks meanwhile, and up to Miss degrees off.
+local function aimAt(from: Vector3, target: Target, gap: number, speed: number): Vector3
+	return miss(from, target.position + HeroKit.flat(target.velocity) * (gap / speed * SETTINGS.Lead))
+end
+
+-- A fighter up close (Shadowren): leap and flurry on heroes, the dagger at range, the dash to close in, the combo in
+-- reach.
+local function brawl(b: Bot, target: Target, others: { Target }, now: number)
 	local root = b.root :: BasePart
-	local kit = Config.Heroes[SETTINGS.Hero].Kit
+	local kit = Config.Heroes[b.hero].Kit
 	local offset = HeroKit.flat(target.position - root.Position)
 	local gap = offset.Magnitude - target.radius
 	local used = false
@@ -308,6 +316,68 @@ local function fight(b: Bot, target: Target, others: { Target }, now: number)
 		walkTo(b, target.position, now)
 	else
 		(b.humanoid :: Humanoid):Move(Vector3.zero)
+	end
+end
+
+-- A fighter from afar (Rowan, whose combo shoots), who keeps his distance (Config.Bots): he hops away from a hero who
+-- comes within Flee, looses his fan, his heavy shot and his volley at heroes in reach, the fan also into a crowd, and
+-- his shots at anything in reach; he walks up while out of reach or behind a wall, and backs off from a hero within
+-- Keep.
+local function shoot(b: Bot, target: Target, others: { Target }, now: number)
+	local root = b.root :: BasePart
+	local kit = Config.Heroes[b.hero].Kit
+	local shot = kit.M1.Hits[1]
+	local offset = HeroKit.flat(target.position - root.Position)
+	local gap = offset.Magnitude - target.radius
+	local open = clear(root.Position, target.position)
+	local away = if offset.Magnitude > 0.1 then -offset.Unit else -root.CFrame.LookVector
+	local used = false
+	if target.hero then
+		used = (gap <= SETTINGS.Flee and maybe(b, "Dash", root.Position + away * kit.Dash.Range, now))
+			or (open and gap <= kit.R.Range * SETTINGS.Fan and maybe(
+				b,
+				"R",
+				aimAt(root.Position, target, gap, kit.R.ProjectileSpeed),
+				now
+			))
+			or (open and gap <= kit.M2.Range - 4 and maybe(
+				b,
+				"M2",
+				aimAt(root.Position, target, gap, kit.M2.ProjectileSpeed),
+				now
+			))
+			or (
+				open
+				and gap <= kit.E.Range - 4
+				and maybe(b, "E", aimAt(root.Position, target, gap, kit.E.ProjectileSpeed), now)
+			)
+	else
+		local crowd = 0
+		for _, other in others do
+			if HeroKit.flat(other.position - target.position).Magnitude <= SETTINGS.Crowd then
+				crowd += 1
+			end
+		end
+		used = open and crowd >= 3 and gap <= kit.R.Range * SETTINGS.Fan and maybe(b, "R", target.position, now)
+	end
+	local aim = if target.hero then aimAt(root.Position, target, gap, shot.ProjectileSpeed) else target.position
+	if not used and open and gap <= shot.Range - 0.5 and now >= b.swingAt and use(b, "M1", aim) then
+		b.swingAt = now + math.random() * SETTINGS.Rest
+	end
+	if not open or gap > shot.Range - 4 then
+		walkTo(b, target.position, now)
+	elseif target.hero and gap < SETTINGS.Keep then
+		walkTo(b, root.Position + away * 8, now)
+	else
+		(b.humanoid :: Humanoid):Move(Vector3.zero)
+	end
+end
+
+local function fight(b: Bot, target: Target, others: { Target }, now: number)
+	if Config.Heroes[b.hero].Kit.M1.Hits[1].ProjectileSpeed then
+		shoot(b, target, others, now)
+	else
+		brawl(b, target, others, now)
 	end
 end
 
@@ -403,14 +473,15 @@ local function missingParts(id: string, pool: { string }, out: { string })
 	end
 end
 
--- At the armory the bot buys the next item of its Build, or while that is too dear the dearest part of it it can
--- afford; an item it cannot carry is passed over.
+-- At the armory the bot buys the next item of its hero's build (Config.Bots.Builds, else the one the armory
+-- recommends him), or while that is too dear the dearest part of it it can afford; an item it cannot carry is passed
+-- over.
 local function shop(b: Bot)
 	if not ShopService.atShop(b.actor) then
 		return
 	end
 	local step = b.actor:GetAttribute("BuildStep") or 1
-	local id = SETTINGS.Build[step]
+	local id = (SETTINGS.Builds[b.hero] or Items.build(b.hero, nil))[step]
 	if not id then
 		return
 	end

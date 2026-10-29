@@ -41,15 +41,35 @@ function Items.get(id: string?): any
 	return id and Config.Items[id]
 end
 
--- The items of `category` ("Recommended" is `hero`'s build), cheapest first within each tier.
-function Items.list(category: string, hero: string?): { string }
+-- Whether `id` is made for `class` (Config.Items' `Classes`); with no class, every item is.
+function Items.fits(id: string, class: string?): boolean
+	local classes = Config.Items[id].Classes
+	return class == nil or classes == nil or table.find(classes, class) ~= nil
+end
+
+-- The build the armory recommends to `hero` (his own, else his class's), or `class`'s build when it is given and not
+-- his class.
+function Items.build(hero: string?, class: string?): { string }
+	local settings = hero and Config.Heroes[hero]
+	local own = settings and settings.Role
+	if class and class ~= own then
+		return table.clone(Config.ClassBuilds[class] or {})
+	end
+	if settings and settings.Build then
+		return table.clone(settings.Build)
+	end
+	return table.clone(own and Config.ClassBuilds[own] or {})
+end
+
+-- The items of `category` made for `class` (all when nil), cheapest first within each tier; "Recommended" is the build
+-- of Items.build.
+function Items.list(category: string, hero: string?, class: string?): { string }
 	if category == "Recommended" then
-		local settings = hero and Config.Heroes[hero]
-		return if settings and settings.Build then table.clone(settings.Build) else {}
+		return Items.build(hero, class)
 	end
 	local list = {}
 	for id, item in Config.Items do
-		if item.Category == category then
+		if item.Category == category and Items.fits(id, class) then
 			table.insert(list, id)
 		end
 	end
@@ -110,15 +130,16 @@ function Items.stats(actor: Instance): Stats
 	return total :: any
 end
 
--- The value of the legendary effect `kind` if `actor` carries it.
-function Items.effect(actor: Instance, kind: string): number?
+-- The value of the effect `kind` if `actor` carries it, the strongest of his items that have it, and that effect.
+function Items.effect(actor: Instance, kind: string): (number?, any)
+	local best = nil
 	for _, slot in Items.bag(actor) do
 		local effect = Config.Items[slot.id].Effect
-		if effect and effect.Kind == kind then
-			return effect.Value
+		if effect and effect.Kind == kind and (not best or effect.Value > best.Value) then
+			best = effect
 		end
 	end
-	return nil
+	return best and best.Value, best
 end
 
 function Items.walkSpeed(actor: Instance): number

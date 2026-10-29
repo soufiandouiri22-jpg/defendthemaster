@@ -2,8 +2,9 @@
 -- The pack's own player only drives its included rig with Motor6Ds; a Roblox character has AnimationConstraints since
 -- the Avatar Joint Upgrade, and frames of its own at the root. So this samples the pack's clips through its player and
 -- turns every joint's pose into one for the hero's joint, so that each body part sits where it would on the pack's
--- rig, standing on the same ground. The weapons (the pack's skinned components, in the character's "Weapons" folder)
--- follow their bones, and fade in and out as the clips say.
+-- rig, standing on the same ground. The weapons (the pack's components, in the character's "Weapons" folder) follow
+-- the clips as on the pack's rig: a skinned one (a bow, a dagger) by its bones, a rigid one (a quiver) by its
+-- ComponentBinding Motor6D on the root part; and they fade in and out as the clips say.
 --
 -- Two layers: the base (standing, running, jumping), which crossfades when it changes, and over it one action (an
 -- attack), which fades in, plays once and fades back to the base.
@@ -23,9 +24,12 @@ local BASE_FADE = 0.15
 local ACTION_FADE_IN = 0.08
 local ACTION_FADE_OUT = 0.2
 
+type Prop = { world: CFrame, scale: Vector3 }
+
 type Pose = {
 	body: { [string]: CFrame },
 	bones: { [string]: CFrame },
+	props: { [string]: Prop },
 	opacity: { [string]: number },
 }
 
@@ -66,6 +70,8 @@ export type Motion = typeof(setmetatable(
 		rootTurn: CFrame,
 		bones: { [string]: Bone },
 		meshes: { [string]: { MeshPart } },
+		-- The rigid components' joints by their part's name, with the part's size as made.
+		props: { [string]: { motor: Motor6D, size: Vector3 } },
 		base: Clip?,
 		previous: Clip?,
 		baseBlend: number,
@@ -148,6 +154,8 @@ local function takeWeapon(self: Motion, d: Instance)
 	end
 	if d:IsA("Bone") then
 		self.bones[d.Name] = d
+	elseif d:IsA("Motor6D") and d.Name == "ComponentBinding" and d.Part1 then
+		self.props[d.Part1.Name] = { motor = d, size = d.Part1.Size }
 	elseif d:IsA("MeshPart") then
 		local meshes = self.meshes[component.Name] or {}
 		self.meshes[component.Name] = meshes
@@ -167,6 +175,7 @@ function Motion.new(character: Model, packName: string): Motion
 		rootTurn = CFrame.identity,
 		bones = {},
 		meshes = {},
+		props = {},
 		base = nil,
 		previous = nil,
 		baseBlend = 1,
@@ -221,7 +230,7 @@ end
 
 function Motion.sample(self: Motion, clip: Clip): Pose
 	local sample = self.player.Sample(nil, clip.id, clipTime(clip))
-	local body, bones = sample.body, sample.bones
+	local body, bones, props = sample.body, sample.bones, sample.props or {}
 	local root = self.rootPart and body[self.rootPart]
 	if clip.inPlace and root then
 		body = table.clone(body)
@@ -238,8 +247,16 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 				bones[name] = CFrame.new(turn:VectorToObjectSpace(travel)) * pose
 			end
 		end
+		props = table.clone(props)
+		for name, prop in self.props do
+			local pose = props[name]
+			if pose then
+				local shifted = CFrame.new(prop.motor.C0.Rotation:VectorToObjectSpace(travel)) * pose.world
+				props[name] = { world = shifted, scale = pose.scale }
+			end
+		end
 	end
-	return { body = body, bones = bones, opacity = sample.opacity }
+	return { body = body, bones = bones, props = props, opacity = sample.opacity }
 end
 
 local function blend(a: Pose, b: Pose, w: number): Pose
@@ -248,7 +265,7 @@ local function blend(a: Pose, b: Pose, w: number): Pose
 	elseif w >= 1 then
 		return b
 	end
-	local body, bones = {}, {}
+	local body, bones, props = {}, {}, {}
 	for name, cf in a.body do
 		local other = b.body[name]
 		body[name] = if other then cf:Lerp(other, w) else cf
@@ -257,7 +274,13 @@ local function blend(a: Pose, b: Pose, w: number): Pose
 		local other = b.bones[name]
 		bones[name] = if other then cf:Lerp(other, w) else cf
 	end
-	return { body = body, bones = bones, opacity = if w < 0.5 then a.opacity else b.opacity }
+	for name, prop in a.props do
+		local other = b.props[name]
+		props[name] = if other
+			then { world = prop.world:Lerp(other.world, w), scale = prop.scale:Lerp(other.scale, w) }
+			else prop
+	end
+	return { body = body, bones = bones, props = props, opacity = if w < 0.5 then a.opacity else b.opacity }
 end
 
 local function newClip(self: Motion, id: string, speed: number, time: number?): Clip
@@ -393,6 +416,18 @@ function Motion.apply(self: Motion, pose: Pose)
 	end
 	for name, bone in self.bones do
 		bone.Transform = pose.bones[name] or CFrame.identity
+	end
+	for name, prop in self.props do
+		local p = pose.props[name]
+		if p then
+			prop.motor.Transform = p.world
+			local size = prop.size
+				* Vector3.new(math.max(p.scale.X, 1e-4), math.max(p.scale.Y, 1e-4), math.max(p.scale.Z, 1e-4))
+			local part = prop.motor.Part1 :: BasePart
+			if (part.Size - size).Magnitude > 1e-3 then
+				part.Size = size
+			end
+		end
 	end
 	for name, meshes in self.meshes do
 		local opacity = pose.opacity[name] or 0

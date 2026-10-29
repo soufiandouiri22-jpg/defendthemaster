@@ -26,6 +26,12 @@ local PLACES = 10
 local CARD_HEIGHT = 214
 local ROW_HEIGHT = 150
 local CENTRE = 1024
+-- The heights of the title with the clock and of the block of the teams, the heroes and LOCK IN, the room between
+-- them, and the most of the screen's height they may fill together.
+local HEADING_HEIGHT = 156
+local BLOCK_HEIGHT = 788
+local GAP = 64
+local ROOM = 0.94
 local TEAM_NAMES = { Blue = "BLUE TEAM", Red = "RED TEAM" }
 local TEAM_FILL = { Blue = { C.Blue, C.BlueDark }, Red = { C.Red, C.RedDark } }
 -- How quickly the camera goes round the arena (radians a second).
@@ -142,20 +148,37 @@ local function build(event: RemoteEvent)
 	})
 	shadeFade.Parent = shade
 
-	-- Who is picking, and his time.
-	local title = Widgets.label(gui, "", 54, C.Cream, nil, C.Edge)
-	title.Size = UDim2.new(1, 0, 0, 64)
-	title.Position = UDim2.fromOffset(0, 42)
-	local timer = Widgets.label(gui, "", 92, C.Cream, nil, C.Edge)
-	timer.Size = UDim2.new(1, 0, 0, 96)
-	timer.Position = UDim2.fromOffset(0, 102)
+	-- Who is picking and his time, GAP above everything else in one block of BLOCK_HEIGHT: together in the middle of
+	-- the screen, drawn smaller where they would fill more than ROOM of its height.
+	local group = UiStyle.frame(
+		gui,
+		UDim2.new(1, 0, 0, HEADING_HEIGHT + GAP + BLOCK_HEIGHT),
+		UDim2.fromScale(0.5, 0.5),
+		Vector2.new(0.5, 0.5)
+	)
+	group.BackgroundTransparency = 1
+	group.Name = "Group"
+	local groupScale = Instance.new("UIScale")
+	groupScale.Parent = group
+	local function fit()
+		local room = shade.AbsoluteSize.Y
+		local tall = group.AbsoluteSize.Y / groupScale.Scale
+		if room > 0 and tall > 0 then
+			groupScale.Scale = math.min(1, room * ROOM / tall)
+		end
+	end
+	shade:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	task.defer(fit)
 
-	-- Everything under the clock in one block of 788, in the middle of the room between the clock and the bottom,
-	-- drawn at 90% round that middle.
-	local middle = Widgets.middle(gui, 788, 102 + 96)
-	middle.AnchorPoint = Vector2.new(0.5, 0.5)
-	middle.Position = UDim2.new(0.5, 0, 0.5, (102 + 96) / 2)
-	UiStyle.shrink(middle, 0.9)
+	local title = Widgets.label(group, "", 54, C.Cream, nil, C.Edge)
+	title.Size = UDim2.new(1, 0, 0, 64)
+	local timer = Widgets.label(group, "", 92, C.Cream, nil, C.Edge)
+	timer.Size = UDim2.new(1, 0, 0, 96)
+	timer.Position = UDim2.fromOffset(0, 60)
+
+	local middle = UiStyle.frame(group, UDim2.new(1, 0, 0, BLOCK_HEIGHT), UDim2.fromOffset(0, HEADING_HEIGHT + GAP))
+	middle.BackgroundTransparency = 1
+	middle.Name = "Middle"
 
 	-- The teams, their middles level with the block's.
 	local rows: { [string]: { Frame } } = {}

@@ -13,6 +13,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Items = require(ReplicatedStorage.Shared.Items)
 local Actors = require(script.Parent.Actors)
+local Damage = require(script.Parent.Damage)
 local ProgressService = require(script.Parent.ProgressService)
 
 local ShopService = {}
@@ -194,7 +195,7 @@ local function heal()
 			actor:SetAttribute("PotionUntil", nil)
 			continue
 		end
-		local amount = SETTINGS.Potion.Heal / SETTINGS.Potion.Time * POTION_TICK
+		local amount = SETTINGS.Potion.Heal / SETTINGS.Potion.Time * POTION_TICK * Damage.healing(actor)
 		humanoid.Health = math.min(humanoid.MaxHealth, humanoid.Health + amount)
 	end
 end

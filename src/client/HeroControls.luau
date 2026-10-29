@@ -3,8 +3,10 @@
 -- Everything aims at the crosshair (HeroCamera.aim). The client plays its own motion at once and asks the server
 -- (Net.HeroAction), which decides the hits; a refused attack is undone. The leap moves the hero itself, from takeoff
 -- to landing, to the spot the server works out the same way (HeroKit.leapLanding), and lands in a shockwave of shadow
--- (ShadowEffects), as does every other hero's leap. Other heroes' motions and every
--- thrown dagger come from the server. The crosshair (design 09) turns red on an enemy and blue on an ally.
+-- (ShadowEffects), as does every other hero's leap. Other heroes' motions and every thrown dagger and shot arrow come
+-- from the server; while an attack plays, the client keeps telling the server where the crosshair points, as every
+-- hit but a leap's landing and a dash's path goes there (HeroKit.follows). The crosshair (design 09) turns red on an
+-- enemy and blue on an ally.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -27,13 +29,13 @@ local ShadowEffects = require(script.Parent.ShadowEffects)
 local HeroControls = {}
 
 local RECOVER = 0.12
+-- How often an attack that follows the crosshair (HeroKit.follows) tells the server where it points while it plays.
+local AIM_EVERY = 0.05
 local KEY_OF: { [Enum.KeyCode | Enum.UserInputType]: string } = {
 	[Enum.UserInputType.MouseButton2] = "M2",
 	[Enum.KeyCode.E] = "E",
 	[Enum.KeyCode.R] = "R",
 }
-local SHADOW = Color3.fromRGB(120, 60, 200)
-
 local player = Players.LocalPlayer
 local actionEvent: RemoteEvent
 local groundRay = RaycastParams.new()
@@ -58,6 +60,7 @@ local holdingM1 = false
 local aiming: string? = nil
 local indicator: Indicators.Indicator? = nil
 local leap: Leap? = nil
+local following, aimSentAt = false, 0
 
 type Flying = {
 	dagger: BasePart,
@@ -66,6 +69,10 @@ type Flying = {
 	speed: number,
 	range: number,
 	started: number,
+	-- Turns a second end over end, how the model lies against its flight, and whether a hit bursts in shadow.
+	spin: number,
+	turn: CFrame,
+	burst: boolean,
 }
 local flying: { [number]: Flying } = {}
 
@@ -176,9 +183,11 @@ local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local drop = if root and humanoid then Vector3.new(0, heightOf(root, humanoid), 0) else Vector3.zero
-	task.delay(kit.Start, function()
-		ShadowEffects.dash(from - drop, to - drop, kit.Move - kit.Start)
-	end)
+	if kit.Trail ~= false then
+		task.delay(kit.Start, function()
+			ShadowEffects.dash(from - drop, to - drop, kit.Move - kit.Start)
+		end)
+	end
 	task.delay(kit.Stop, function()
 		if HeroAnimator.playing(character) == kit.Motion then
 			HeroAnimator.stop(character)
@@ -221,6 +230,7 @@ local function cast(key: string)
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
 	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
 	actionEvent:FireServer(key, aim)
+	following, aimSentAt = HeroKit.follows(kit), now
 	AbilityBar.used(key)
 
 	if kit.Kind == "Combo" then
@@ -228,7 +238,7 @@ local function cast(key: string)
 		local hit = kit.Hits[step]
 		combo, comboUntil = step, now + kit.Reset
 		local speed = kit.Speed * Items.attackSpeed(player)
-		busyUntil = now + hit.Hit / speed + RECOVER
+		busyUntil = now + (hit.Hit + (hit.Recover or 0)) / speed + RECOVER
 		local length = HeroAnimator.play(character, hit.Motion, speed)
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
 		return
@@ -255,7 +265,8 @@ local function cast(key: string)
 		slow(humanoid, kit.Land + RECOVER, 0)
 		landLater(character, to, kit)
 	elseif kit.Kind == "Throw" then
-		busyUntil = now + kit.Release + RECOVER
+		local releases = HeroKit.releases(kit)
+		busyUntil = now + releases[#releases] + RECOVER
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
 	else
 		busyUntil = now + length
@@ -377,9 +388,12 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	end
 end
 
--- The thrown shadow dagger: the pack's dagger, spinning end over end, with a trail of shadow behind it.
-local function dagger(pack: string): BasePart
-	local template = ReplicatedStorage[pack].Rig.Components.DaggerLeft:FindFirstChildWhichIsA("MeshPart", true)
+-- A hero's flying projectile (Config.Heroes[hero].Projectile): the pack's component, with a trail behind it; a
+-- Shadowren's dagger spins end over end and glows with shadow, a Rowan's arrow flies point first.
+local function projectileModel(settings: any): BasePart
+	local look = settings.Projectile
+	local template =
+		ReplicatedStorage[settings.Pack].Rig.Components[look.Component]:FindFirstChildWhichIsA("MeshPart", true)
 	local part = template:Clone() :: MeshPart
 	for _, d in part:GetChildren() do
 		if d:IsA("JointInstance") then
@@ -391,25 +405,28 @@ local function dagger(pack: string): BasePart
 	part.CanQuery = false
 	part.CanTouch = false
 	part.Transparency = 0
+	local half = look.TrailHalf or part.Size.Y * 0.3
 	local a0 = Instance.new("Attachment")
-	a0.Position = Vector3.new(0, part.Size.Y * 0.3, 0)
+	a0.Position = Vector3.new(0, half, 0)
 	a0.Parent = part
 	local a1 = Instance.new("Attachment")
-	a1.Position = Vector3.new(0, -part.Size.Y * 0.3, 0)
+	a1.Position = Vector3.new(0, -half, 0)
 	a1.Parent = part
 	local trail = Instance.new("Trail")
 	trail.Attachment0, trail.Attachment1 = a0, a1
 	trail.Lifetime = 0.25
-	trail.Color = ColorSequence.new(SHADOW, Color3.fromRGB(20, 10, 40))
-	trail.Transparency = NumberSequence.new(0.35, 1)
+	trail.Color = ColorSequence.new(look.Trail[1], look.Trail[2])
+	trail.Transparency = NumberSequence.new(look.TrailFade or 0.35, 1)
 	trail.LightEmission = 0.4
 	trail.FaceCamera = true
 	trail.Parent = part
-	local light = Instance.new("PointLight")
-	light.Color = SHADOW
-	light.Range = 6
-	light.Brightness = 1.5
-	light.Parent = part
+	if look.Glow then
+		local light = Instance.new("PointLight")
+		light.Color = look.Glow
+		light.Range = 6
+		light.Brightness = 1.5
+		light.Parent = part
+	end
 	part.Parent = effects()
 	return part
 end
@@ -427,13 +444,19 @@ local function onProjectile(
 	if not settings then
 		return
 	end
+	if not settings.Projectile then
+		return
+	end
 	flying[id] = {
-		dagger = dagger(settings.Pack),
+		dagger = projectileModel(settings),
 		origin = origin,
 		direction = direction,
 		speed = speed,
 		range = range,
 		started = os.clock(),
+		spin = settings.Projectile.Spin or 0,
+		turn = settings.Projectile.Turn or CFrame.identity,
+		burst = settings.Projectile.Burst == true,
 	}
 	HeroSounds.event(character, settings.Pack, "Release")
 end
@@ -443,9 +466,9 @@ local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
 	if f then
 		f.dagger:Destroy()
 		flying[id] = nil
-	end
-	if hit then
-		ShadowEffects.burst(at)
+		if hit and f.burst then
+			ShadowEffects.burst(at)
+		end
 	end
 end
 
@@ -459,8 +482,8 @@ local function updateFlying()
 			continue
 		end
 		local position = f.origin + f.direction * math.min(travelled, f.range)
-		local spin = CFrame.Angles(-(now - f.started) * 22, 0, 0)
-		f.dagger.CFrame = CFrame.lookAt(position, position + f.direction) * spin * CFrame.Angles(-math.pi / 2, 0, 0)
+		local spin = CFrame.Angles(-(now - f.started) * f.spin, 0, 0)
+		f.dagger.CFrame = CFrame.lookAt(position, position + f.direction) * spin * f.turn
 	end
 end
 
@@ -544,6 +567,11 @@ function HeroControls.start()
 	RunService.RenderStepped:Connect(function()
 		if holdingM1 and not aiming then
 			cast("M1")
+		end
+		local now = os.clock()
+		if following and now < busyUntil and now - aimSentAt >= AIM_EVERY then
+			aimSentAt = now
+			actionEvent:FireServer("Aim", HeroCamera.aim())
 		end
 		updateIndicator()
 		updateFlying()

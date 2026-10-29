@@ -16,6 +16,15 @@
 					"$path": "Vendor/ShadowDuelist/Animations/Included Rig.rbxmx"
 				}
 			},
+			"Ranger": {
+				"$className": "Folder",
+				"ComponentPlayer": {
+					"$path": "Vendor/Ranger/Animations/Component Playback.rbxm"
+				},
+				"Rig": {
+					"$path": "Vendor/Ranger/Animations/Included Rig.rbxmx"
+				}
+			},
 			"GreataxeBerserker": {
 				"$className": "Folder",
 				"Rig": {

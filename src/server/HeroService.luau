@@ -19,6 +19,7 @@ local Motion = require(ReplicatedStorage.Shared.Motion)
 local Actors = require(script.Parent.Actors)
 local HeroLook = require(script.Parent.HeroLook)
 local ProgressService = require(script.Parent.ProgressService)
+local TestGround = require(script.Parent.TestGround)
 
 local HeroService = {}
 
@@ -125,7 +126,7 @@ function HeroService.start(layout: Layout)
 		if not player.Parent or not released then
 			return
 		end
-		local hero = player:GetAttribute("Hero") or Config.DefaultHero
+		local hero = player:GetAttribute("Hero") or TestGround.hero() or Config.DefaultHero
 		if not Config.Heroes[hero] then
 			hero = Config.DefaultHero
 		end

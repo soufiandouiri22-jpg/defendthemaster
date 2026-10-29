@@ -33,6 +33,8 @@ local SLOT_BOTTOM = Color3.fromRGB(222, 196, 146)
 
 type Slot = {
 	frame: Frame,
+	-- Where the slot belongs on the panel, which the flash of `used` always returns it to.
+	home: UDim2,
 	stroke: UIStroke,
 	glyph: TextLabel,
 	icon: ImageLabel,
@@ -98,6 +100,7 @@ local function slot(parent: Instance, key: string, index: number): Slot
 
 	local s: Slot = {
 		frame = frame,
+		home = frame.Position,
 		stroke = edge,
 		glyph = glyph,
 		icon = icon,
@@ -211,10 +214,9 @@ end
 function AbilityBar.used(key: string)
 	local s = slots[key]
 	if s then
-		local home = s.frame.Position
 		s.frame.Size = UDim2.fromOffset(SLOT - 8, SLOT - 8)
-		s.frame.Position = home + UDim2.fromOffset(4, 4)
-		local goal = { Size = UDim2.fromOffset(SLOT, SLOT), Position = home }
+		s.frame.Position = s.home + UDim2.fromOffset(4, 4)
+		local goal = { Size = UDim2.fromOffset(SLOT, SLOT), Position = s.home }
 		TweenService:Create(s.frame, TweenInfo.new(0.15, Enum.EasingStyle.Back), goal):Play()
 	end
 end

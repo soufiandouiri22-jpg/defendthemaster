@@ -1,9 +1,11 @@
 -- The heroes' attacks (Config.Heroes[hero].Kit). A client asks for an attack through ReplicatedStorage.Net.HeroAction
--- (key, the point aimed at); the server checks the hero can (alive, not mid-motion, off cooldown), tells every client
--- to play the motion (Net.HeroMotion: character, key, combo step, landing spot) and lands each hit at its time in the
--- motion on the enemies there: the other team's minions and Combatants (heroes, Masters). A refused attack is sent
--- back to its client (Net.HeroRefused), which stops the motion it already began. Thrown daggers fly on the server
--- (Net.HeroProjectile: id, origin, direction, speed, range; Net.HeroProjectileEnd: id, where it stopped, hit or not).
+-- (key, the point aimed at; while an attack plays, "Aim" and where the crosshair points now); the server
+-- checks the hero can (alive, not mid-motion, off cooldown), tells every client to play the motion (Net.HeroMotion:
+-- character, key, combo step, landing spot) and lands each hit at its time in the motion on the enemies there: the
+-- other team's minions and Combatants (heroes, Masters). A refused attack is sent back to its client
+-- (Net.HeroRefused), which stops the motion it already began. Thrown daggers and shot arrows fly on the server
+-- (Net.HeroProjectile: id, origin, direction, speed, range; Net.HeroProjectileEnd: id, where it stopped, hit or not);
+-- one stops at the first enemy in its way, a piercing one strikes everyone it passes once.
 -- Every hit is told to the clients for its feedback (Net.HeroHit: target, damage, where, the striking player). Bots
 -- (Actors, BotService) attack through CombatService.act, with the same checks; they move through their leaps and
 -- dashes on the server (CombatService.act gives where they land), as a player's client moves him.
@@ -45,6 +47,8 @@ type State = {
 	motion: number,
 	-- Whether his next M1 swing is Eclipse Edge's, after an ability.
 	eclipse: boolean,
+	-- Where his crosshair points now, sent by his client while an attack plays (Net.HeroAction "Aim").
+	aim: Vector3?,
 }
 
 -- An enemy in reach: a minion's root part or a Combatant model.
@@ -66,6 +70,11 @@ type Projectile = {
 	width: number,
 	damage: number,
 	magic: boolean,
+	pierce: boolean,
+	-- Those it struck, shared by the projectiles of one fan so it strikes each enemy once.
+	struck: { [Instance]: boolean },
+	-- Whether it is an M1 shot.
+	basic: boolean,
 }
 
 local states: { [Instance]: State } = {}
@@ -117,10 +126,30 @@ local function enemiesNear(team: string, centre: Vector3, reach: number): { Enem
 	return found
 end
 
--- `player`'s hit of `amount` (Damage: his items' effects, the target's defence, his lifesteal).
-local function damage(player: Instance, character: Model, enemy: Enemy, amount: number, magic: boolean)
+-- Thornwall's share `amount` of an M1 that `owner`'s hero `victim` took, sent back to the attacker's hero `character`
+-- as magic damage.
+local function reflect(owner: Instance, victim: Model, character: Model, amount: number)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return
+	end
+	amount = math.round(Damage.mitigated(character, amount, true, owner))
+	if amount <= 0 then
+		return
+	end
+	local by = if owner:IsA("Player") then owner else nil
+	hitEvent:FireAllClients(character, amount, character:GetPivot().Position, by)
+	humanoid:TakeDamage(amount)
+	ProgressService.hurt(character, owner)
+	MinionService.heroAttacked(victim, character)
+end
+
+-- `player`'s hit of `amount` (Damage: his items' effects, the target's defence, his lifesteal, wounds and thorns);
+-- `basic` when it is an M1 hit.
+local function damage(player: Instance, character: Model, enemy: Enemy, amount: number, magic: boolean, basic: boolean?)
 	local target = enemy.instance
-	amount = Damage.outgoing(player, amount, magic, target)
+	amount = Damage.outgoing(player, amount, magic, target, basic)
+	local raw = amount
 	if target:IsA("Model") and target:GetAttribute("Hero") then
 		amount = Damage.mitigated(target, amount, magic, player)
 	end
@@ -145,6 +174,11 @@ local function damage(player: Instance, character: Model, enemy: Enemy, amount: 
 		humanoid:TakeDamage(amount)
 		if model:GetAttribute("Hero") then
 			ProgressService.hurt(model, player)
+			local back = Damage.struck(player, model, raw, basic)
+			local owner = Actors.owner(model)
+			if back > 0 and owner then
+				reflect(owner, model, character, back)
+			end
 		end
 	else
 		model:SetAttribute("Health", math.max(0, (model:GetAttribute("Health") or 0) - amount))
@@ -186,7 +220,8 @@ local function strikeCone(
 	range: number,
 	angle: number,
 	amount: number,
-	magic: boolean
+	magic: boolean,
+	basic: boolean?
 )
 	local root = rootOf(state.character)
 	if not root then
@@ -195,19 +230,23 @@ local function strikeCone(
 	local origin = root.Position
 	for _, enemy in enemiesNear(team, origin, range) do
 		if HeroKit.inCone(origin, direction, range, angle, enemy.position, enemy.radius) then
-			damage(player, state.character, enemy, amount, magic)
+			damage(player, state.character, enemy, amount, magic, basic)
 		end
 	end
 end
 
+-- Sends a projectile from the hero towards `direction`: `shot` gives its Range, ProjectileSpeed, Width and Pierce;
+-- `struck` is shared with the other projectiles of its fan; `basic` when it is an M1 shot.
 local function launch(
 	player: Instance,
 	state: State,
 	team: string,
 	direction: Vector3,
-	kit: any,
+	shot: any,
 	amount: number,
-	magic: boolean
+	magic: boolean,
+	struck: { [Instance]: boolean }?,
+	basic: boolean?
 )
 	local root = rootOf(state.character)
 	if not root then
@@ -222,14 +261,22 @@ local function launch(
 		team = team,
 		position = origin,
 		direction = direction,
-		left = kit.Range,
-		speed = kit.ProjectileSpeed,
-		width = kit.Width,
+		left = shot.Range,
+		speed = shot.ProjectileSpeed,
+		width = shot.Width,
 		damage = amount,
 		magic = magic,
+		pierce = shot.Pierce == true,
+		struck = struck or {},
+		basic = basic == true,
 	}
 	table.insert(projectiles, projectile)
-	projectileEvent:FireAllClients(projectile.id, state.character, origin, direction, kit.ProjectileSpeed, kit.Range)
+	projectileEvent:FireAllClients(projectile.id, state.character, origin, direction, shot.ProjectileSpeed, shot.Range)
+end
+
+-- `direction` turned `degrees` round the vertical.
+local function turned(direction: Vector3, degrees: number): Vector3
+	return CFrame.fromAxisAngle(Vector3.yAxis, math.rad(degrees)):VectorToWorldSpace(direction)
 end
 
 local function stepProjectiles(dt: number)
@@ -241,13 +288,19 @@ local function stepProjectiles(dt: number)
 		local bestAlong = math.huge
 		for _, enemy in enemiesNear(p.team, (from + to) / 2, travel / 2 + p.width) do
 			local distance, along = HeroKit.segmentDistance(from, to, enemy.position)
-			if distance <= enemy.radius + p.width / 2 and along < bestAlong then
-				best, bestAlong = enemy, along
+			if distance <= enemy.radius + p.width / 2 and not p.struck[enemy.instance] then
+				if p.pierce then
+					p.struck[enemy.instance] = true
+					damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
+				elseif along < bestAlong then
+					best, bestAlong = enemy, along
+				end
 			end
 		end
 		if best then
 			local at = from:Lerp(to, bestAlong)
-			damage(p.player, p.character, best, p.damage, p.magic)
+			p.struck[best.instance] = true
+			damage(p.player, p.character, best, p.damage, p.magic, p.basic)
 			projectileEndEvent:FireAllClients(p.id, at, true)
 			table.remove(projectiles, i)
 			continue
@@ -308,6 +361,21 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 	local function strength(base: number, ratio: number?): number
 		return (base + (ratio or kit.Ratio or 0) * Items.stats(player)[scales]) * power
 	end
+	-- Where a hit goes as it lands or leaves his hand (HeroKit.follows): where his client last said the crosshair
+	-- points, else where a player aimed at the cast, or for a bot where he faces.
+	local function aimedNow(): Vector3
+		local body = rootOf(state.character)
+		if not body then
+			return direction
+		end
+		local facing = HeroKit.flat(body.CFrame.LookVector)
+		facing = if facing.Magnitude > 0.1 then facing.Unit else direction
+		if state.aim then
+			return HeroKit.direction(body.Position, state.aim, facing)
+		end
+		return if player:IsA("Player") then direction else facing
+	end
+	state.aim = nil
 	state.motion += 1
 
 	if kit.Kind == "Combo" then
@@ -319,11 +387,16 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		state.eclipse = false
 		state.combo = step
 		state.comboUntil = now + kit.Reset
-		state.busyUntil = now + hit.Hit / speed + RECOVER
+		state.busyUntil = now + (hit.Hit + (hit.Recover or 0)) / speed + RECOVER
 		motionEvent:FireAllClients(character, key, step)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		later(state, hit.Hit / speed, function()
-			strikeCone(player, state, team, direction, hit.Range, hit.Angle, strength(hit.Damage) * eclipse, magic)
+			local amount = strength(hit.Damage) * eclipse
+			if hit.ProjectileSpeed then
+				launch(player, state, team, aimedNow(), hit, amount, magic, nil, true)
+			else
+				strikeCone(player, state, team, aimedNow(), hit.Range, hit.Angle, amount, magic, true)
+			end
 		end)
 		return true, nil
 	end
@@ -369,6 +442,9 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				local reached = 1 - (1 - x) ^ 2
 				local a, b = from:Lerp(landing, covered), from:Lerp(landing, reached)
 				covered = reached
+				if not kit.Damage then
+					return
+				end
 				for _, enemy in enemiesNear(team, a:Lerp(b, 0.5), HeroKit.flat(b - a).Magnitude / 2 + kit.Width) do
 					if
 						not struck[enemy.instance]
@@ -380,25 +456,40 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				end
 			end)
 		end
+		-- A shot on the way, where the motion (played at the dash's Speed) lets it go, at the crosshair then.
+		local shot = kit.Shot
+		if shot then
+			later(state, shot.Release / (kit.Speed or 1), function()
+				launch(player, state, team, aimedNow(), shot, strength(shot.Damage, shot.Ratio), magic)
+			end)
+		end
 		return true, landing
 	elseif kit.Kind == "Throw" then
-		state.busyUntil = now + kit.Release + RECOVER
+		-- One release (a dagger, a shot) or several in turn (a volley), each sending Count projectiles fanned over
+		-- Spread degrees, each where the crosshair points as it goes. A fan strikes each enemy once, however close.
+		local releases = HeroKit.releases(kit)
+		state.busyUntil = now + releases[#releases] + RECOVER
 		motionEvent:FireAllClients(character, key, 0)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
-		later(state, kit.Release, function()
-			launch(player, state, team, direction, kit, strength(kit.Damage), magic)
-		end)
+		local count, spread = kit.Count or 1, kit.Spread or 0
+		for _, time in releases do
+			later(state, time, function()
+				local aimed = aimedNow()
+				local struck = {}
+				for n = 1, count do
+					local offset = if count > 1 then -spread / 2 + spread * (n - 1) / (count - 1) else 0
+					launch(player, state, team, turned(aimed, offset), kit, strength(kit.Damage), magic, struck)
+				end
+			end)
+		end
 	elseif kit.Kind == "Flurry" then
 		state.busyUntil = now + length
 		motionEvent:FireAllClients(character, key, 0)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		for _, time in kit.Hits do
 			later(state, time, function()
-				-- He turns with the camera while the flurry plays, so every sweep goes where he faces then; the slam
-				-- strikes all round him, as its shockwave shows.
-				local body = rootOf(state.character)
-				local facing = if body then HeroKit.flat(body.CFrame.LookVector) else Vector3.zero
-				facing = if facing.Magnitude > 0.1 then facing.Unit else direction
+				-- Every sweep follows the crosshair; the slam strikes all round him, as its shockwave shows.
+				local facing = aimedNow()
 				local slam = kit.Slam ~= nil and time >= kit.Slam
 				local reach = if slam then kit.SlamRadius else kit.Range
 				local angle = if slam then 360 else kit.Angle
@@ -456,7 +547,17 @@ function CombatService.start()
 	hitEvent = remote("HeroHit")
 
 	actionEvent.OnServerEvent:Connect(function(player, key, aim)
-		if typeof(key) ~= "string" or not KEYS[key] or typeof(aim) ~= "Vector3" or aim ~= aim then
+		if typeof(aim) ~= "Vector3" or aim ~= aim then
+			return
+		end
+		if key == "Aim" then
+			local state = states[player]
+			if state and os.clock() < state.busyUntil then
+				state.aim = aim
+			end
+			return
+		end
+		if typeof(key) ~= "string" or not KEYS[key] then
 			return
 		end
 		act(player, key, aim)

@@ -55,6 +55,21 @@ PACKS = {
             "Slam": (["Slam1", "Slam2"], 0.9),
         },
     },
+    "Ranger": {
+        "folder": ROOT / "Vendor/Ranger/Sounds",
+        "clips": [
+            # Rowan's attacks (Config.Heroes.Rowan.Kit) and the clips under them.
+            "RA-RNG-036", "RA-RNG-040", "RA-RNG-041", "RA-RNG-048", "RA-RNG-058",
+            "RA-RNG-005", "RA-RNG-006", "RA-RNG-007", "RA-RNG-002", "RA-RNG-011", "RA-RNG-013", "RA-RNG-030",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        # Cues added to clips the pack left without them (seconds, recordings, volume): his plain shot (036) has
+        # only footsteps, so the release of his heavy shot (040's Sound 04, loudest 0.1 s in) sounds as its arrow goes.
+        "extra": {
+            "RA-RNG-036": [(0.30, ["Acfa330cd7291"], 0.6)],
+        },
+        "events": {},
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no
@@ -130,6 +145,8 @@ def select(pack, sound_map):
                 else:
                     continue
                 cues.append(entry)
+        for time, sounds, volume in pack.get("extra", {}).get(clip_id, []):
+            cues.append({"time": time, "volume": volume, "sounds": [need(s) for s in sounds]})
         cues.sort(key=lambda c: c["time"])
         clips[key] = cues
 
