@@ -1,6 +1,7 @@
 -- The camera over the hero's right shoulder (design 05): the mouse is held in the middle of the screen and turns the
 -- camera, the hero faces where the camera looks, and the crosshair in the middle (design 09) marks what he aims at.
--- The scroll wheel zooms. HeroCamera.aim() gives the point under the crosshair, which every attack aims at.
+-- The scroll wheel zooms. HeroCamera.aim() is the point under the crosshair (far along the look at the sky), up and
+-- down too, which every attack aims at (owner, 2026-10-29): a shot or swing hits what the crosshair is on.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -19,8 +20,8 @@ local ZOOM_MIN, ZOOM_MAX = 7, 20
 local SHOULDER = Vector3.new(2.2, 1.5, 0)
 -- How quickly the hero turns to where the camera looks (the share of the way per 1/60 s).
 local TURN = 0.35
--- How far the crosshair reaches when it points at the sky.
-local AIM_REACH = 80
+-- How far along the look the aim point sits when the crosshair points at the sky: past every kit's range.
+local AIM_ALONG = 200
 
 local player = Players.LocalPlayer
 local yaw, pitch, zoom = 0, -12, 12
@@ -99,14 +100,14 @@ local function update(dt: number)
 	aimRay.FilterDescendantsInstances = { character, Workspace:FindFirstChild("Effects") :: Instance }
 	local centre = camera.ViewportSize / 2
 	local ray = camera:ViewportPointToRay(centre.X, centre.Y)
-	local result = Workspace:Raycast(ray.Origin, ray.Direction * 400, aimRay)
-	if result then
-		aimPoint = result.Position
-		aimInstance = result.Instance
-	else
-		aimPoint = ray.Origin + ray.Direction * AIM_REACH
-		aimInstance = nil
-	end
+	-- The ray starts level with the hero, so nothing between the camera and him (a banner, a pillar's edge) is aimed at.
+	local start = math.max(0, (HeroKit.muzzle(root.Position) - ray.Origin):Dot(ray.Direction))
+	local from = ray.Origin + ray.Direction * start
+	local result = Workspace:Raycast(from, ray.Direction * 400, aimRay)
+	aimInstance = if result then result.Instance else nil
+	-- The point under the crosshair, else one far along the camera's line: the hero stands left of that line, so
+	-- aiming along the look from him would fly past what the crosshair is on.
+	aimPoint = if result then result.Position else from + ray.Direction * AIM_ALONG
 end
 
 function HeroCamera.start()

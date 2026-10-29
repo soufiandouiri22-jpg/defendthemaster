@@ -26,8 +26,17 @@ local HeroService = {}
 HeroService.description = HeroLook.description
 
 -- Holds the root part of the dead hero `character` still, upright on the ground below where he died, with his body
--- joints on, so that his pack's fall (HeroAnimator) lays him down there, as the Masters fall.
+-- joints on, so that his pack's fall (HeroAnimator) lays him down there, as the Masters fall. Lying there he is in
+-- nobody's way: heroes walk through him rather than climbing onto him and sticking there (bots did), and aim and
+-- shots pass him.
 local function lay(character: Model, humanoid: Humanoid)
+	for _, part in character:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+		end
+	end
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
 		return

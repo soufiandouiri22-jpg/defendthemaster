@@ -152,8 +152,8 @@ Config.Shop = {
 	Slots = 6,
 	Sell = 0.7,
 	Reach = 16,
-	-- The arena is small and fights are quick, so a potion heals in half League's time (owner, 2026-10-29).
-	Potion = { Heal = 120, Time = 7.5, Stack = 5 },
+	-- The arena is small and fights are quick, so a potion heals in under two seconds (owner, 2026-10-29).
+	Potion = { Heal = 120, Time = 1.875, Stack = 5 },
 	GuardReach = 40,
 	-- How long a wound (Bitter Thorn and the items built from it) keeps a hero's healing down.
 	WoundTime = 3,
@@ -249,7 +249,7 @@ Config.Items = {
 		Cost = 50,
 		Potion = true,
 		Stats = {},
-		Text = "Q: heals 120 health over 7.5 seconds",
+		Text = "Q: heals 120 health over 1.875 seconds",
 		Icon = "rbxassetid://72428616348938",
 	},
 	HuntingBow = {
@@ -803,7 +803,9 @@ Config.Minions = {
 --
 -- The kit: M1 a combo of hits, M2, E and R abilities. Times are seconds into the motion at speed 1 (`Speed` plays it
 -- faster), ranges in studs from the hero to the target's edge, angles the cone's full width in degrees. Every hit
--- lands at its time in the motion, on the server. Indicators (design 06): "Arrow" (a skillshot), "Zone" (a range
+-- lands at its time in the motion, on the server. For every hero, every swing, shot and throw goes where the crosshair
+-- points, upwards and downwards as well (owner, 2026-10-29); a leap lands on the spot aimed at, a dash keeps to the
+-- ground. Indicators (design 06): "Arrow" (a skillshot), "Zone" (a range
 -- round the hero and the spot aimed at), "Cone". A combo hit with a `ProjectileSpeed` is a shot instead of a swing,
 -- and its `Recover` the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with

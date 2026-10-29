@@ -37,6 +37,8 @@ local TICK = 0.1
 local PATH_REFRESH, PATH_SLACK = 2, 6
 -- A bot that gains less than STUCK_STEP studs in STUCK_TIME seconds walking takes a path for DETOUR seconds.
 local STUCK_TIME, STUCK_STEP, DETOUR = 1, 1, 3
+-- How far above or below it a bot counts an enemy as level with it.
+local RISE = 3
 
 -- A leap or dash under way: the server carries the bot from `from` to `to`, as a player's client carries him.
 type Move = {
@@ -74,6 +76,9 @@ type Bot = {
 	focus: Instance?,
 	-- The enemy hero it goes after.
 	prey: Instance?,
+	-- Which way it steps around a target it already has in range, so it never stands still in a fight.
+	circle: number,
+	circleAt: number,
 }
 
 type Target = {
@@ -224,6 +229,22 @@ local function walkTo(b: Bot, goal: Vector3, now: number)
 	end
 end
 
+-- Steps beside `target`, so a bot that already has its range never stands still in a fight.
+local function circle(b: Bot, target: Target, now: number)
+	local root = b.root :: BasePart
+	if now - b.circleAt > 2.4 then
+		b.circle = -b.circle
+		b.circleAt = now
+	end
+	local offset = HeroKit.flat(target.position - root.Position)
+	local out = if offset.Magnitude > 0.1 then offset.Unit else HeroKit.flat(root.CFrame.LookVector)
+	if out.Magnitude < 0.1 then
+		out = Vector3.zAxis
+	end
+	local side = Vector3.new(-out.Z, 0, out.X) * b.circle
+	walkTo(b, root.Position + side * 10, now)
+end
+
 -- Uses `key` towards `aim`, facing it; for a leap or dash the server then carries the bot to where it lands.
 local function use(b: Bot, key: string, aim: Vector3): boolean
 	local root = b.root :: BasePart
@@ -268,6 +289,14 @@ local function stray(at: Vector3): Vector3
 	return at + Vector3.new(math.cos(angle), 0, math.sin(angle)) * (math.random() * SETTINGS.Stray)
 end
 
+-- How far `target` is from the bot, from edge to edge: round, and up or down past RISE studs, so a bot under an enemy on a
+-- ledge goes up to him rather than swinging from below where its strikes do not reach (CombatService).
+local function gapTo(root: BasePart, target: Target): number
+	local rise = math.max(0, math.abs(target.position.Y - root.Position.Y) - RISE)
+	local round = HeroKit.flat(target.position - root.Position).Magnitude
+	return math.sqrt(round * round + rise * rise) - target.radius
+end
+
 -- `at` turned round `from` by up to Miss degrees either way, where a thrown dagger flies.
 local function miss(from: Vector3, at: Vector3): Vector3
 	local turn = CFrame.Angles(0, math.rad((math.random() * 2 - 1) * SETTINGS.Miss), 0)
@@ -285,8 +314,7 @@ end
 local function brawl(b: Bot, target: Target, others: { Target }, now: number)
 	local root = b.root :: BasePart
 	local kit = Config.Heroes[b.hero].Kit
-	local offset = HeroKit.flat(target.position - root.Position)
-	local gap = offset.Magnitude - target.radius
+	local gap = gapTo(root, target)
 	local used = false
 	if target.hero then
 		local lead = target.position + HeroKit.flat(target.velocity) * (gap / kit.E.ProjectileSpeed * SETTINGS.Lead)
@@ -315,7 +343,7 @@ local function brawl(b: Bot, target: Target, others: { Target }, now: number)
 	if gap > 3 then
 		walkTo(b, target.position, now)
 	else
-		(b.humanoid :: Humanoid):Move(Vector3.zero)
+		circle(b, target, now)
 	end
 end
 
@@ -328,7 +356,7 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 	local kit = Config.Heroes[b.hero].Kit
 	local shot = kit.M1.Hits[1]
 	local offset = HeroKit.flat(target.position - root.Position)
-	local gap = offset.Magnitude - target.radius
+	local gap = gapTo(root, target)
 	local open = clear(root.Position, target.position)
 	local away = if offset.Magnitude > 0.1 then -offset.Unit else -root.CFrame.LookVector
 	local used = false
@@ -369,7 +397,7 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 	elseif target.hero and gap < SETTINGS.Keep then
 		walkTo(b, root.Position + away * 8, now)
 	else
-		(b.humanoid :: Humanoid):Move(Vector3.zero)
+		circle(b, target, now)
 	end
 end
 
@@ -686,6 +714,8 @@ local function addBot(team: string)
 		swingAt = 0,
 		focus = nil,
 		prey = nil,
+		circle = if math.random() < 0.5 then 1 else -1,
+		circleAt = 0,
 	}
 	table.insert(bots, b)
 	task.spawn(spawnHero, b)

@@ -30,7 +30,7 @@ local CENTRE = 1024
 -- them, and the most of the screen's height they may fill together.
 local HEADING_HEIGHT = 156
 local BLOCK_HEIGHT = 788
-local GAP = 64
+local GAP = 14
 local ROOM = 0.94
 local TEAM_NAMES = { Blue = "BLUE TEAM", Red = "RED TEAM" }
 local TEAM_FILL = { Blue = { C.Blue, C.BlueDark }, Red = { C.Red, C.RedDark } }
@@ -148,11 +148,12 @@ local function build(event: RemoteEvent)
 	})
 	shadeFade.Parent = shade
 
-	-- Who is picking and his time, GAP above everything else in one block of BLOCK_HEIGHT: together in the middle of
-	-- the screen, drawn smaller where they would fill more than ROOM of its height.
+	-- Who is picking and his time, GAP above everything else in one block of BLOCK_HEIGHT: the block in the middle of
+	-- the screen (as much room under it as the title takes above), drawn smaller where they would fill more than ROOM
+	-- of its height.
 	local group = UiStyle.frame(
 		gui,
-		UDim2.new(1, 0, 0, HEADING_HEIGHT + GAP + BLOCK_HEIGHT),
+		UDim2.new(1, 0, 0, 2 * (HEADING_HEIGHT + GAP) + BLOCK_HEIGHT),
 		UDim2.fromScale(0.5, 0.5),
 		Vector2.new(0.5, 0.5)
 	)

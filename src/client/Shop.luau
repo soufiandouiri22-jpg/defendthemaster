@@ -588,7 +588,9 @@ function goTo(id: string)
 end
 
 local function build()
-	gui = UiStyle.screen("Shop", player:WaitForChild("PlayerGui"), 6)
+	-- Over the HUD, the kill banners and feed, the buy phase's banner and the damage numbers, so a kill never
+	-- writes across the board (owner, 2026-10-29). Under the draft (20) and the match end (30).
+	gui = UiStyle.screen("Shop", player:WaitForChild("PlayerGui"), 18)
 	gui.Enabled = false
 
 	-- Clicks beside the panels stay in the screen, and the arena behind darkens a little.
@@ -912,6 +914,7 @@ function Shop.open()
 	end
 	isOpen = true
 	gui.Enabled = true
+	gui.DisplayOrder = 18
 	UiSound.play("ShopOpen")
 	refit()
 	HeroCamera.setEnabled(false)

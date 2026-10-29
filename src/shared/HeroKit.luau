@@ -37,17 +37,57 @@ function HeroKit.direction(from: Vector3, to: Vector3, fallback: Vector3): Vecto
 	return offset.Unit
 end
 
+-- Where a hero's projectiles leave him and his strikes are measured from, his root part at `root`: a little above it.
+function HeroKit.muzzle(root: Vector3): Vector3
+	return root + Vector3.new(0, 0.6, 0)
+end
+
+-- The direction from `from` towards `to`, upwards and downwards as well as round, as every swing, shot and throw goes
+-- where the player looks (owner, 2026-10-29); `fallback` when they are on one spot.
+function HeroKit.aimDirection(from: Vector3, to: Vector3, fallback: Vector3): Vector3
+	local offset = to - from
+	if offset.Magnitude < 0.05 then
+		return fallback.Unit
+	end
+	return offset.Unit
+end
+
+-- The point of an upright target's axis, through `position` from the height `bottom` to `top`, nearest to the line
+-- from `origin` along the unit `direction` (or to `origin` where the target stands behind it).
+function HeroKit.axisPoint(origin: Vector3, direction: Vector3, position: Vector3, bottom: number, top: number): Vector3
+	local w = origin - Vector3.new(position.X, 0, position.Z)
+	local tilt = direction.Y
+	local square = 1 - tilt * tilt
+	local height = if square > 1e-4 then (w.Y - tilt * direction:Dot(w)) / square else origin.Y
+	height = math.clamp(height, bottom, top)
+	local point = Vector3.new(position.X, height, position.Z)
+	if (point - origin):Dot(direction) < 0 then
+		point = Vector3.new(position.X, math.clamp(origin.Y, bottom, top), position.Z)
+	end
+	return point
+end
+
 -- Whether a target of `radius` at `position` is in the cone from `origin` along `direction`, `range` studs to the
--- target's edge and `angle` degrees wide (360 all round).
+-- target's edge and `angle` degrees wide (360 all round). Given the heights the target reaches from `bottom` to `top`,
+-- the cone points where `direction` does, up and down too, measured to the point of the target's upright axis nearest
+-- its line; without them it lies flat.
 function HeroKit.inCone(
 	origin: Vector3,
 	direction: Vector3,
 	range: number,
 	angle: number,
 	position: Vector3,
-	radius: number
+	radius: number,
+	bottom: number?,
+	top: number?
 ): boolean
 	local offset = HeroKit.flat(position - origin)
+	if bottom and top then
+		local point = if angle >= 360
+			then Vector3.new(position.X, math.clamp(origin.Y, bottom, top), position.Z)
+			else HeroKit.axisPoint(origin, direction, position, bottom, top)
+		offset = point - origin
+	end
 	local distance = offset.Magnitude
 	if distance - radius > range then
 		return false

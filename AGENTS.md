@@ -16,11 +16,15 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   fine, no trading. Teams are told apart only by the HP bar (red or blue).
 - Attacks: left mouse a three-hit combo, right mouse and E specials, R the ultimate; built on the bought animation
   packs, damage lands on the hit frame. League-style indicators: hold to aim (arrow, circle, cone), release to cast.
-- Every hit goes where the crosshair points at the moment it lands or leaves the hero's hand, not where it pointed at
+- Every hit goes where the player looks at the moment it lands or leaves the hero's hand, not where he looked at
   the click (owner, 2026-10-29): swings, throws, shots, volleys, sweeps and a dash's shot, so turning while an attack
   plays hits whoever the player turns to and the hero never throws one way while his shot flies another. Only what
   moves the hero keeps the aim of its cast: a leap's landing spot and a dash's path. `HeroKit.follows` decides it for
-  every kit, also new ones.
+  every kit, also new ones. Upwards and downwards as well, to the point under the crosshair (owner, 2026-10-29; the
+  hero stands left of the camera's line, so a shot along the look from him flies 2.2 studs past what the crosshair is
+  on): a shot up or down flies there, a swing strikes where the hero looks
+  (`HeroCamera.aim`, `HeroKit.aimDirection`, enemies' heights in `HeroKit.inCone`), and every projectile stops at the
+  first wall or floor; a dash's path stays on the ground. The same for every hero, also ones not yet built.
 - Every hero's numbers (health, damage, ratios, speeds, ranges, cooldowns) are set against every other hero and his
   own class (owner, 2026-10-29), so they make sense together: compare key by key, his sustained damage (M1 per
   second) and his burst (his whole kit at once, also at point-blank range and on one target), and check his class's

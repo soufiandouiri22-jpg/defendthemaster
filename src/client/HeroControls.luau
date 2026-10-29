@@ -1,6 +1,6 @@
 -- The player's attacks (Config.Heroes[hero].Kit, server: CombatService). Left mouse swings the combo (held, it keeps
 -- swinging); right mouse, E and R are held to aim with their indicator on the ground (design 06) and cast when let go.
--- Everything aims at the crosshair (HeroCamera.aim). The client plays its own motion at once and asks the server
+-- Everything aims where the player looks (HeroCamera.aim), up and down too. The client plays its own motion at once and asks the server
 -- (Net.HeroAction), which decides the hits; a refused attack is undone. The leap moves the hero itself, from takeoff
 -- to landing, to the spot the server works out the same way (HeroKit.leapLanding), and lands in a shockwave of shadow
 -- (ShadowEffects), as does every other hero's leap. Other heroes' motions and every thrown dagger and shot arrow come

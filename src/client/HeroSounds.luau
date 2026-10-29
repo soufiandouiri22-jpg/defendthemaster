@@ -8,6 +8,7 @@ local ContentProvider = game:GetService("ContentProvider")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Preferences = require(script.Parent.Preferences)
 
@@ -104,20 +105,56 @@ function HeroSounds.forget(walker: Instance)
 	contact[walker] = nil
 end
 
--- Stops Roblox's RbxCharacterSounds and takes away the sounds it already gave the players' characters. A script of
--- that name in StarterPlayerScripts no longer stands in for it: Roblox puts its own back.
+-- Whether `sound` is one of Roblox's own character sounds (its death cry, jumps, falls, splashes).
+local function roblox(sound: Instance): boolean
+	return sound:IsA("Sound") and string.find(sound.SoundId, "rbxasset://sounds/", 1, true) == 1
+end
+
+-- Takes `sound` away when it is, or becomes, one of Roblox's character sounds.
+local function silence(sound: Instance)
+	if not sound:IsA("Sound") then
+		return
+	end
+	if roblox(sound) then
+		sound:Destroy()
+		return
+	end
+	local changed
+	changed = sound:GetPropertyChangedSignal("SoundId"):Connect(function()
+		if roblox(sound) then
+			changed:Disconnect()
+			sound:Destroy()
+		end
+	end)
+	sound.AncestryChanged:Once(function()
+		changed:Disconnect()
+	end)
+end
+
+-- Stops Roblox's RbxCharacterSounds, and keeps every Roblox character sound off for the whole session: those it
+-- already gave the characters, and any that come later (a respawn, a bot, a moment before the script was stopped),
+-- so the default death cry never sounds (owner, 2026-10-29). A script of that name in StarterPlayerScripts no
+-- longer stands in for it: Roblox puts its own back.
 function HeroSounds.start()
+	Workspace.DescendantAdded:Connect(function(added)
+		if added:IsA("Sound") then
+			task.defer(silence, added)
+		end
+	end)
+	for _, sound in Workspace:GetDescendants() do
+		if roblox(sound) then
+			sound:Destroy()
+		end
+	end
 	task.spawn(function()
 		local scripts = Players.LocalPlayer:WaitForChild("PlayerScripts")
-		local roblox = scripts:WaitForChild("RbxCharacterSounds", 10)
-		if roblox and roblox:IsA("LocalScript") then
-			roblox.Enabled = false
+		local script = scripts:WaitForChild("RbxCharacterSounds", 10)
+		if script and script:IsA("LocalScript") then
+			script.Enabled = false
 		end
-		for _, player in Players:GetPlayers() do
-			for _, sound in if player.Character then player.Character:GetDescendants() else {} do
-				if sound:IsA("Sound") and string.find(sound.SoundId, "rbxasset://sounds/", 1, true) == 1 then
-					sound:Destroy()
-				end
+		for _, sound in Workspace:GetDescendants() do
+			if roblox(sound) then
+				sound:Destroy()
 			end
 		end
 	end)

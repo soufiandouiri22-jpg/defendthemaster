@@ -67,8 +67,9 @@ function UiStyle.screen(name: string, parent: Instance, order: number?): ScreenG
 	gui.Name = name
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
-	gui.DisplayOrder = order or 0
 	gui.Parent = parent
+	-- After parenting: a ScreenGui created at runtime can ignore DisplayOrder set before it has a parent.
+	gui.DisplayOrder = order or 0
 	UiStyle.scaled(gui)
 	return gui
 end

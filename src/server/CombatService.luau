@@ -1,11 +1,14 @@
 -- The heroes' attacks (Config.Heroes[hero].Kit). A client asks for an attack through ReplicatedStorage.Net.HeroAction
--- (key, the point aimed at; while an attack plays, "Aim" and where the crosshair points now); the server
+-- (key, a point far along where he looks; while an attack plays, "Aim" and where he looks now); the server
 -- checks the hero can (alive, not mid-motion, off cooldown), tells every client to play the motion (Net.HeroMotion:
 -- character, key, combo step, landing spot) and lands each hit at its time in the motion on the enemies there: the
 -- other team's minions and Combatants (heroes, Masters). A refused attack is sent back to its client
 -- (Net.HeroRefused), which stops the motion it already began. Thrown daggers and shot arrows fly on the server
 -- (Net.HeroProjectile: id, origin, direction, speed, range; Net.HeroProjectileEnd: id, where it stopped, hit or not);
--- one stops at the first enemy in its way, a piercing one strikes everyone it passes once.
+-- one stops at the first enemy in its way, a piercing one strikes everyone it passes once, and every one at the
+-- first wall or floor. Every swing, shot and throw of every hero goes where the crosshair points, upwards and
+-- downwards as well, to the point under it (HeroKit.aimDirection, owner 2026-10-29), and strikes an enemy only at the heights his body
+-- reaches; a leap lands on the spot aimed at and a dash keeps to the ground.
 -- Every hit is told to the clients for its feedback (Net.HeroHit: target, damage, where, the striking player). Bots
 -- (Actors, BotService) attack through CombatService.act, with the same checks; they move through their leaps and
 -- dashes on the server (CombatService.act gives where they land), as a player's client moves him.
@@ -51,11 +54,13 @@ type State = {
 	aim: Vector3?,
 }
 
--- An enemy in reach: a minion's root part or a Combatant model.
+-- An enemy in reach: a minion's root part or a Combatant model, standing from the height `bottom` to `top`.
 type Enemy = {
 	instance: Instance,
 	position: Vector3,
 	radius: number,
+	bottom: number,
+	top: number,
 }
 
 type Projectile = {
@@ -96,11 +101,15 @@ local function rootOf(character: Model): BasePart?
 	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
 end
 
+-- How far below and above its pivot each Combatant reaches, measured once.
+local reaches: { [Model]: { number } } = setmetatable({}, { __mode = "k" }) :: any
+
 -- The enemies of `team` within `reach` studs of `centre`.
 local function enemiesNear(team: string, centre: Vector3, reach: number): { Enemy }
 	local found = {}
 	local minions = Workspace:FindFirstChild("Minions")
 	if minions then
+		local half = Config.Minions.Height / 2
 		for _, root in minions:GetChildren() do
 			if
 				root:IsA("BasePart")
@@ -108,7 +117,13 @@ local function enemiesNear(team: string, centre: Vector3, reach: number): { Enem
 				and not root:GetAttribute("Dead")
 				and HeroKit.flat(root.Position - centre).Magnitude <= reach + Config.Minions.Radius
 			then
-				table.insert(found, { instance = root, position = root.Position, radius = Config.Minions.Radius })
+				table.insert(found, {
+					instance = root,
+					position = root.Position,
+					radius = Config.Minions.Radius,
+					bottom = root.Position.Y - half,
+					top = root.Position.Y + half,
+				})
 			end
 		end
 	end
@@ -119,7 +134,19 @@ local function enemiesNear(team: string, centre: Vector3, reach: number): { Enem
 			local position = model:GetPivot().Position
 			local radius = model:GetAttribute("Radius") or 1.5
 			if living and HeroKit.flat(position - centre).Magnitude <= reach + radius then
-				table.insert(found, { instance = model, position = position, radius = radius })
+				local extent = reaches[model]
+				if not extent then
+					local box, size = model:GetBoundingBox()
+					extent = { box.Position.Y - size.Y / 2 - position.Y, box.Position.Y + size.Y / 2 - position.Y }
+					reaches[model] = extent
+				end
+				table.insert(found, {
+					instance = model,
+					position = position,
+					radius = radius,
+					bottom = position.Y + extent[1],
+					top = position.Y + extent[2],
+				})
 			end
 		end
 	end
@@ -227,9 +254,9 @@ local function strikeCone(
 	if not root then
 		return
 	end
-	local origin = root.Position
+	local origin = HeroKit.muzzle(root.Position)
 	for _, enemy in enemiesNear(team, origin, range) do
-		if HeroKit.inCone(origin, direction, range, angle, enemy.position, enemy.radius) then
+		if HeroKit.inCone(origin, direction, range, angle, enemy.position, enemy.radius, enemy.bottom, enemy.top) then
 			damage(player, state.character, enemy, amount, magic, basic)
 		end
 	end
@@ -253,7 +280,7 @@ local function launch(
 		return
 	end
 	nextProjectile += 1
-	local origin = root.Position + Vector3.new(0, 0.6, 0) + direction * 1.5
+	local origin = HeroKit.muzzle(root.Position) + direction * 1.5
 	local projectile: Projectile = {
 		id = nextProjectile,
 		player = player,
@@ -279,16 +306,35 @@ local function turned(direction: Vector3, degrees: number): Vector3
 	return CFrame.fromAxisAngle(Vector3.yAxis, math.rad(degrees)):VectorToWorldSpace(direction)
 end
 
+-- A projectile flies where it was aimed, up or down too, strikes an enemy whose height it passes at, and stops at the
+-- first wall or floor in its way.
+local walls = RaycastParams.new()
+walls.FilterType = Enum.RaycastFilterType.Exclude
+
 local function stepProjectiles(dt: number)
+	if #projectiles == 0 then
+		return
+	end
+	walls.FilterDescendantsInstances = HeroKit.leapIgnore()
 	for i = #projectiles, 1, -1 do
 		local p = projectiles[i]
 		local travel = math.min(p.left, p.speed * dt)
-		local from, to = p.position, p.position + p.direction * travel
+		local from = p.position
+		local wall = Workspace:Raycast(from, p.direction * travel, walls)
+		local reach = if wall then wall.Distance / travel else 1
+		local to = from + p.direction * travel
 		local best: Enemy? = nil
 		local bestAlong = math.huge
 		for _, enemy in enemiesNear(p.team, (from + to) / 2, travel / 2 + p.width) do
 			local distance, along = HeroKit.segmentDistance(from, to, enemy.position)
-			if distance <= enemy.radius + p.width / 2 and not p.struck[enemy.instance] then
+			local height = from.Y + (to.Y - from.Y) * along
+			if
+				distance <= enemy.radius + p.width / 2
+				and along <= reach
+				and height >= enemy.bottom - p.width / 2
+				and height <= enemy.top + p.width / 2
+				and not p.struck[enemy.instance]
+			then
 				if p.pierce then
 					p.struck[enemy.instance] = true
 					damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
@@ -302,6 +348,11 @@ local function stepProjectiles(dt: number)
 			p.struck[best.instance] = true
 			damage(p.player, p.character, best, p.damage, p.magic, p.basic)
 			projectileEndEvent:FireAllClients(p.id, at, true)
+			table.remove(projectiles, i)
+			continue
+		end
+		if wall then
+			projectileEndEvent:FireAllClients(p.id, wall.Position, false)
 			table.remove(projectiles, i)
 			continue
 		end
@@ -352,7 +403,9 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		return refuse(player, key)
 	end
 	local team = character:GetAttribute("Team") or "Blue"
+	-- Round only, for where a dash goes; every swing, shot and throw goes up or down to the crosshair as well.
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
+	local aimed = HeroKit.aimDirection(HeroKit.muzzle(root.Position), aim, direction)
 	local power = Leveling.power(player :: any, key)
 	local scales = settings.Scales or "Attack"
 	local magic = scales == "Magic"
@@ -362,18 +415,22 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		return (base + (ratio or kit.Ratio or 0) * Items.stats(player)[scales]) * power
 	end
 	-- Where a hit goes as it lands or leaves his hand (HeroKit.follows): where his client last said the crosshair
-	-- points, else where a player aimed at the cast, or for a bot where he faces.
+	-- points, else where a player aimed at the cast, or for a bot where he faces, as high or low as it aimed.
 	local function aimedNow(): Vector3
 		local body = rootOf(state.character)
 		if not body then
-			return direction
+			return aimed
 		end
 		local facing = HeroKit.flat(body.CFrame.LookVector)
 		facing = if facing.Magnitude > 0.1 then facing.Unit else direction
 		if state.aim then
-			return HeroKit.direction(body.Position, state.aim, facing)
+			return HeroKit.aimDirection(HeroKit.muzzle(body.Position), state.aim, facing)
 		end
-		return if player:IsA("Player") then direction else facing
+		if player:IsA("Player") then
+			return aimed
+		end
+		local level = HeroKit.flat(aimed).Magnitude
+		return Vector3.new(facing.X * level, aimed.Y, facing.Z * level)
 	end
 	state.aim = nil
 	state.motion += 1
@@ -474,11 +531,11 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		local count, spread = kit.Count or 1, kit.Spread or 0
 		for _, time in releases do
 			later(state, time, function()
-				local aimed = aimedNow()
+				local toward = aimedNow()
 				local struck = {}
 				for n = 1, count do
 					local offset = if count > 1 then -spread / 2 + spread * (n - 1) / (count - 1) else 0
-					launch(player, state, team, turned(aimed, offset), kit, strength(kit.Damage), magic, struck)
+					launch(player, state, team, turned(toward, offset), kit, strength(kit.Damage), magic, struck)
 				end
 			end)
 		end

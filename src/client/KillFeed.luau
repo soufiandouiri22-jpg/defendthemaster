@@ -188,7 +188,8 @@ local function counterAt(gui: ScreenGui, scale: number): Vector2?
 end
 
 function KillFeed.start()
-	local gui = UiStyle.screen("KillFeed", player:WaitForChild("PlayerGui"), 7)
+	-- Under the armory (18), so a kill's banner and WIPEOUT sit behind the board, not across it.
+	local gui = UiStyle.screen("KillFeed", player:WaitForChild("PlayerGui"), 4)
 	local scale = gui:FindFirstChildOfClass("UIScale") :: UIScale
 
 	local flash = UiStyle.frame(gui, UDim2.fromScale(1, 1))
