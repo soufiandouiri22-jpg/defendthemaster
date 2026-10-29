@@ -68,7 +68,7 @@ local function light()
 	bloom.Name = "LobbyBloom"
 	bloom.Intensity = 0.6
 	bloom.Size = 30
-	bloom.Threshold = 1.4
+	bloom.Threshold = 2
 	bloom.Parent = Lighting
 end
 
@@ -182,14 +182,15 @@ function LobbyBuilder.build(): Hall
 	local showcase = CFrame.new(0, top, 0)
 
 	-- Light: the warm glow of the fires over the hall, a lamp from the front on the hero, and a dim fill from above.
+	-- The hero's lamps are soft and nearly white, so light clothes keep their colour and folds (owner, 2026-10-29).
 	local lights = K.folder(map, "Lights")
-	lamp(lights, Vector3.new(0, 14, 12), Color3.fromRGB(255, 220, 180), 2, 30, Vector3.new(0, 3, 0))
+	lamp(lights, Vector3.new(0, 14, 12), Color3.fromRGB(255, 246, 236), 1.3, 30, Vector3.new(0, 3, 0))
 	lamp(lights, Vector3.new(-7, 6, 6), Color3.fromRGB(255, 170, 90), 0.8, 18)
 	lamp(lights, Vector3.new(0, 20, -20), Color3.fromRGB(255, 160, 90), 0.7, 40)
 	-- On the throne from the front, so it stands out of the dark behind the hero.
 	lamp(lights, Vector3.new(0, 9, -16), Color3.fromRGB(255, 180, 110), 1.2, 16)
 	-- Behind him, low: the golden rim of the design round his shoulders and hair.
-	lamp(lights, Vector3.new(0, 6, -4), Color3.fromRGB(255, 178, 90), 2.2, 12)
+	lamp(lights, Vector3.new(0, 6, -4), Color3.fromRGB(255, 205, 150), 1.3, 12)
 
 	map.Parent = Workspace
 	light()
