@@ -55,6 +55,10 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   `python3 Tools/key_icons.py <drawing> <out.png> [--glow] [--like <icon of the set>]` (`--glow` for soft slashes,
   smoke and trails) and `--check`; the green drawings stay in `Art/Icons/keyed/<set>/`. Every ability icon shows
   what that ability does in the hero's kit.
+- Every picture a menu page or the HUD can show is loaded by the loading screen, so a page is complete the first time
+  it opens (owner, 2026-10-28 and 2026-10-29). `src/client/Pictures.luau` collects every `rbxassetid://` in
+  `Shared.Config` and `Shared.Assets`: a new or replaced picture's id goes there (with an uploaded replacement, swap
+  the id in place), never written into a page's own module, and a new sound in `Assets` goes into its `SOUNDS`.
 - Keys only in the macOS Keychain. Third-party assets need a recorded source and licence (`Docs/Third_Party.md`).
 - Nothing the owner or an agent made may ever be lost or put back to an older version (owner, 2026-10-28):
   - Change code and docs only with the editor's edit tools (StrReplace, Write), never with scripts, `sed` or `cp` over

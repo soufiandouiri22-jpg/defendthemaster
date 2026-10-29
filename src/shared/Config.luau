@@ -890,7 +890,7 @@ Config.Ranked = {
 		{ Name = "Gladiator", Badge = "rbxassetid://93313899570806" },
 		{ Name = "Knight", Badge = "rbxassetid://132364992531557" },
 		{ Name = "Champion", Badge = "rbxassetid://77862907021114" },
-		{ Name = "Warlord", Badge = "rbxassetid://133311704574910" },
+		{ Name = "Warlord", Badge = "rbxassetid://93747066981753" },
 		{ Name = "Titan", Badge = "rbxassetid://94796196631740" },
 		{ Name = "Legend", Badge = "rbxassetid://127667467620464" },
 		{ Name = "Sunborn", Badge = "rbxassetid://100216658200527", Top = 100 },
