@@ -1,5 +1,5 @@
 -- The HUD of design 05 round the ability bar (AbilityBar): at the top each team's Master's health under its crown,
--- blue left and red right, and between them the score (enemy heroes killed) over the match's clock (MatchService),
+-- blue left and red right, jolting at every blow he takes, and between them the score (enemy heroes killed) over the match's clock (MatchService),
 -- with the time left on the Sun Crown beside it while the player's team has it;
 -- at the bottom left the hero's portrait with his level (a chime as it rises), his kills / deaths / assists
 -- (ProgressService), health and XP (Shared.Leveling); at the bottom right the
@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
@@ -60,9 +61,36 @@ local TOP_COLOURS = {
 	},
 }
 
+-- Every blow on a Master shows on his bar (owner, 2026-10-30): it jolts and tilts, shaking out over SHAKE_TIME seconds
+-- (up to SHAKE studs of the HUD and SHAKE_TURN degrees), swells by PUNCH (his crown by twice that) and settles back,
+-- its fill flashes white, and what he lost stays in LOST_COLOUR for LOST_HOLD seconds before it drains in LOST_DRAIN.
+-- A blow of HEAVY of his health or more strikes it fully, a light one at least LIGHT as hard.
+local SHAKE, SHAKE_TURN, SHAKE_TIME, PUNCH = 14, 3, 0.4, 0.09
+local LOST_COLOUR = Color3.fromRGB(255, 238, 176)
+local LOST_HOLD, LOST_DRAIN = 0.3, 0.45
+local HEAVY, LIGHT = 0.02, 0.55
+
+type MasterBar = {
+	rim: Frame,
+	fill: Frame,
+	lost: Frame,
+	flash: Frame,
+	punch: UIScale,
+	crownPunch: UIScale,
+	home: UDim2,
+	lostShare: NumberValue,
+	struckAt: number,
+	strength: number,
+}
+
+-- The fill's size for `share` of his health.
+local function fillSize(share: number): UDim2
+	return UDim2.new(share, FILL_TUCK - share * CROWN_COVER, 1, 0)
+end
+
 -- A Master's bar as in design 05: a light gold rim, a black line inside it, a dark grey track and a glossy fill, with
 -- its crown held on the rim's end so the two stay together on every screen.
-local function masterBar(parent: Frame, team: string, left: boolean): Frame
+local function masterBar(parent: Frame, team: string, left: boolean): MasterBar
 	local colours = TOP_COLOURS[team]
 	local rim = UiStyle.frame(
 		parent,
@@ -80,14 +108,23 @@ local function masterBar(parent: Frame, team: string, left: boolean): Frame
 	track.BackgroundColor3 = Color3.fromRGB(51, 50, 48)
 	UiStyle.corner(track, 9)
 	UiStyle.stroke(track, Color3.fromRGB(14, 12, 10), 3)
+	local lost = UiStyle.frame(track, UDim2.fromScale(1, 1))
+	lost.Name = "Lost"
+	lost.BackgroundColor3 = LOST_COLOUR
 	local fill = UiStyle.frame(track, UDim2.fromScale(1, 1))
 	fill.Name = "Fill"
-	fill.Position = UDim2.fromOffset(CROWN_COVER - FILL_TUCK, 0)
-	if not left then
-		fill.AnchorPoint = Vector2.new(1, 0)
-		fill.Position = UDim2.new(1, -(CROWN_COVER - FILL_TUCK), 0, 0)
+	for _, bar in { lost, fill } do
+		bar.Position = UDim2.fromOffset(CROWN_COVER - FILL_TUCK, 0)
+		if not left then
+			bar.AnchorPoint = Vector2.new(1, 0)
+			bar.Position = UDim2.new(1, -(CROWN_COVER - FILL_TUCK), 0, 0)
+		end
+		UiStyle.corner(bar, 9)
 	end
-	UiStyle.corner(fill, 9)
+	local flash = UiStyle.frame(fill, UDim2.fromScale(1, 1))
+	flash.Name = "Flash"
+	flash.BackgroundTransparency = 1
+	UiStyle.corner(flash, 9)
 	local gloss = UiStyle.gradient(fill, colours.shine, colours.fill)
 	gloss.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, colours.shine),
@@ -105,7 +142,58 @@ local function masterBar(parent: Frame, team: string, left: boolean): Frame
 	crown.Position = UDim2.new(if left then 0 else 1, if left then -BAR_UNDER else BAR_UNDER, 0.5, CROWN_Y - BAR_MIDDLE)
 	crown.ZIndex = 3
 	crown.Parent = rim
-	return fill
+	local punch = Instance.new("UIScale")
+	punch.Parent = rim
+	local crownPunch = Instance.new("UIScale")
+	crownPunch.Parent = crown
+	local lostShare = Instance.new("NumberValue")
+	lostShare.Value = 1
+	return {
+		rim = rim,
+		fill = fill,
+		lost = lost,
+		flash = flash,
+		punch = punch,
+		crownPunch = crownPunch,
+		home = rim.Position,
+		lostShare = lostShare,
+		struckAt = -math.huge,
+		strength = 0,
+	}
+end
+
+-- `bar`'s Master lost `share` of his health (Hud's top): the blow that shows on it.
+local function strike(bar: MasterBar, share: number, now: number)
+	local strength = math.clamp(share / HEAVY, LIGHT, 1)
+	local shaking = math.max(0, 1 - (now - bar.struckAt) / SHAKE_TIME) * bar.strength
+	bar.struckAt, bar.strength = now, math.max(strength, shaking)
+	bar.punch.Scale = 1 + PUNCH * strength
+	TweenService:Create(bar.punch, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	bar.crownPunch.Scale = 1 + 2 * PUNCH * strength
+	TweenService:Create(bar.crownPunch, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	bar.flash.BackgroundTransparency = 0.15
+	TweenService:Create(bar.flash, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+end
+
+-- Shows `bar` at `share` of his health: the fill at once, the lost part draining after it, the jolt of his last blow.
+local function showMaster(bar: MasterBar, share: number, now: number)
+	bar.fill.Size = fillSize(share)
+	bar.fill.Visible = share > 0
+	if share > bar.lostShare.Value then
+		bar.lostShare.Value = share
+	end
+	bar.lost.Size = fillSize(bar.lostShare.Value)
+	bar.lost.Visible = bar.lostShare.Value > share + 0.0001
+	local left = math.max(0, 1 - (now - bar.struckAt) / SHAKE_TIME)
+	if left <= 0 then
+		bar.rim.Position = bar.home
+		bar.rim.Rotation = 0
+		return
+	end
+	local amount = bar.strength * left * left
+	bar.rim.Position = bar.home
+		+ UDim2.fromOffset((math.random() * 2 - 1) * SHAKE * amount, (math.random() * 2 - 1) * SHAKE * 0.6 * amount)
+	bar.rim.Rotation = (math.random() * 2 - 1) * SHAKE_TURN * amount
 end
 
 local function scoreText(parent: Instance, team: string?, align: Enum.TextXAlignment, x: number): TextLabel
@@ -129,9 +217,31 @@ local function scoreText(parent: Instance, team: string?, align: Enum.TextXAlign
 end
 
 local function buildTop(gui: Frame): () -> ()
-	local fills = {}
+	local bars: { [string]: MasterBar } = {}
+	local drains: { [string]: Tween } = {}
+	local function shareOf(team: string): number
+		local max = Workspace:GetAttribute("MasterMax" .. team) or Config.Master.Health
+		return math.clamp((Workspace:GetAttribute("Master" .. team) or max) / max, 0, 1)
+	end
 	for i, team in Config.TeamOrder do
-		fills[team] = masterBar(gui, team, i == 1)
+		local bar = masterBar(gui, team, i == 1)
+		bars[team] = bar
+		local was = shareOf(team)
+		Workspace:GetAttributeChangedSignal("Master" .. team):Connect(function()
+			local share = shareOf(team)
+			local lost = was - share
+			was = share
+			if lost <= 0 then
+				return
+			end
+			strike(bar, lost, os.clock())
+			if drains[team] then
+				drains[team]:Cancel()
+			end
+			local info = TweenInfo.new(LOST_DRAIN, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, LOST_HOLD)
+			drains[team] = TweenService:Create(bar.lostShare, info, { Value = share })
+			drains[team]:Play()
+		end)
 	end
 
 	local board = Instance.new("ImageLabel")
@@ -156,11 +266,9 @@ local function buildTop(gui: Frame): () -> ()
 	clock.ZIndex = 3
 
 	return function()
-		for team, fill in fills do
-			local max = Workspace:GetAttribute("MasterMax" .. team) or Config.Master.Health
-			local share = math.clamp((Workspace:GetAttribute("Master" .. team) or max) / max, 0, 1)
-			fill.Size = UDim2.new(share, FILL_TUCK - share * CROWN_COVER, 1, 0)
-			fill.Visible = share > 0
+		local now = os.clock()
+		for team, bar in bars do
+			showMaster(bar, shareOf(team), now)
 		end
 		blueScore.Text =
 			string.format("%s %d", string.upper(Config.Teams[blue].Name), Workspace:GetAttribute("Score" .. blue) or 0)

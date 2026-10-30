@@ -4,7 +4,8 @@
 -- where he stands: at one of his team's armory stalls, or while dead. Each stall has an invisible part in
 -- Workspace.Armories, with its "Team", where the clients hang the prompt that opens the armory (Shop). What he bought
 -- and sold there can be undone until he leaves or drinks. A potion heals over Potion.Time seconds; one drunk while
--- another still heals starts after it. Bots (BotService) shop through the same functions.
+-- another still heals starts after it, so two heal twice a potion's health over twice its time (owner, 2026-10-30).
+-- Bots (BotService) shop through the same functions.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -28,6 +29,10 @@ local POTION_TICK = 0.5
 type Change = { bag: { [number]: Items.Slot }, coins: number }
 
 local history: { [Instance]: { Change } } = {}
+
+-- The potions healing each actor: when the last one drunk stops, and up to when they have healed (server time).
+type Potion = { ends: number, healed: number }
+local potions: { [Instance]: Potion } = {}
 local shops: { [string]: { Vector3 } } = {}
 
 local function living(actor: Instance): (Model?, Humanoid?, BasePart?)
@@ -173,8 +178,10 @@ function ShopService.drink(actor: Instance): boolean
 				bag[i] = nil
 			end
 			local now = Workspace:GetServerTimeNow()
-			local from = math.max(now, actor:GetAttribute("PotionUntil") or 0)
-			actor:SetAttribute("PotionUntil", from + SETTINGS.Potion.Time)
+			local potion = potions[actor] or { ends = now, healed = now }
+			potions[actor] = potion
+			potion.ends = math.max(now, potion.ends) + SETTINGS.Potion.Time
+			actor:SetAttribute("PotionUntil", potion.ends)
 			history[actor] = nil
 			put(actor, bag)
 			return true
@@ -185,17 +192,22 @@ end
 
 local function heal()
 	local now = Workspace:GetServerTimeNow()
-	for _, actor in Actors.all() do
-		local ends = actor:GetAttribute("PotionUntil")
-		if not ends or ends <= now then
-			continue
-		end
+	for actor, potion in potions do
 		local _, humanoid = living(actor)
 		if not humanoid then
-			actor:SetAttribute("PotionUntil", nil)
+			potions[actor] = nil
+			if actor.Parent then
+				actor:SetAttribute("PotionUntil", nil)
+			end
 			continue
 		end
-		local amount = SETTINGS.Potion.Heal / SETTINGS.Potion.Time * POTION_TICK * Damage.healing(actor)
+		local upTo = math.min(now, potion.ends)
+		local seconds = upTo - potion.healed
+		potion.healed = upTo
+		if upTo >= potion.ends then
+			potions[actor] = nil
+		end
+		local amount = SETTINGS.Potion.Heal / SETTINGS.Potion.Time * seconds * Damage.healing(actor)
 		humanoid.Health = math.min(humanoid.MaxHealth, humanoid.Health + amount)
 	end
 end
