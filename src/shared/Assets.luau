@@ -8,6 +8,9 @@ return {
 	CrosshairNeutral = "rbxassetid://128336196823656",
 	CrosshairEnemy = "rbxassetid://107422997181186",
 	CrosshairAlly = "rbxassetid://129075895576362",
+	-- The mouse pointer everywhere (client Pointer): a gold gauntlet pointing to the top-left, keyed from
+	-- Art/Icons/keyed/Pointer and cut close round it (Art/UI/Pointer/PointerGold_tight.png, 211 by 238).
+	Pointer = "rbxassetid://124420581695634",
 	HudCrown = "rbxassetid://101598854323035",
 	-- The Sun Crown from the front (Art/Icons/Crown/SunCrownFront.png, Tools/render_crown_icon.py), worn by the
 	-- portrait on the banner when a hero takes it (KillFeed).
@@ -52,6 +55,10 @@ return {
 	HudScoreboard = "rbxassetid://135647770824642",
 	-- The arena from straight above (Play, camera 380 studs up), MAP_REACH studs from the centre to the edge.
 	HudMinimap = "rbxassetid://113866338742572",
+	-- Mavorak's orb (Tools/orb_textures.py, Art/VFX): the dark vortex, the energy crackling round it, and its glow.
+	OrbVortex = "rbxassetid://88154175742294",
+	OrbWisps = "rbxassetid://118394014691190",
+	OrbGlow = "rbxassetid://113973773269405",
 	-- The spawn pads' rune circle and the ring that sweeps out at a respawn (Tools/pad_textures.py), white to be tinted.
 	PadRunes = "rbxassetid://96305253371811",
 	PadRing = "rbxassetid://88093541402245",
@@ -91,11 +98,28 @@ return {
 	CorkPull = "rbxassetid://9113944349",
 	SwordDraw = "rbxassetid://9119742466",
 	EvilBell = "rbxassetid://9114352428",
-	CrownDrop = "rbxassetid://9116554603",
 	FireWhoosh = "rbxassetid://9114446852",
 	FireBurst = "rbxassetid://9114443884",
 	RockKnock = "rbxassetid://9118608925",
 	RockBreak = "rbxassetid://9118588165",
 	GlassShards = "rbxassetid://9114591567",
 	DeepThud = "rbxassetid://1843025759",
+	-- Candidates for the sound of every hit (Config.Combat.HitSounds): the game's own dry crunches, wide,
+	-- deeper, and deeper with a sharp crack (Art/Sounds/Hit.wav, HitLow.wav and HitRaw.wav, made and uploaded by
+	-- Tools/hit_sound.py; the owner's picks, 2026-10-29).
+	Hit = "rbxassetid://96114235299258",
+	HitLow = "rbxassetid://77946331051858",
+	HitRaw = "rbxassetid://76988880908631",
+	-- The owner's candidates from Mixkit (Docs/Third_Party.md), trimmed to their hit (Vendor/Mixkit): a golf ball struck,
+	-- a deep heartbeat impact, a strong punch.
+	HitGolf = "rbxassetid://119602961103716",
+	HitHeart = "rbxassetid://132916240819217",
+	HitPunch = "rbxassetid://126348049371560",
+	-- Mixkit's strong punches to the body (2198): its three punches one after the other, each brought level with
+	-- HitPunch's loudest 50 ms, with a tenth of a second between them (Vendor/Mixkit/HitBody.wav; UiSound's HitBody1-3).
+	HitBody = "rbxassetid://109409924861160",
+	-- The Ranger Sounds pack's body impacts of its "Hit reaction - forward" (clothing profile 6, its three variations),
+	-- one after the other, levelled to the punch as it last played, a tenth of a second apart
+	-- (Vendor/Ranger/HitBodyImpact.wav; UiSound's BodyImpact1-3).
+	HitBodyImpact = "rbxassetid://136739364884117",
 }

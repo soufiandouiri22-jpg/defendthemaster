@@ -48,6 +48,8 @@ type Move = {
 	takeoff: number,
 	land: number,
 	sharp: boolean,
+	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift).
+	lift: any?,
 }
 
 type Bot = {
@@ -79,6 +81,17 @@ type Bot = {
 	-- Which way it steps around a target it already has in range, so it never stands still in a fight.
 	circle: number,
 	circleAt: number,
+	-- What it fights this tick, and the one its attack under way keeps aiming at.
+	aimFor: Instance?,
+	aiming: Aiming?,
+}
+
+-- An attack under way that follows its target till it strikes or lets go (Bot.aiming): `speed` of what it shoots,
+-- if anything, and `side`, how far to one side it misses (-1 to 1, of Miss), chosen once per attack.
+type Aiming = {
+	target: Instance,
+	speed: number?,
+	side: number,
 }
 
 type Target = {
@@ -97,6 +110,23 @@ local made = 0
 local waiting: { [string]: { string } } = {}
 local walls = RaycastParams.new()
 walls.FilterType = Enum.RaycastFilterType.Exclude
+
+-- A minion's root is moved by the server, not by physics, so its velocity is measured from where it was a moment ago.
+local seen: { [BasePart]: { at: Vector3, time: number, velocity: Vector3 } } = setmetatable({}, { __mode = "k" }) :: any
+local function track(root: BasePart): Vector3
+	local now = os.clock()
+	local last = seen[root]
+	if not last then
+		seen[root] = { at = root.Position, time = now, velocity = Vector3.zero }
+		return Vector3.zero
+	end
+	local passed = now - last.time
+	if passed >= 0.1 then
+		last.velocity = if passed < 1 then (root.Position - last.at) / passed else Vector3.zero
+		last.at, last.time = root.Position, now
+	end
+	return last.velocity
+end
 
 local function alive(b: Bot): boolean
 	return b.character ~= nil and b.character.Parent ~= nil and b.humanoid ~= nil and b.humanoid.Health > 0
@@ -137,7 +167,7 @@ local function enemiesNear(team: string, from: Vector3, reach: number): ({ Targe
 					instance = root,
 					position = root.Position,
 					radius = Config.Minions.Radius,
-					velocity = Vector3.zero,
+					velocity = track(root),
 					hero = false,
 				})
 			end
@@ -254,8 +284,15 @@ local function use(b: Bot, key: string, aim: Vector3): boolean
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
 	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
 	local ok, landing = CombatService.act(b.actor, key, aim)
-	if ok and landing then
-		local kit = Config.Heroes[b.hero].Kit[key]
+	local kit = Config.Heroes[b.hero].Kit[key]
+	if ok and b.aimFor then
+		local shot = if kit.Kind == "Combo" then kit.Hits[1] else kit.Shot or kit
+		b.aiming = { target = b.aimFor, speed = shot.ProjectileSpeed, side = math.random() * 2 - 1 }
+	end
+	if ok and kit.Kind == "Ascend" then
+		b.move = { started = os.clock(), from = root.Position, to = root.Position, takeoff = 0, land = 0, lift = kit }
+		b.path = {}
+	elseif ok and landing then
 		local dash = kit.Kind == "Dash"
 		b.move = {
 			started = os.clock(),
@@ -297,16 +334,78 @@ local function gapTo(root: BasePart, target: Target): number
 	return math.sqrt(round * round + rise * rise) - target.radius
 end
 
--- `at` turned round `from` by up to Miss degrees either way, where a thrown dagger flies.
-local function miss(from: Vector3, at: Vector3): Vector3
-	local turn = CFrame.Angles(0, math.rad((math.random() * 2 - 1) * SETTINGS.Miss), 0)
+-- `at` turned round `from` so it passes up to Miss studs beside it either way, near or far (`side` of Miss, else
+-- anywhere in it): where a shot or a thrown dagger flies.
+local function miss(from: Vector3, at: Vector3, side: number?): Vector3
+	local distance = math.max(HeroKit.flat(at - from).Magnitude, 1)
+	local turn = CFrame.Angles(0, math.atan2((side or math.random() * 2 - 1) * SETTINGS.Miss, distance), 0)
 	return from + turn:VectorToWorldSpace(at - from)
 end
 
--- Where a projectile flying `speed` studs a second, shot at the hero `target` `gap` studs away, is aimed: ahead of
--- him by Lead of the way he walks meanwhile, and up to Miss degrees off.
-local function aimAt(from: Vector3, target: Target, gap: number, speed: number): Vector3
-	return miss(from, target.position + HeroKit.flat(target.velocity) * (gap / speed * SETTINGS.Lead))
+-- Where a projectile flying `speed` studs a second, shot at `target` `gap` studs away, is aimed: ahead of him by Lead
+-- of the way he walks meanwhile, and up to Miss studs beside that.
+local function aimAt(from: Vector3, target: Target, gap: number, speed: number, side: number?): Vector3
+	return miss(from, target.position + HeroKit.flat(target.velocity) * (gap / speed * SETTINGS.Lead), side)
+end
+
+-- Where `instance` (a hero or a Master, else a minion's root) is now, while it lives.
+local function targetOf(instance: Instance): Target?
+	if not instance.Parent then
+		return nil
+	end
+	if instance:IsA("BasePart") then
+		if instance:GetAttribute("Dead") then
+			return nil
+		end
+		return {
+			instance = instance,
+			position = instance.Position,
+			radius = Config.Minions.Radius,
+			velocity = track(instance),
+			hero = false,
+		}
+	end
+	local model = instance :: Model
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if not (if humanoid then humanoid.Health > 0 else (model:GetAttribute("Health") or 0) > 0) then
+		return nil
+	end
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	return {
+		instance = model,
+		position = model:GetPivot().Position,
+		radius = model:GetAttribute("Radius") or 1.5,
+		velocity = if root then root.AssemblyLinearVelocity else Vector3.zero,
+		hero = model:GetAttribute("Hero") ~= nil,
+	}
+end
+
+-- Keeps the bot's attack under way on its target till it strikes or lets go, as a player keeps his crosshair on him:
+-- most of all an attack that takes long to let go (Mavorak's ultimate hangs three seconds), which would otherwise go
+-- where its target stood when it began. It faces him meanwhile, unless a leap or dash carries it.
+local function follow(b: Bot)
+	local aiming, root, humanoid = b.aiming, b.root, b.humanoid
+	if not aiming or not root or not humanoid or not alive(b) then
+		b.aiming = nil
+		return
+	end
+	local target = targetOf(aiming.target)
+	local aim = if target
+		then (if aiming.speed
+			then aimAt(root.Position, target, gapTo(root, target), aiming.speed, aiming.side)
+			else target.position)
+		else nil
+	if not aim or not CombatService.aim(b.actor, aim) then
+		b.aiming = nil
+		humanoid.AutoRotate = true
+		return
+	end
+	if b.move and not b.move.lift then
+		return
+	end
+	humanoid.AutoRotate = false
+	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
+	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
 end
 
 -- A fighter up close (Shadowren): leap and flurry on heroes, the dagger at range, the dash to close in, the combo in
@@ -347,10 +446,10 @@ local function brawl(b: Bot, target: Target, others: { Target }, now: number)
 	end
 end
 
--- A fighter from afar (Rowan, whose combo shoots), who keeps his distance (Config.Bots): he hops away from a hero who
--- comes within Flee, looses his fan, his heavy shot and his volley at heroes in reach, the fan also into a crowd, and
--- his shots at anything in reach; he walks up while out of reach or behind a wall, and backs off from a hero within
--- Keep.
+-- A fighter from afar (Rowan or Mavorak, whose combos shoot), who keeps his distance (Config.Bots): he hops away from
+-- a hero who comes within Flee, looses his ultimate, his heavy shot (or slams a hero beside him) and his volley at
+-- heroes in reach, the ultimate also into a crowd, and his shots at anything in reach; he walks up while out of reach
+-- or behind a wall, and backs off from a hero within Keep.
 local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 	local root = b.root :: BasePart
 	local kit = Config.Heroes[b.hero].Kit
@@ -368,7 +467,8 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 				aimAt(root.Position, target, gap, kit.R.ProjectileSpeed),
 				now
 			))
-			or (open and gap <= kit.M2.Range - 4 and maybe(
+			or (kit.M2.Slam and gap <= kit.M2.SlamRadius - 2 and maybe(b, "M2", target.position, now))
+			or (not kit.M2.Slam and open and gap <= kit.M2.Range - 4 and maybe(
 				b,
 				"M2",
 				aimAt(root.Position, target, gap, kit.M2.ProjectileSpeed),
@@ -388,7 +488,7 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 		end
 		used = open and crowd >= 3 and gap <= kit.R.Range * SETTINGS.Fan and maybe(b, "R", target.position, now)
 	end
-	local aim = if target.hero then aimAt(root.Position, target, gap, shot.ProjectileSpeed) else target.position
+	local aim = aimAt(root.Position, target, gap, shot.ProjectileSpeed)
 	if not used and open and gap <= shot.Range - 0.5 and now >= b.swingAt and use(b, "M1", aim) then
 		b.swingAt = now + math.random() * SETTINGS.Rest
 	end
@@ -599,6 +699,7 @@ local function think(b: Bot, now: number)
 		end
 	end
 	local target = choosePrey(b, heroes) or nearest(others, root.Position)
+	b.aimFor = if target then target.instance else nil
 	-- A hero it turns on gets a moment before the first ability, as a person needs to see him coming.
 	if target and target.hero and target.instance ~= b.focus then
 		b.calmUntil = math.max(b.calmUntil, now + reaction())
@@ -611,7 +712,7 @@ local function think(b: Bot, now: number)
 	end
 end
 
--- Carries a leaping or dashing bot along, as HeroControls carries the player's hero.
+-- Carries a leaping or dashing bot along, or holds an ascending one up, as HeroControls does the player's hero.
 local function carry(b: Bot, now: number)
 	local m = b.move
 	if not m then
@@ -623,6 +724,14 @@ local function carry(b: Bot, now: number)
 		return
 	end
 	local t = now - m.started
+	if m.lift then
+		root.CFrame = CFrame.new(m.from + Vector3.new(0, HeroKit.lift(m.lift, t), 0)) * root.CFrame.Rotation
+		root.AssemblyLinearVelocity = Vector3.zero
+		if t >= m.lift.Land then
+			b.move = nil
+		end
+		return
+	end
 	if t < m.takeoff then
 		return
 	end
@@ -716,6 +825,8 @@ local function addBot(team: string)
 		prey = nil,
 		circle = if math.random() < 0.5 then 1 else -1,
 		circleAt = 0,
+		aimFor = nil,
+		aiming = nil,
 	}
 	table.insert(bots, b)
 	task.spawn(spawnHero, b)
@@ -808,6 +919,7 @@ function BotService.start(layout: Layout, heroes: { [string]: { string } }?)
 		elapsed = math.min(elapsed - TICK, TICK)
 		walls.FilterDescendantsInstances = HeroKit.leapIgnore()
 		for _, b in table.clone(bots) do
+			follow(b)
 			think(b, now)
 		end
 	end)

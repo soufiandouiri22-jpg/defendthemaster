@@ -380,12 +380,19 @@ function KillFeed.start()
 			tween(text, 0.16, { TextTransparency = 0 })
 			tween(text:FindFirstChildOfClass("UIStroke") :: UIStroke, 0.16, { Transparency = 0 })
 
-			if own then
-				UiSound.play(STINGS[tier] or STINGS[1], STING_VOLUME)
+			-- The player's own kills and death go before every other sound (UiSound.announce); the crown's calls wait
+			-- their turn and are left out while one plays.
+			if crowned then
+				if not UiSound.announcing() then
+					UiSound.play(
+						if own then STINGS[tier] elseif fading then "CrownFades" else "CrownEnemy",
+						if own then STING_VOLUME else nil
+					)
+				end
+			elseif own then
+				UiSound.announce(STINGS[tier] or STINGS[1], STING_VOLUME)
 			elseif death then
-				UiSound.play("Death", STING_VOLUME)
-			elseif crowned then
-				UiSound.play(if fading then "CrownFades" else "CrownEnemy")
+				UiSound.announce("Death", STING_VOLUME)
 			end
 
 			task.delay(0.26, function()

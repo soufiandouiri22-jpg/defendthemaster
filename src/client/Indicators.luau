@@ -1,5 +1,6 @@
 -- The ability indicators on the ground (design 06), shown while a key is held to aim: a skillshot arrow, a zone (a
--- pale circle of the range round the hero and a gold circle where he lands) and a cone. Each is a flat, invisible part
+-- pale circle of the range round the hero and a gold circle where he lands), a cone and a ring (a gold circle round
+-- the hero). Each is a flat, invisible part
 -- just above the ground with its image on top, semi-transparent with soft gradients (Tools/ui_textures.py).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -89,6 +90,10 @@ function Indicators.cone(): Indicator
 	return { kind = "Cone", parts = { plate(Assets.IndicatorCone, PALE, 0) } }
 end
 
+function Indicators.ring(): Indicator
+	return { kind = "Ring", parts = { plate(Assets.IndicatorDisc, GOLD, 0) } }
+end
+
 -- An arrow from `from` (on the ground) `length` studs along `direction`, `width` studs wide.
 function Indicators.placeArrow(indicator: Indicator, from: Vector3, direction: Vector3, length: number, width: number)
 	local head = width / ARROW_SHAFT
@@ -104,6 +109,11 @@ function Indicators.placeZone(indicator: Indicator, centre: Vector3, range: numb
 	local lift = Vector3.new(0, LIFT, 0)
 	lay(indicator.parts[1], centre + lift, Vector3.zAxis, range * 2, range * 2)
 	lay(indicator.parts[2], target + lift * 2, Vector3.zAxis, radius * 2, radius * 2)
+end
+
+-- A circle of `radius` studs round `centre` on the ground: what a slam round the hero reaches.
+function Indicators.placeRing(indicator: Indicator, centre: Vector3, radius: number)
+	lay(indicator.parts[1], centre + Vector3.new(0, LIFT, 0), Vector3.zAxis, radius * 2, radius * 2)
 end
 
 -- A cone from `apex` on the ground along `direction`, reaching `range` studs (the image's angle is the R's 70°).

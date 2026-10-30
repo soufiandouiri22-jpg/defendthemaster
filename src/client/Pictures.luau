@@ -33,13 +33,20 @@ local SOUNDS = {
 	CorkPull = true,
 	SwordDraw = true,
 	EvilBell = true,
-	CrownDrop = true,
 	FireWhoosh = true,
 	FireBurst = true,
 	RockKnock = true,
 	RockBreak = true,
 	GlassShards = true,
 	DeepThud = true,
+	Hit = true,
+	HitLow = true,
+	HitRaw = true,
+	HitGolf = true,
+	HitHeart = true,
+	HitPunch = true,
+	HitBody = true,
+	HitBodyImpact = true,
 }
 
 local Pictures = {}

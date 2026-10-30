@@ -138,10 +138,11 @@ function ProgressService.hurtByMinion(victim: Model)
 	minionHits[victim] = os.clock()
 end
 
--- When an enemy hero last hurt `victim` (os.clock), if he did since `victim` came back.
+-- When an enemy (a hero, a minion or a Master) last hurt `victim` (os.clock), if one did since `victim` came back.
 function ProgressService.hurtAt(victim: Model): number?
 	local last = credit[victim]
-	return last and last.at
+	local at = math.max(last and last.at or 0, minionHits[victim] or 0, masterHits[victim] or 0)
+	return if at > 0 then at else nil
 end
 
 -- What killing `player`'s hero earns (Config.Economy): less after deaths without a kill, more on a kill streak.

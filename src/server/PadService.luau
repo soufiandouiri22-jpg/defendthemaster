@@ -1,5 +1,6 @@
 -- The spawn pads heal (design 03, Config.Pads): every Tick each hero, player or bot, who stands on one of his own
--- team's pads gains Heal of his health, unless an enemy hero hurt him in the last CombatPause seconds. Each heal is
+-- team's pads gains Heal of his health, unless an enemy (a hero, a minion or a Master) hurt him in the last
+-- CombatPause seconds, so nobody can wait there for his attackers and win on its healing. Each heal is
 -- told to the clients (Net.PadHeal: the hero, how much) for its light and its number.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

@@ -71,6 +71,7 @@ print(if testing then "[DefendTheMaster] server started on the test ground" else
 -- The test ground starts at once with the player's own hero; a match drafts first.
 if testing then
 	HeroService.release()
+	TestGround.minions(MinionService.spawnAt)
 	return
 end
 task.spawn(function()

@@ -1,6 +1,6 @@
 -- Shadowren's shadow magic on the client: the puff where a thrown dagger strikes, the trail of his dash, the shockwave where he lands from his
 -- leap (a dark ring racing out over the ground to the edge of its reach, a shadow that fades under it, smoke thrown
--- outwards and a short violet flash), and the larger slam of his ultimate.
+-- outwards and a short violet flash), and the larger slam of his ultimate; and the burst of Mavorak's great orb.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -212,6 +212,43 @@ function ShadowEffects.slam(ground: Vector3, radius: number)
 
 	task.delay(2, function()
 		shade:Destroy()
+		centre:Destroy()
+	end)
+end
+
+-- A great orb bursting in the air at `at`, reaching `radius` studs: a ball of smoke thrown out every way, violet sparks
+-- and a bright flash.
+function ShadowEffects.blast(at: Vector3, radius: number)
+	local centre = holder(at, Vector3.new(2, 2, 2))
+	centre.Parent = effects()
+	smoke(
+		centre,
+		60,
+		NumberRange.new(radius * 1.2, radius * 2.4),
+		NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 7) }),
+		NumberRange.new(0.5, 0.9)
+	)
+	local sparks = Instance.new("ParticleEmitter")
+	sparks.Texture = SPARK
+	sparks.Color = ColorSequence.new(BRIGHT, SHADOW)
+	sparks.LightEmission = 1
+	sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 0) })
+	sparks.Lifetime = NumberRange.new(0.4, 0.8)
+	sparks.Speed = NumberRange.new(radius * 2, radius * 4)
+	sparks.SpreadAngle = Vector2.new(180, 180)
+	sparks.Drag = 2
+	sparks.Enabled = false
+	sparks.Parent = centre
+	sparks:Emit(60)
+
+	local light = Instance.new("PointLight")
+	light.Color = BRIGHT
+	light.Range = radius * 2.5
+	light.Brightness = 5
+	light.Parent = centre
+	TweenService:Create(light, TweenInfo.new(0.6), { Brightness = 0 }):Play()
+
+	task.delay(2, function()
 		centre:Destroy()
 	end)
 end

@@ -16,6 +16,19 @@ function HeroKit.releases(kit: any): { number }
 	return kit.Releases or { kit.Release }
 end
 
+-- How high an Ascend (`kit`) holds the hero above where he cast it, `t` seconds after: easing up from RiseStart to
+-- RiseEnd, hanging at Rise, and easing down from Fall to Land.
+function HeroKit.lift(kit: any, t: number): number
+	local function ease(a: number): number
+		a = math.clamp(a, 0, 1)
+		return a * a * (3 - 2 * a)
+	end
+	if t < kit.Fall then
+		return kit.Rise * ease((t - kit.RiseStart) / (kit.RiseEnd - kit.RiseStart))
+	end
+	return kit.Rise * (1 - ease((t - kit.Fall) / (kit.Land - kit.Fall)))
+end
+
 -- Whether the hits of `kit` go where the crosshair points as each lands or leaves his hand rather than where it
 -- pointed at the cast, so turning while the attack plays hits whoever he turns to: every swing, throw, shot and sweep
 -- does. A leap lands on the spot chosen at its cast and a dash keeps its path; only a dash's shot follows.

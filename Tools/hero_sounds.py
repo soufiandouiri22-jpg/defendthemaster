@@ -9,12 +9,14 @@ each recording sits in it (played with Sound.PlaybackRegion) and the cues per cl
 
     python3 Tools/hero_sounds.py build ShadowDuelist     # joins the recordings into Vendor/Build/<Pack>_Sounds.wav
     python3 Tools/hero_sounds.py upload ShadowDuelist    # uploads it and writes the Luau module
+    python3 Tools/hero_sounds.py write ShadowDuelist     # only new cues: writes the module for the uploaded file
 
 The upload uses the Open Cloud API key in the macOS Keychain (service DefendTheMaster.RobloxOpenCloud), with the
 Assets read and write permissions; the key is never printed or written anywhere.
 """
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -69,6 +71,31 @@ PACKS = {
             "RA-RNG-036": [(0.30, ["Acfa330cd7291"], 0.6)],
         },
         "events": {},
+    },
+    "Elementalist": {
+        "folder": ROOT / "Vendor/Elementalist/Sounds",
+        "clips": [
+            # Mavorak's attacks (Config.Heroes.Mavorak.Kit) and the clips under them.
+            "RA-ELM-020", "RA-ELM-034", "RA-ELM-041", "RA-ELM-053", "RA-ELM-062", "RA-ELM-050", "RA-ELM-060",
+            "RA-ELM-005", "RA-ELM-006", "RA-ELM-007", "RA-ELM-002", "RA-ELM-011", "RA-ELM-013",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        # Every orb of his combo sounds as the third's cast (041's Sound 02, owner 2026-10-30): the three keep only
+        # their footsteps and get it as their orb goes (Config's Hit).
+        "mute": ["RA-ELM-020", "RA-ELM-034", "RA-ELM-041"],
+        "extra": {
+            "RA-ELM-020": [(0.30, ["A372384195c2d"], 0.45)],
+            "RA-ELM-034": [(0.37, ["A372384195c2d"], 0.45)],
+            "RA-ELM-041": [(0.45, ["A372384195c2d"], 0.45)],
+        },
+        # The ultimate's great orb bursting: the other slam of his staff (053's second set), from where it strikes.
+        # His staff's own slam (053's cue) already sounds as it comes down, so the pack's clips need no Slam.
+        "mixes": {
+            "Blast": [("A84e421561310", 0.25)],
+        },
+        "events": {
+            "Blast": (["Blast"], 0.9),
+        },
     },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
@@ -144,11 +171,19 @@ def select(pack, sound_map):
                     ]
                 else:
                     continue
+                # A muted clip's own recordings stay in the file, so the uploaded one still matches its regions.
+                if clip_id in pack.get("mute", []) and not entry.get("footstep"):
+                    continue
                 cues.append(entry)
         for time, sounds, volume in pack.get("extra", {}).get(clip_id, []):
-            cues.append({"time": time, "volume": volume, "sounds": [need(s) for s in sounds]})
+            cues.append({"time": time, "volume": volume, "sounds": list(sounds)})
         cues.sort(key=lambda c: c["time"])
         clips[key] = cues
+    # The added cues' recordings go in after all the pack's own, so adding them never moves those in the file.
+    for cues in clips.values():
+        for cue in cues:
+            for s in cue.get("sounds", []):
+                need(s)
 
     events = {name: {"sounds": [need(s) for s in sounds], "volume": volume} for name, (sounds, volume) in pack["events"].items()}
     return clips, contacts, events, needed
@@ -269,6 +304,20 @@ def upload(name):
     write_module(name, f"rbxassetid://{asset_id}", layout)
 
 
+def write(name):
+    """Rewrites the module for new cues without a new upload, when the built file is the uploaded one."""
+    module = ROOT / f"src/shared/PackSounds/{name}.luau"
+    asset = next(line.split('"')[3] for line in module.read_text().splitlines() if '["Asset"]' in line)
+    if not asset.startswith("rbxassetid://"):
+        sys.exit(f"No uploaded asset in {module.relative_to(ROOT)}: upload the file instead.")
+    uploaded = {k: float(v) for k, v in re.findall(r'\["(\w+)"\] = \{ ([\d.]+), [\d.]+ \}', module.read_text())}
+    build(name)
+    layout = json.loads((ROOT / f"Vendor/Build/{name}_Sounds.json").read_text())
+    if {k: v[0] for k, v in layout["regions"].items()} != uploaded:
+        sys.exit("The recordings changed: upload the file again instead.")
+    write_module(name, asset, layout)
+
+
 def lua(value, indent=1):
     pad = "\t" * indent
     if isinstance(value, dict):
@@ -311,6 +360,6 @@ def write_module(name, asset, layout):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[1] not in ("build", "upload") or sys.argv[2] not in PACKS:
+    if len(sys.argv) != 3 or sys.argv[1] not in ("build", "upload", "write") or sys.argv[2] not in PACKS:
         sys.exit(__doc__)
-    {"build": build, "upload": upload}[sys.argv[1]](sys.argv[2])
+    {"build": build, "upload": upload, "write": write}[sys.argv[1]](sys.argv[2])

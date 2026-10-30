@@ -30,6 +30,20 @@ local phase = "Waiting"
 local event: RemoteEvent
 local rng = Random.new()
 
+-- A bot's hero: the first of Config.Bots.Lineup his team has not picked yet, else Config.Bots.Hero.
+local function botHero(pick: Pick): string
+	local left = table.clone(Config.Bots.Lineup)
+	for _, other in picks do
+		if other ~= pick and other.locked and other.team == pick.team then
+			local at = table.find(left, other.hero)
+			if at then
+				table.remove(left, at)
+			end
+		end
+	end
+	return left[1] or Config.Bots.Hero
+end
+
 local function owned(pick: Pick): { string }
 	if pick.player and pick.player.Parent then
 		local data = ProfileService.get(pick.player)
@@ -37,7 +51,7 @@ local function owned(pick: Pick): { string }
 			return Profile.owned(data)
 		end
 	end
-	return { Config.Bots.Hero }
+	return { botHero(pick) }
 end
 
 local function taken(hero: string): boolean

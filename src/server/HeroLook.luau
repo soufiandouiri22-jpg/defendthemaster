@@ -1,7 +1,8 @@
 -- How a hero looks (Config.Heroes[hero].Look): his avatar from catalog items in the proportions of his animation pack's
--- rig, his head hidden under a mask, and the pack's weapons bound to his root part as on the pack's rig. For the
+-- rig, his head hidden under a mask, and the pack's weapons bound to his root part or his hand as on the pack's rig. For the
 -- heroes in a match (HeroService, BotService) and on the lobby's podium (Lobby.ShowcaseService).
 
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -19,6 +20,11 @@ function HeroLook.description(name: string): HumanoidDescription
 	description.Pants = look.Pants
 	description.HairAccessory = look.HairAccessory or ""
 	description.FaceAccessory = look.FaceAccessory or ""
+	description.HatAccessory = look.HatAccessory or ""
+	description.BackAccessory = look.BackAccessory or ""
+	-- A dynamic head from the catalog with its own animated face, and the mood it plays.
+	description.Head = look.Head or 0
+	description.MoodAnimation = look.Mood or 0
 	for _, part in BODY_COLOURS do
 		(description :: any)[part] = look.Skin
 	end
@@ -34,7 +40,12 @@ local function arm(character: Model, hero: string)
 	if not settings.Pack or not root then
 		return
 	end
-	local components = ReplicatedStorage[settings.Pack].Rig.Components
+	-- A keyframe pack (Tools/keyframe_pack.py) has its components beside its rig, and its weapon held in a hand.
+	local pack = ReplicatedStorage[settings.Pack]
+	local components = pack.Rig:FindFirstChild("Components") or pack.Components
+	local held = if pack.Rig:FindFirstChild("Components")
+		then nil
+		else HttpService:JSONDecode(pack.ComponentPlayer.Configuration.Value).weapon
 	local shift = Motion.rootShift(character)
 	local folder = Instance.new("Folder")
 	folder.Name = "Weapons"
@@ -48,6 +59,11 @@ local function arm(character: Model, hero: string)
 				d.CanTouch = false
 				d.Massless = true
 				d.CastShadow = true
+			elseif d:IsA("Motor6D") and d.Name == "ComponentBinding" and held and weapon.Name == held.name then
+				-- Held in his own hand as on the pack's rig, so it never drifts from it.
+				d.Part0 = character:FindFirstChild(held.parent) :: BasePart
+				d.C0 = CFrame.new(table.unpack(held.c0))
+				d.C1 = CFrame.new(table.unpack(held.c1))
 			elseif (d:IsA("Weld") or d:IsA("Motor6D")) and d.Name == "ComponentBinding" then
 				-- A skinned component hangs from a Weld, a rigid one (the Ranger's quiver) from a Motor6D the clips
 				-- turn; both bind to the pack rig's root part, which becomes the hero's.
@@ -72,7 +88,9 @@ function HeroLook.dress(character: Model, hero: string)
 	local look = Config.Heroes[hero].Look
 	local head = character:FindFirstChild("Head")
 	if look.HideHead and head and head:IsA("BasePart") then
+		-- Nothing of his face is drawn on a hidden head.
 		head.Transparency = 1
+		head = nil
 	end
 	if look.BlankFace and head and head:IsA("MeshPart") then
 		head.TextureID = ""
@@ -96,6 +114,65 @@ function HeroLook.dress(character: Model, hero: string)
 		weld.Part1 = strip
 		weld.Parent = strip
 		strip.Parent = head
+	end
+	local eyes = look.Eyes
+	if eyes and head and head:IsA("BasePart") then
+		-- Each eye a picture (Tools/face_eyes.py) on a thin plate, `Apart` studs to the side and `Height` from the head's
+		-- centre, sunk halfway into the face and turned with its curve; his left eye is on the head's -X.
+		local radius = head.Size.X / 2
+		for side, image in { [-1] = eyes.Left, [1] = eyes.Right } do
+			local x = side * eyes.Apart
+			local plate = Instance.new("Part")
+			plate.Name = if side < 0 then "LeftEye" else "RightEye"
+			plate.Size = Vector3.new(eyes.Width, eyes.Width * eyes.Aspect, 0.012)
+			plate.Transparency = 1
+			plate.CanCollide = false
+			plate.CanQuery = false
+			plate.CanTouch = false
+			plate.Massless = true
+			plate.CastShadow = false
+			local depth = math.sqrt(math.max(radius * radius - x * x, 0)) * head.Size.Z / head.Size.X
+			plate.CFrame = head.CFrame
+				* CFrame.new(x, eyes.Height, -depth)
+				* CFrame.Angles(0, -math.asin(math.clamp(x / radius, -1, 1)), 0)
+			local decal = Instance.new("Decal")
+			decal.Texture = image
+			decal.Face = Enum.NormalId.Front
+			decal.Parent = plate
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = head
+			weld.Part1 = plate
+			weld.Parent = plate
+			plate.Parent = head
+		end
+	end
+	local brows = look.Brows
+	if brows and head and head:IsA("BasePart") then
+		-- A strip above each eye, `Apart` studs to the side and `Height` from the head's centre, sunk into the face
+		-- and turned with its curve, its inner end `Tilt` degrees lower than its outer end.
+		local radius = head.Size.X / 2
+		for _, side in { -1, 1 } do
+			local x = side * brows.Apart
+			local strip = Instance.new("Part")
+			strip.Name = if side < 0 then "LeftBrow" else "RightBrow"
+			strip.Size = Vector3.new(brows.Length, brows.Thickness, 0.012)
+			strip.Color = brows.Colour
+			strip.Material = Enum.Material.SmoothPlastic
+			strip.CanCollide = false
+			strip.CanQuery = false
+			strip.CanTouch = false
+			strip.Massless = true
+			strip.CastShadow = false
+			local depth = math.sqrt(math.max(radius * radius - x * x, 0)) * head.Size.Z / head.Size.X
+			strip.CFrame = head.CFrame
+				* CFrame.new(x, brows.Height, -depth)
+				* CFrame.Angles(0, -math.asin(math.clamp(x / radius, -1, 1)), side * math.rad(brows.Tilt))
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = head
+			weld.Part1 = strip
+			weld.Parent = strip
+			strip.Parent = head
+		end
 	end
 	arm(character, hero)
 end

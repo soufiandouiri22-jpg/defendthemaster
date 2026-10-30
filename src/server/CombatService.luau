@@ -4,9 +4,9 @@
 -- character, key, combo step, landing spot) and lands each hit at its time in the motion on the enemies there: the
 -- other team's minions and Combatants (heroes, Masters). A refused attack is sent back to its client
 -- (Net.HeroRefused), which stops the motion it already began. Thrown daggers and shot arrows fly on the server
--- (Net.HeroProjectile: id, origin, direction, speed, range; Net.HeroProjectileEnd: id, where it stopped, hit or not);
--- one stops at the first enemy in its way, a piercing one strikes everyone it passes once, and every one at the
--- first wall or floor. Every swing, shot and throw of every hero goes where the crosshair points, upwards and
+-- (Net.HeroProjectile: id, origin, direction, speed, range, its size and blast; Net.HeroProjectileEnd: id, where it
+-- stopped, hit or not); one stops at the first enemy in its way, a piercing one strikes everyone it passes once, and
+-- every one at the first wall or floor; one with a blast then bursts there over everyone round it. Every swing, shot and throw of every hero goes where the crosshair points, upwards and
 -- downwards as well, to the point under it (HeroKit.aimDirection, owner 2026-10-29), and strikes an enemy only at the heights his body
 -- reaches; a leap lands on the spot aimed at and a dash keeps to the ground.
 -- Every hit is told to the clients for its feedback (Net.HeroHit: target, damage, where, the striking player). Bots
@@ -80,6 +80,8 @@ type Projectile = {
 	struck: { [Instance]: boolean },
 	-- Whether it is an M1 shot.
 	basic: boolean,
+	-- How far round where it stops it bursts, striking everyone there it did not strike yet.
+	blast: number?,
 }
 
 local states: { [Instance]: State } = {}
@@ -296,9 +298,33 @@ local function launch(
 		pierce = shot.Pierce == true,
 		struck = struck or {},
 		basic = basic == true,
+		blast = shot.Blast,
 	}
 	table.insert(projectiles, projectile)
-	projectileEvent:FireAllClients(projectile.id, state.character, origin, direction, shot.ProjectileSpeed, shot.Range)
+	projectileEvent:FireAllClients(
+		projectile.id,
+		state.character,
+		origin,
+		direction,
+		shot.ProjectileSpeed,
+		shot.Range,
+		shot.OrbScale,
+		shot.Blast
+	)
+end
+
+-- A bursting projectile `p` stopped at `at`: everyone within its blast it has not struck yet is struck.
+local function burst(p: Projectile, at: Vector3)
+	local reach = p.blast
+	if not reach then
+		return
+	end
+	for _, enemy in enemiesNear(p.team, at, reach) do
+		if not p.struck[enemy.instance] and at.Y >= enemy.bottom - reach and at.Y <= enemy.top + reach then
+			p.struck[enemy.instance] = true
+			damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
+		end
+	end
 end
 
 -- `direction` turned `degrees` round the vertical.
@@ -347,11 +373,13 @@ local function stepProjectiles(dt: number)
 			local at = from:Lerp(to, bestAlong)
 			p.struck[best.instance] = true
 			damage(p.player, p.character, best, p.damage, p.magic, p.basic)
+			burst(p, at)
 			projectileEndEvent:FireAllClients(p.id, at, true)
 			table.remove(projectiles, i)
 			continue
 		end
 		if wall then
+			burst(p, wall.Position)
 			projectileEndEvent:FireAllClients(p.id, wall.Position, false)
 			table.remove(projectiles, i)
 			continue
@@ -359,6 +387,7 @@ local function stepProjectiles(dt: number)
 		p.position = to
 		p.left -= travel
 		if p.left <= 0 then
+			burst(p, to)
 			projectileEndEvent:FireAllClients(p.id, to, false)
 			table.remove(projectiles, i)
 		end
@@ -539,6 +568,14 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				end
 			end)
 		end
+	elseif kit.Kind == "Ascend" then
+		-- He hangs in the air (his client lifts him, a bot BotService) and cannot walk till he stands again.
+		state.busyUntil = now + kit.Land + RECOVER
+		motionEvent:FireAllClients(character, key, 0)
+		slow(state, kit.Land + RECOVER, 0)
+		later(state, kit.Release, function()
+			launch(player, state, team, aimedNow(), kit, strength(kit.Damage), magic)
+		end)
 	elseif kit.Kind == "Flurry" then
 		state.busyUntil = now + length
 		motionEvent:FireAllClients(character, key, 0)
@@ -586,6 +623,16 @@ function CombatService.ready(player: Instance, key: string): boolean
 		and Leveling.learned(player :: any, key)
 		and now >= state.busyUntil
 		and now >= (state.cooldowns[key] or 0)
+end
+
+-- Points a bot's attack under way at `aim`, as a player's client does with "Aim"; false once no attack plays.
+function CombatService.aim(actor: Instance, aim: Vector3): boolean
+	local state = states[actor]
+	if not state or os.clock() >= state.busyUntil then
+		return false
+	end
+	state.aim = aim
+	return true
 end
 
 function CombatService.start()

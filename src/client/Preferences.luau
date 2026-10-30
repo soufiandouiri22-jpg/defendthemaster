@@ -17,6 +17,8 @@ local GROUPS = { "Music", "Effects", "Interface" }
 
 local current: Profile.Settings = Profile.defaultSettings()
 local changed = Instance.new("BindableEvent")
+-- How loud the music and the effects play beside the interface's sounds (Preferences.duck).
+local duck = 1
 
 -- The sound group `name` ("Music", "Effects" or "Interface"), made the first time it is asked for.
 function Preferences.group(name: string): SoundGroup
@@ -30,19 +32,33 @@ function Preferences.group(name: string): SoundGroup
 	return group
 end
 
-local function apply(values: Profile.Settings)
-	current = values
+local function setVolumes()
 	local lobby = Workspace:GetAttribute("Role") == "Lobby"
 	for _, name in GROUPS do
-		local own = (values :: any)[name] or 1
-		local volume = values.Master * own
-		if name == "Music" and lobby and not values.MenuMusic then
+		local own = (current :: any)[name] or 1
+		local volume = current.Master * own
+		if name == "Music" and lobby and not current.MenuMusic then
 			volume = 0
+		end
+		if name ~= "Interface" then
+			volume *= duck
 		end
 		Preferences.group(name).Volume = volume
 	end
+end
+
+local function apply(values: Profile.Settings)
+	current = values
+	setVolumes()
 	Lighting.GlobalShadows = values.Shadows
 	changed:Fire(values)
+end
+
+-- Plays the music and the effects at `level` (0 to 1) of their set volume, so an interface sound stands out above
+-- them (UiSound.announce); 1 again when it is over.
+function Preferences.duck(level: number)
+	duck = level
+	setVolumes()
 end
 
 -- The setting `key` as it is now (previewed or saved).

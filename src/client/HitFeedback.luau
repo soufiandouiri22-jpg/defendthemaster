@@ -1,7 +1,9 @@
 -- Shows every hit a hero lands (Net.HeroHit from the server: the target, the damage, where, and who struck): the target
 -- flashes white for a moment, brighter the harder the hit, and the striker sees the damage pop up from it and arc away,
 -- to the left and right in turn. How hard a hit was reads at a glance from its tier (TIERS): light hits small and
--- white, medium ones gold, heavy ones big, red-hot and with a burst of sparks.
+-- white, medium ones gold, heavy ones big, red-hot and with a burst of sparks. Hits sound as a series
+-- (Config.Combat.HitSounds, none when it is empty), each striker's next one in turn and the first again after a pause: flat
+-- for the striker and the one struck, from where it lands for everyone else.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,8 +11,10 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local MinionView = require(script.Parent.MinionView)
 local Preferences = require(script.Parent.Preferences)
+local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 
 local HitFeedback = {}
@@ -80,6 +84,8 @@ local HEAL: Tier = {
 }
 
 local FLASH_TIME = 0.18
+-- The least time between two flat hit sounds, so one swing through a crowd sounds once rather than louder.
+local SOUND_GAP = 0.05
 -- A number pops up over POP seconds, flies for LIFE seconds in all, and fades over the last FADE of them.
 local POP, LIFE, FADE = 0.16, 0.85, 0.3
 -- Its arc: it starts this high over the hit, rises at RISE studs a second against GRAVITY, and drifts SPREAD studs aside.
@@ -100,6 +106,9 @@ local player = Players.LocalPlayer
 local flashing: { [Instance]: Highlight } = {}
 local live: { Number } = {}
 local nextSide = 1
+local lastSound = 0
+-- Per striker (the player's own hits and those on him together) the last of Config.Combat.HitSounds played, and when.
+local series: { [any]: { step: number, at: number } } = setmetatable({}, { __mode = "k" }) :: any
 
 local function tierOf(amount: number): Tier
 	local found = TIERS[1]
@@ -254,6 +263,20 @@ function HitFeedback.heal(at: Vector3, amount: number)
 	number(at, "+" .. math.round(amount), HEAL)
 end
 
+-- The next of the hit sounds in `key`'s series, from the first again after a pause.
+local function nextSound(key: any): string
+	local sounds = Config.Combat.HitSounds
+	local now = os.clock()
+	local last = series[key]
+	if not last or now - last.at > Config.Combat.HitSeriesReset then
+		last = { step = 0, at = now }
+		series[key] = last
+	end
+	last.step = last.step % #sounds + 1
+	last.at = now
+	return sounds[last.step]
+end
+
 function HitFeedback.start()
 	local net = ReplicatedStorage:WaitForChild("Net")
 	local event = net:WaitForChild("HeroHit") :: RemoteEvent
@@ -264,6 +287,17 @@ function HitFeedback.start()
 		end
 		if striker == player then
 			number(at, tostring(math.round(amount)), tier)
+		end
+		if #Config.Combat.HitSounds == 0 then
+			return
+		elseif striker == player or (target and target == player.Character) then
+			local now = os.clock()
+			if now - lastSound >= SOUND_GAP then
+				lastSound = now
+				UiSound.play(nextSound(player))
+			end
+		else
+			UiSound.at(nextSound(striker or target), at)
 		end
 	end)
 	RunService.RenderStepped:Connect(update)

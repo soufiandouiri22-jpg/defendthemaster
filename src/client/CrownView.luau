@@ -1,15 +1,13 @@
 -- The Sun Crown on screen (CrownService's attributes on Workspace): its model (ReplicatedStorage.SunCrown, from Meshy,
 -- pivot at its middle) turns and bobs where it floats, on the plateau or where its carrier fell, with a warm light and
 -- a faint glow rising to it from the floor. While a hero carries it, a smaller one turns the same way over his head.
--- It clangs to the ground where its carrier fell.
+-- Its fall makes no sound: its clang sounded like a cartoon against the death's boom (owner, 2026-10-30).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Config = require(ReplicatedStorage.Shared.Config)
-local UiSound = require(script.Parent.UiSound)
-
 local CrownView = {}
 
 local GOLD = Color3.fromRGB(255, 196, 64)
@@ -103,14 +101,6 @@ function CrownView.start()
 	folder.Name = "CrownEffects"
 	folder.Parent = Workspace
 	local angle = 0
-
-	-- The server sets where it fell just after its state.
-	Workspace:GetAttributeChangedSignal("CrownSpot"):Connect(function()
-		local spot = Workspace:GetAttribute("CrownSpot")
-		if Workspace:GetAttribute("Crown") == "Dropped" and typeof(spot) == "Vector3" then
-			UiSound.at("CrownDropped", spot)
-		end
-	end)
 
 	RunService.RenderStepped:Connect(function(dt)
 		angle = (angle + TURN * dt) % 360

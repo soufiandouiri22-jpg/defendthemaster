@@ -1,15 +1,17 @@
 -- Client entry point of Defend The Master. The server says what this place is (the Workspace attribute "Role"): in the
 -- lobby the menu runs (Lobby.Menu), in a match the arena's views and the HUD, with the draft before the fight and the
 -- end screen after it. The loading screen (ReplicatedFirst.Loading) stays up until the place's world and pictures are
--- loaded, and goes along on every teleport from here.
+-- loaded, and goes along on every teleport from here. The mouse is the game's gold gauntlet everywhere (Pointer).
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Loading = require(ReplicatedFirst:WaitForChild("Loading"))
 
 local Music = require(script.Music)
 local Pictures = require(script.Pictures)
+local Pointer = require(script.Pointer)
 local Preferences = require(script.Preferences)
 local ProfileClient = require(script.ProfileClient)
 
@@ -17,6 +19,7 @@ task.spawn(ProfileClient.start)
 Preferences.start()
 Loading.forTeleport()
 local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+Pointer.start(playerGui)
 
 -- What the loading screen waits for: the world, everything on the screen, and every picture a page or the HUD can show.
 local function everything(): { Instance | string }
@@ -95,5 +98,11 @@ task.spawn(MatchEndView.start)
 task.spawn(function()
 	Loading.preload(everything(), 12)
 	Loading.ready()
+	-- Studio's test ground holds its minions back until the loading screen is gone (server TestGround).
+	local loaded = ReplicatedStorage:WaitForChild("Net"):FindFirstChild("TestGroundLoaded")
+	if loaded then
+		Loading.waitGone()
+		loaded:FireServer()
+	end
 end)
 print("[DefendTheMaster] client started")

@@ -222,6 +222,17 @@ function Loading.build(): ScreenGui
 	shine.Rotation = 90
 	shine.Color = ColorSequence.new(GOLD, GOLD_DARK)
 	shine.Parent = fill
+
+	-- Over it all an empty button that takes every click, so nothing of the menu behind it can be pressed. Roblox still
+	-- tells the buttons behind when the mouse comes over them, which is why UiSound stays silent until the screen goes.
+	local shield = Instance.new("TextButton")
+	shield.Name = "Shield"
+	shield.Text = ""
+	shield.BackgroundTransparency = 1
+	shield.AutoButtonColor = false
+	shield.Selectable = false
+	shield.Size = UDim2.fromScale(1, 1)
+	shield.Parent = group
 	return gui
 end
 
@@ -299,6 +310,11 @@ function Loading.waitGone()
 	if not gone then
 		goneSignal.Event:Wait()
 	end
+end
+
+-- Whether the screen has started to fade away.
+function Loading.isGone(): boolean
+	return gone
 end
 
 -- Waits for the game, the client (Loading.ready) and every download, then lets the world render a while behind the

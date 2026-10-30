@@ -4,7 +4,8 @@
 -- turns every joint's pose into one for the hero's joint, so that each body part sits where it would on the pack's
 -- rig, standing on the same ground. The weapons (the pack's components, in the character's "Weapons" folder) follow
 -- the clips as on the pack's rig: a skinned one (a bow, a dagger) by its bones, a rigid one (a quiver) by its
--- ComponentBinding Motor6D on the root part; and they fade in and out as the clips say.
+-- ComponentBinding Motor6D on the root part (or on a hand, the Elementalist's staff); and they fade in and out as the
+-- clips say.
 --
 -- Two layers: the base (standing, running, jumping), which crossfades when it changes, and over it one action (an
 -- attack), which fades in, plays once and fades back to the base.
@@ -250,7 +251,9 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 		props = table.clone(props)
 		for name, prop in self.props do
 			local pose = props[name]
-			if pose then
+			-- A weapon held in a hand (Shared.KeyframePlayer) moves with the body already.
+			local onRoot = prop.motor.Part0 ~= nil and prop.motor.Part0.Name == "HumanoidRootPart"
+			if pose and onRoot then
 				local shifted = CFrame.new(prop.motor.C0.Rotation:VectorToObjectSpace(travel)) * pose.world
 				props[name] = { world = shifted, scale = pose.scale }
 			end

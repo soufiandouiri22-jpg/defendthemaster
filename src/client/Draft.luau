@@ -1,9 +1,8 @@
 -- The draft before the buy phase (design 07, server DraftService): over the arena, seen from a slowly turning camera,
 -- the two teams down the sides (each place's hero, rank and name, the one picking aglow), who is picking and his time
 -- at the top, the heroes in the middle (filtered by class; the player's own, the taken ones marked PICKED), the chosen
--- hero under them with LOCK IN. Anyone may look at heroes; on his turn the
--- player's choice is shown to everyone (Net.Draft "Hover") and LOCK IN takes it ("Lock"). The rest of the HUD hides
--- meanwhile. When the picks have been shown ("Ready") the draft goes and the camera is the hero's again.
+-- hero under them with LOCK IN. Anyone may look at heroes; on his turn the player's choice is shown to everyone
+-- (Net.Draft "Hover"), LOCK IN takes it ("Lock") and its last seconds tick. The rest of the HUD hides meanwhile. When the picks have been shown ("Ready") the draft goes and the camera is the hero's again.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -36,6 +35,8 @@ local TEAM_NAMES = { Blue = "BLUE TEAM", Red = "RED TEAM" }
 local TEAM_FILL = { Blue = { C.Blue, C.BlueDark }, Red = { C.Red, C.RedDark } }
 -- How quickly the camera goes round the arena (radians a second).
 local ORBIT = 0.035
+-- The player's own turn ticks over its last this many seconds, in case he is not watching.
+local TICKS = 3
 
 type PickState = {
 	key: string,
@@ -496,6 +497,7 @@ local function build(event: RemoteEvent)
 		showLock()
 	end
 
+	local ticked: number? = nil
 	local function updateTitle()
 		local s = state
 		if not s then
@@ -503,17 +505,24 @@ local function build(event: RemoteEvent)
 		end
 		local pick = current()
 		local left = math.max(0, s.endsAt - Workspace:GetServerTimeNow())
+		local second = math.ceil(left)
 		if s.phase == "Draft" and pick then
 			if pick.userId == player.UserId then
 				title.Text = "YOUR TURN: PICK YOUR HERO"
 				title.TextColor3 = C.Xp
+				if second >= 1 and second <= TICKS and second ~= ticked then
+					UiSound.play("CountTick")
+				end
+				ticked = second
 			else
+				ticked = nil
 				title.Text = string.upper(pick.name) .. " IS PICKING"
 				title.TextColor3 = TEAM_FILL[pick.team][1]:Lerp(Color3.new(1, 1, 1), 0.35)
 			end
 			timer.Text = UiStyle.clock(math.ceil(left))
 			timer.TextColor3 = if left <= 5 then Color3.fromRGB(255, 110, 90) else C.Cream
 		else
+			ticked = nil
 			title.Text = "GET READY"
 			title.TextColor3 = C.Xp
 			timer.Text = UiStyle.clock(math.ceil(left))

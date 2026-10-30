@@ -8,6 +8,7 @@ local ContentProvider = game:GetService("ContentProvider")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 local Workspace = game:GetService("Workspace")
 
 local Preferences = require(script.Parent.Preferences)
@@ -40,8 +41,13 @@ function HeroSounds.bank(name: string): Bank?
 		local bank = if module then require(module) :: any else false
 		banks[name] = bank
 		if bank then
+			-- Kept for the whole session: while one Sound holds the file it stays loaded, and every recording
+			-- played from it sounds at once instead of waiting for the file again (or not at all).
 			local probe = Instance.new("Sound")
+			probe.Name = `{name}Sounds`
 			probe.SoundId = bank.Asset
+			probe.Volume = 0
+			probe.Parent = SoundService
 			task.spawn(ContentProvider.PreloadAsync, ContentProvider, { probe })
 		end
 	end

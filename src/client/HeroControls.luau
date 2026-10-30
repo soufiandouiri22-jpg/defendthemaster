@@ -3,7 +3,8 @@
 -- Everything aims where the player looks (HeroCamera.aim), up and down too. The client plays its own motion at once and asks the server
 -- (Net.HeroAction), which decides the hits; a refused attack is undone. The leap moves the hero itself, from takeoff
 -- to landing, to the spot the server works out the same way (HeroKit.leapLanding), and lands in a shockwave of shadow
--- (ShadowEffects), as does every other hero's leap. Other heroes' motions and every thrown dagger and shot arrow come
+-- (ShadowEffects), as does every other hero's leap; an Ascend holds him up in the air till it ends (HeroKit.lift),
+-- and its great orb bursts where it stops. Other heroes' motions and every thrown dagger and shot arrow come
 -- from the server; while an attack plays, the client keeps telling the server where the crosshair points, as every
 -- hit but a leap's landing and a dash's path goes there (HeroKit.follows). The crosshair (design 09) turns red on an
 -- enemy and blue on an ally.
@@ -11,6 +12,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
@@ -49,6 +51,8 @@ type Leap = {
 	land: number,
 	-- A dash starts fast and slows to a stop; a leap eases in and out.
 	sharp: boolean,
+	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift).
+	lift: any?,
 }
 
 local busyUntil = 0
@@ -73,6 +77,9 @@ type Flying = {
 	spin: number,
 	turn: CFrame,
 	burst: boolean,
+	-- How far it bursts round where it stops, and whose it is.
+	blast: number?,
+	character: Model,
 }
 local flying: { [number]: Flying } = {}
 
@@ -177,6 +184,15 @@ local function slamLater(character: Model, kit: any)
 	end)
 end
 
+-- An Ascend's second motion (`kit.Then`), as its first (`length` seconds) ends, unless that was cut short.
+local function thenLater(character: Model, kit: any, length: number)
+	task.delay(math.max(0, length - 0.03), function()
+		if HeroAnimator.playing(character) == kit.Motion then
+			HeroAnimator.play(character, kit.Then, 1)
+		end
+	end)
+end
+
 -- The dash's lunge in place while the hero is carried from `from` to `to`, its trail, and the lunge cut off at its end.
 local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any)
 	HeroAnimator.play(character, kit.Motion, kit.Speed, nil, true)
@@ -268,6 +284,19 @@ local function cast(key: string)
 		local releases = HeroKit.releases(kit)
 		busyUntil = now + releases[#releases] + RECOVER
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
+	elseif kit.Kind == "Ascend" then
+		busyUntil = now + kit.Land + RECOVER
+		leap = {
+			started = now,
+			from = root.Position,
+			to = root.Position,
+			takeoff = 0,
+			land = kit.Land,
+			sharp = false,
+			lift = kit,
+		}
+		slow(humanoid, kit.Land + RECOVER, 0)
+		thenLater(character, kit, length)
 	else
 		busyUntil = now + length
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
@@ -292,6 +321,8 @@ local function startAiming(key: string)
 		indicator = Indicators.zone()
 	elseif kit.Indicator == "Cone" then
 		indicator = Indicators.cone()
+	elseif kit.Indicator == "Ring" then
+		indicator = Indicators.ring()
 	end
 end
 
@@ -320,6 +351,8 @@ local function updateIndicator()
 		Indicators.placeZone(indicator, feet, kit.Range, spot, kit.Radius)
 	elseif indicator.kind == "Cone" then
 		Indicators.placeCone(indicator, feet, direction, kit.Range)
+	elseif indicator.kind == "Ring" then
+		Indicators.placeRing(indicator, feet, kit.SlamRadius)
 	end
 end
 
@@ -334,6 +367,14 @@ local function updateLeap()
 		return
 	end
 	local t = os.clock() - l.started
+	if l.lift then
+		root.CFrame = CFrame.new(l.from + Vector3.new(0, HeroKit.lift(l.lift, t), 0)) * root.CFrame.Rotation
+		root.AssemblyLinearVelocity = Vector3.zero
+		if t >= l.lift.Land then
+			leap = nil
+		end
+		return
+	end
 	if t < l.takeoff then
 		return
 	end
@@ -379,7 +420,10 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 		end
 		return
 	else
-		HeroAnimator.play(character, kit.Motion, 1)
+		local length = HeroAnimator.play(character, kit.Motion, 1)
+		if kit.Kind == "Ascend" then
+			thenLater(character, kit, length)
+		end
 	end
 	if kit.Kind == "Leap" and landing then
 		landLater(character, landing, kit)
@@ -388,24 +432,103 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	end
 end
 
--- A hero's flying projectile (Config.Heroes[hero].Projectile): the pack's component, with a trail behind it; a
--- Shadowren's dagger spins end over end and glows with shadow, a Rowan's arrow flies point first.
-local function projectileModel(settings: any): BasePart
+-- A hero's flying projectile (Config.Heroes[hero].Projectile): the pack's component, or a glowing `Orb` of magic
+-- for a pack without one, with a trail behind it; a Shadowren's dagger spins end over end and glows with shadow, a
+-- Rowan's arrow flies point first. An orb is `scale` times its usual size (an Ascend's great orb).
+-- A swirl image `fraction` of `gui` across, turning once every `turn` seconds (backwards when negative).
+local function swirlImage(gui: BillboardGui, image: string, fraction: number, turn: number, transparency: number)
+	local label = Instance.new("ImageLabel")
+	label.BackgroundTransparency = 1
+	label.Image = image
+	label.ImageTransparency = transparency
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromScale(0.5, 0.5)
+	label.Size = UDim2.fromScale(fraction, fraction)
+	label.Parent = gui
+	if turn ~= 0 then
+		local info = TweenInfo.new(math.abs(turn), Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1)
+		TweenService:Create(label, info, { Rotation = if turn > 0 then 360 else -360 }):Play()
+	end
+end
+
+-- The dark vortex an orb is (Config's Projectile.Orb.Swirl), round the unseen `part`: a faint glow, two vortices
+-- turning against each other and the energy crackling round them, all facing the camera, and the dark smoke and
+-- violet sparks it leaves behind, `size` studs across.
+local function dressOrb(part: BasePart, size: number)
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromScale(size * 3.2, size * 3.2)
+	gui.LightInfluence = 0
+	gui.Brightness = 1.4
+	gui.MaxDistance = 400
+	gui.Adornee = part
+	swirlImage(gui, Assets.OrbGlow, 1.1, 0, 0.65)
+	swirlImage(gui, Assets.OrbVortex, 0.85, 0.55, 0)
+	swirlImage(gui, Assets.OrbVortex, 0.55, -0.9, 0.3)
+	swirlImage(gui, Assets.OrbWisps, 1, -1.6, 0)
+	gui.Parent = part
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	smoke.Color = ColorSequence.new(Color3.fromRGB(70, 15, 120), Color3.fromRGB(10, 0, 20))
+	smoke.LightEmission = 0
+	smoke.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size * 1.4),
+		NumberSequenceKeypoint.new(1, size * 2.6),
+	})
+	smoke.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.35),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	smoke.Lifetime = NumberRange.new(0.35, 0.6)
+	smoke.Rate = 45
+	smoke.Speed = NumberRange.new(0.5, 1.5)
+	smoke.SpreadAngle = Vector2.new(180, 180)
+	smoke.Rotation = NumberRange.new(0, 360)
+	smoke.RotSpeed = NumberRange.new(-90, 90)
+	smoke.Parent = part
+	local sparks = Instance.new("ParticleEmitter")
+	sparks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	sparks.Color = ColorSequence.new(Color3.fromRGB(230, 110, 255), Color3.fromRGB(110, 30, 220))
+	sparks.LightEmission = 1
+	sparks.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size * 0.35),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	sparks.Lifetime = NumberRange.new(0.2, 0.4)
+	sparks.Rate = 25
+	sparks.Speed = NumberRange.new(size * 2, size * 4)
+	sparks.SpreadAngle = Vector2.new(180, 180)
+	sparks.Parent = part
+end
+
+local function projectileModel(settings: any, scale: number): BasePart
 	local look = settings.Projectile
-	local template =
-		ReplicatedStorage[settings.Pack].Rig.Components[look.Component]:FindFirstChildWhichIsA("MeshPart", true)
-	local part = template:Clone() :: MeshPart
-	for _, d in part:GetChildren() do
-		if d:IsA("JointInstance") then
-			d:Destroy()
+	local part: BasePart
+	if look.Orb then
+		part = Instance.new("Part")
+		part.Shape = Enum.PartType.Ball
+		part.Size = Vector3.one * look.Orb.Size * scale * (if look.Orb.Swirl then 0.55 else 1)
+		part.Material = Enum.Material.Neon
+		part.Color = look.Orb.Color
+		part.CastShadow = false
+		if look.Orb.Swirl then
+			dressOrb(part, look.Orb.Size * scale)
+		end
+	else
+		local template =
+			ReplicatedStorage[settings.Pack].Rig.Components[look.Component]:FindFirstChildWhichIsA("MeshPart", true)
+		part = template:Clone() :: MeshPart
+		for _, d in part:GetChildren() do
+			if d:IsA("JointInstance") then
+				d:Destroy()
+			end
 		end
 	end
 	part.Anchored = true
 	part.CanCollide = false
 	part.CanQuery = false
 	part.CanTouch = false
-	part.Transparency = 0
-	local half = look.TrailHalf or part.Size.Y * 0.3
+	part.Transparency = if look.Orb and look.Orb.Swirl then 1 else 0
+	local half = if look.TrailHalf then look.TrailHalf * scale else part.Size.Y * 0.3
 	local a0 = Instance.new("Attachment")
 	a0.Position = Vector3.new(0, half, 0)
 	a0.Parent = part
@@ -423,8 +546,8 @@ local function projectileModel(settings: any): BasePart
 	if look.Glow then
 		local light = Instance.new("PointLight")
 		light.Color = look.Glow
-		light.Range = 6
-		light.Brightness = 1.5
+		light.Range = (if look.Orb and look.Orb.Swirl then 9 else 6) * scale
+		light.Brightness = if look.Orb and look.Orb.Swirl then 1.8 else 1.5
 		light.Parent = part
 	end
 	part.Parent = effects()
@@ -437,7 +560,9 @@ local function onProjectile(
 	origin: Vector3,
 	direction: Vector3,
 	speed: number,
-	range: number
+	range: number,
+	scale: number?,
+	blast: number?
 )
 	local name = character and character:GetAttribute("Hero")
 	local settings = name and Config.Heroes[name]
@@ -448,7 +573,7 @@ local function onProjectile(
 		return
 	end
 	flying[id] = {
-		dagger = projectileModel(settings),
+		dagger = projectileModel(settings, scale or 1),
 		origin = origin,
 		direction = direction,
 		speed = speed,
@@ -457,8 +582,26 @@ local function onProjectile(
 		spin = settings.Projectile.Spin or 0,
 		turn = settings.Projectile.Turn or CFrame.identity,
 		burst = settings.Projectile.Burst == true,
+		blast = blast,
+		character = character,
 	}
 	HeroSounds.event(character, settings.Pack, "Release")
+end
+
+-- A great orb bursting at `at` over `radius` studs: a blast of dark magic in the air there and, when the ground is
+-- near enough below to be reached, the slam's shockwaves over it.
+local function blastAt(character: Model, at: Vector3, radius: number)
+	ShadowEffects.blast(at, radius)
+	groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
+	local below = Workspace:Raycast(at + Vector3.new(0, 1, 0), Vector3.new(0, -(radius + 1), 0), groundRay)
+	if below then
+		ShadowEffects.slam(below.Position, radius)
+	end
+	shakeNear(at, 0.9)
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	if settings and settings.Pack and character.Parent then
+		HeroSounds.event(character, settings.Pack, "Blast")
+	end
 end
 
 local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
@@ -466,7 +609,9 @@ local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
 	if f then
 		f.dagger:Destroy()
 		flying[id] = nil
-		if hit and f.burst then
+		if f.blast then
+			blastAt(f.character, at, f.blast)
+		elseif hit and f.burst then
 			ShadowEffects.burst(at)
 		end
 	end

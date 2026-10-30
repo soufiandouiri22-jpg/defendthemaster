@@ -791,7 +791,8 @@ Config.Minions = {
 }
 
 -- The heroes. Each looks like a Roblox R15 avatar put together from catalog items (Docs/Third_Party.md): a classic
--- shirt and pants, hair, a face accessory, and one skin colour on every body part. Faces come from the catalog too: R15
+-- shirt and pants, hair, a face accessory, a hat or hood and a cape when he has them (`HatAccessory`, `BackAccessory`),
+-- and one skin colour on every body part. Faces come from the catalog too: R15
 -- heads are dynamic heads, on which a Decal face does not render. Every player plays the hero he picked in the draft
 -- (`DefaultHero` when there is none), and comes back on a spawn pad after dying (Config.Respawn).
 --
@@ -806,11 +807,13 @@ Config.Minions = {
 -- lands at its time in the motion, on the server. For every hero, every swing, shot and throw goes where the crosshair
 -- points, upwards and downwards as well (owner, 2026-10-29); a leap lands on the spot aimed at, a dash keeps to the
 -- ground. Indicators (design 06): "Arrow" (a skillshot), "Zone" (a range
--- round the hero and the spot aimed at), "Cone". A combo hit with a `ProjectileSpeed` is a shot instead of a swing,
+-- round the hero and the spot aimed at), "Cone", "Ring" (what a slam round him reaches). A combo hit with a `ProjectileSpeed` is a shot instead of a swing,
 -- and its `Recover` the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
 -- `Pierce` strikes everyone it passes once. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
+-- An "Ascend" plays its `Motion` and then its `Then`, lifting him off the ground meanwhile (HeroKit.lift), and lets
+-- one projectile go at `Release`, `OrbScale` times his usual orb, which bursts over `Blast` studs where it stops.
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first.
 --
 -- In the armory his class's build is recommended (Config.ClassBuilds), or his own `Build` when he has one.
@@ -818,7 +821,8 @@ Config.Minions = {
 -- In the menu (the lobby): `Role` is his class (Config.Classes), `Description` his line on the cards. A `Starter`
 -- hero is every player's from the start; one with a `Price` is sold for coins in the heroes' shop (Shared.HeroShop),
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
--- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there and the colour of his aura.
+-- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
+-- when that clip looks aside, and the colour of his aura.
 -- Every hero gets one, a pose from his own pack as Shadowren's weapon pose.
 Config.Heroes = {
 	Shadowren = {
@@ -961,13 +965,12 @@ Config.Heroes = {
 			Shirt = 6985101011,
 			Pants = 102410804434863,
 			HairAccessory = "136456876434698",
-			-- Roblox's default head comes with a smile painted on; his face is only a short dark stripe for a mouth, in
-			-- the middle of his face. A picture on the round head lands askew, so the stripe is a thin strip on it.
-			BlankFace = true,
-			Mouth = { Length = 0.26, Thickness = 0.032, Height = -0.33, Colour = Color3.fromRGB(24, 18, 16) },
+			-- An animated head with a cool, striking anime stare.
+			Head = 71608108882725,
+			Mood = 14618207727,
 			Skin = Color3.fromRGB(232, 196, 168),
 		},
-		Portrait = { Image = "rbxassetid://97165426487285", Face = { 160, 40, 620 } },
+		Portrait = { Image = "rbxassetid://96167601016805", Face = { 200, 40, 620 } },
 		Icons = {
 			M1 = "rbxassetid://74397042098977",
 			M2 = "rbxassetid://94119815193611",
@@ -1074,6 +1077,184 @@ Config.Heroes = {
 			},
 		},
 	},
+	Mavorak = {
+		Role = "Mage",
+		Description = "Hurls dark magic from his staff.",
+		Starter = true,
+		-- His ready stance looks aside, so he stands turned until his face nearly meets the camera, with his raised hand
+		-- still clear of it.
+		Showcase = { Motion = "RA-ELM-017", Turn = -28, Aura = Color3.fromRGB(150, 70, 230) },
+		Health = 720,
+		-- His kit deals magic damage, growing with Magic (Config.Items).
+		Scales = "Magic",
+		Look = {
+			Shirt = 2715706272,
+			Pants = 2715707499,
+			-- Long black hair falling from under his hood, as on his portrait.
+			HairAccessory = "15796404798",
+			HatAccessory = "127306972712760",
+			BackAccessory = "13374923791",
+			-- Rowan's skin under an animated head with purple cyber eyes in shadow.
+			Head = 80336341746719,
+			Mood = 14618207727,
+			Skin = Color3.fromRGB(232, 196, 168),
+		},
+		Portrait = { Image = "rbxassetid://82768668500650", Face = { 235, 40, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Mavorak, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Mavorak, keyed by Tools/key_icons.py --glow).
+		Icons = {
+			M1 = "rbxassetid://131342780006544",
+			M2 = "rbxassetid://95895466142267",
+			E = "rbxassetid://126999387085945",
+			R = "rbxassetid://113799512510557",
+			Dash = "rbxassetid://134137025780012",
+		},
+		Pack = "Elementalist",
+		-- The staff hangs from his right hand (Tools/keyframe_pack.py).
+		Weapons = { "Staff" },
+		-- His spells in flight (HeroControls): a dark vortex.
+		Projectile = {
+			-- No ball but a dark vortex (owner 2026-10-30): two near-black vortices with violet arms turning against
+			-- each other in crackling energy, about `Size` times 3.2 studs across, leaving dark smoke and violet
+			-- sparks behind (HeroControls' projectileModel).
+			Orb = { Size = 1.1, Color = Color3.fromRGB(150, 40, 255), Swirl = true },
+			Trail = { Color3.fromRGB(140, 40, 230), Color3.fromRGB(10, 0, 20) },
+			TrailHalf = 0.4,
+			Glow = Color3.fromRGB(120, 30, 220),
+			Burst = true,
+		},
+		Motions = {
+			Idle = "RA-ELM-017",
+			Run = "RA-ELM-005",
+			RunLeft = "RA-ELM-006",
+			RunRight = "RA-ELM-007",
+			Back = "RA-ELM-002",
+			Takeoff = "RA-ELM-011",
+			Air = "RA-ELM-012",
+			Land = "RA-ELM-013",
+			Death = "RA-ELM-028",
+		},
+		-- The times are where the staff or a hand thrusts forward, or the staff strikes the ground, in the pack's
+		-- clips (measured on the hero; the pack's sound markers fall there too).
+		Kit = {
+			-- Three orbs in turn, each at the first enemy in its way: a staff swing, a push of both hands and a
+			-- sweeping cast, the last the hardest. A little under Rowan's damage a second (46 against 48), from a little
+			-- less far: a mage's strength is in his spells (owner, 2026-10-30).
+			--
+			-- His Ratios are lower than the others' as Magic comes about twice as fast from items as Attack (Spell Tome
+			-- 20 against Iron Sword's 10, Stormcrown 90 against Eclipse Edge's 55), so he grows as fast as they do.
+			M1 = {
+				Kind = "Combo",
+				Speed = 1.2,
+				Ratio = 0.35,
+				Reset = 1.5,
+				Hits = {
+					{
+						Motion = "RA-ELM-020",
+						Hit = 0.30,
+						Recover = 0.25,
+						Damage = 26,
+						Range = 30,
+						ProjectileSpeed = 90,
+						Width = 2,
+					},
+					{
+						Motion = "RA-ELM-034",
+						Hit = 0.37,
+						Recover = 0.30,
+						Damage = 30,
+						Range = 30,
+						ProjectileSpeed = 90,
+						Width = 2,
+					},
+					{
+						Motion = "RA-ELM-041",
+						Hit = 0.45,
+						Recover = 0.40,
+						Damage = 40,
+						Range = 30,
+						ProjectileSpeed = 90,
+						Width = 2,
+					},
+				},
+			},
+			-- He swings his staff up and strikes it into the ground: a shockwave of dark magic strikes everyone
+			-- round him at once (owner, 2026-10-30), SlamRadius studs, as far as the shockwave's shade (Range).
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-ELM-053",
+				Indicator = "Ring",
+				Cooldown = 9,
+				Hits = { 0.75 },
+				Slam = 0.75,
+				SlamRadius = 12,
+				SlamDamage = 120,
+				SlamRatio = 0.8,
+				Damage = 120,
+				Ratio = 0.8,
+				Range = 12,
+				Angle = 360,
+			},
+			-- Three orbs fanned out ahead of him: strong on a group, mostly one of them on a single foe.
+			E = {
+				Kind = "Throw",
+				Motion = "RA-ELM-062",
+				Indicator = "Cone",
+				Cooldown = 10,
+				Release = 0.53,
+				Count = 3,
+				Spread = 30,
+				ProjectileSpeed = 90,
+				Range = 34,
+				Width = 2,
+				Damage = 80,
+				Ratio = 0.5,
+			},
+			-- He rises into the air (Motion), gathers a great orb over his head while he hangs there (Then) and
+			-- hurls it where he aims (owner, 2026-10-30): it bursts at the first enemy, wall or floor it meets, or at
+			-- the end of its range, striking everyone within Blast studs of it.
+			R = {
+				Kind = "Ascend",
+				Motion = "RA-ELM-050",
+				Then = "RA-ELM-060",
+				Indicator = "Arrow",
+				Cooldown = 40,
+				-- He rises Rise studs from RiseStart to RiseEnd seconds after the cast, comes down from Fall and
+				-- stands again at Land; the orb leaves his hands at Release, as he flings his arms open (Then's 1.70
+				-- seconds, its fastest move, owner 2026-10-30).
+				Rise = 6,
+				RiseStart = 0.1,
+				RiseEnd = 1.1,
+				Release = 3.0,
+				Fall = 3.95,
+				Land = 4.35,
+				ProjectileSpeed = 70,
+				Range = 45,
+				Width = 4,
+				-- How much larger than his other orbs it is.
+				OrbScale = 4,
+				Blast = 10,
+				-- The game's hardest blow, to everyone in the blast, as he hangs still for three seconds before it
+				-- and anyone can step out of its way (owner, 2026-10-30): more than Shadowren's 240 on one foe.
+				Damage = 320,
+				Ratio = 1,
+			},
+			-- A quick blink to where he aims (Shift), in a trail of shadow, letting one orb go that way as his hands
+			-- rise (owner 2026-10-30); as much as Rowan's arrow in his hop.
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-ELM-050",
+				Speed = 1.5,
+				Cooldown = 6,
+				Range = 14,
+				Width = 3,
+				Start = 0.05,
+				Move = 0.3,
+				Stop = 0.5,
+				Shot = { Release = 0.30, Damage = 35, Ratio = 0.25, Range = 30, ProjectileSpeed = 90, Width = 2 },
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -1081,11 +1262,12 @@ Config.DefaultHero = "Shadowren"
 -- match goes on; and `Streak` more for each time he died within `StreakWindow` seconds of his last death, at most
 -- `StreakMax` more. Surviving StreakWindow seconds clears it.
 -- A hero on one of his own team's spawn pads heals `Heal` of his health a second, in ticks of `Tick` seconds, unless
--- an enemy hero hit him in the last `CombatPause` seconds (design 03).
+-- an enemy (a hero, a minion or a Master) hit him in the last `CombatPause` seconds, so he cannot camp there and heal
+-- through a fight (owner, 2026-10-30; design 03).
 Config.Pads = {
 	Heal = 0.10,
 	Tick = 1,
-	CombatPause = 3,
+	CombatPause = 5,
 }
 
 Config.Respawn = {
@@ -1096,15 +1278,18 @@ Config.Respawn = {
 	StreakMax = 9,
 }
 
--- Bots fill both teams up to `TeamSize` heroes, playing `Hero` unless the draft gave them another (a player who
--- leaves is played on by a bot with his hero), each with its own hero's kit. A bot goes after an enemy hero anywhere in the
+-- Bots fill both teams up to `TeamSize` heroes, each picking in the draft the first hero of `Lineup` his team has
+-- not picked yet (players' picks count too), else `Hero` (a player who leaves is played on by a bot with his hero),
+-- each with its own hero's kit. A bot goes after an enemy hero anywhere in the
 -- arena: the nearest one nobody of its team fights yet (no other bot chose him and no player of its team is within
 -- `Taken` studs of him), and only when every one is taken the nearest of them, to help. With no enemy hero alive it
 -- fights the nearest other enemy within `Sight` studs, else the nearest enemy minion, else waits at its lane's gate. It
 -- plays as a person would, not
 -- perfectly: after an ability, and on a new target, it waits `Reaction` seconds (between Min and Max) before its next
--- ability; between its swings it rests up to `Rest` seconds; what it shoots or throws at a hero leads him by `Lead` of
--- the way and flies up to `Miss` degrees off, its leaps and dashes land up to `Stray` studs from where it aimed. An
+-- ability; between its swings it rests up to `Rest` seconds; what it shoots or throws leads its target by `Lead` of
+-- the way and flies up to `Miss` studs beside that, near or far (owner, 2026-10-30: the archers missed everything with
+-- 15 degrees and 0.2), kept on him till it lets go as a player keeps his crosshair on him, its leaps and dashes land up
+-- to `Stray` studs from where it aimed. An
 -- archer (a hero whose combo shoots, as Rowan) keeps `Keep` studs from an enemy hero, hops away from one within
 -- `Flee`, looses his fan of arrows at a hero within `Fan` of its range, and into minions when 3 stand within `Crowd`
 -- studs of the one he aims at. Only while `Buys` is on does a bot shop: at the armory it buys its hero's build in
@@ -1113,12 +1298,15 @@ Config.Respawn = {
 Config.Bots = {
 	TeamSize = 4,
 	Hero = "Shadowren",
+	-- Two Shadowren, a Rowan and a Mavorak a team, whichever of them a player picks (owner, 2026-10-30); Mavorak last,
+	-- so a bot picking before the player leaves him free.
+	Lineup = { "Shadowren", "Rowan", "Shadowren", "Mavorak" },
 	Sight = 25,
 	Taken = 20,
 	Reaction = { Min = 1.3, Max = 2.6 },
 	Rest = 0.9,
-	Lead = 0.2,
-	Miss = 15,
+	Lead = 0.85,
+	Miss = 2,
 	Stray = 6,
 	Keep = 18,
 	Flee = 8,
@@ -1148,6 +1336,13 @@ Config.Combat = {
 	WalkSpeed = 16,
 	AttackWalkSpeed = 5,
 	Slack = 4,
+	-- The sounds of every hit, for everyone on everything (HitFeedback), in turn, the first again after
+	-- `HitSeriesReset` seconds without a hit: the Ranger pack's three body impacts, for every hero (owner,
+	-- 2026-10-30; the Shadow Duelist pack holds the same ones). The other candidates stay in UiSound: "HitBody1",
+	-- "HitBody2", "HitBody3" (Mixkit's three punches to the body), "HitPunch" (the single strong punch), "Hit", "HitLow",
+	-- "HitRaw" (Tools/hit_sound.py), "HitGolf", "HitHeart".
+	HitSounds = { "BodyImpact1", "BodyImpact2", "BodyImpact3" },
+	HitSeriesReset = 1,
 }
 
 -- The arena's light, one of `Presets` by name: "Day" is the warm, sunny afternoon of the designs, "Cool" the same

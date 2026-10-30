@@ -25,6 +25,16 @@
 					"$path": "Vendor/Ranger/Animations/Included Rig.rbxmx"
 				}
 			},
+			"Elementalist": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/Elementalist/Build/ComponentPlayer"
+				},
+				"Rig": {
+					"$path": "Vendor/Elementalist/Animations/Included Rig.rbxmx"
+				}
+			},
 			"GreataxeBerserker": {
 				"$className": "Folder",
 				"Rig": {

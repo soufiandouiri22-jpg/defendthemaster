@@ -63,12 +63,16 @@ local function update(dt: number)
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	-- Held only by a hero with no menu open: without one (the draft, the end of a match) the mouse is free.
+	UserInputService.MouseBehavior = if enabled
+			and root
+			and humanoid
+		then Enum.MouseBehavior.LockCenter
+		else Enum.MouseBehavior.Default
 	if not root or not humanoid then
 		return
 	end
 	camera.CameraType = Enum.CameraType.Scriptable
-	UserInputService.MouseBehavior = if enabled then Enum.MouseBehavior.LockCenter else Enum.MouseBehavior.Default
-	UserInputService.MouseIconEnabled = not enabled
 
 	local rotation = CFrame.Angles(0, math.rad(yaw), 0) * CFrame.Angles(math.rad(pitch), 0, 0)
 	local focus = root.Position

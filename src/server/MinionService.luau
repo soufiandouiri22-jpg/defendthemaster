@@ -436,9 +436,9 @@ local function count(team: string): number
 	return n
 end
 
-local function spawn(team: string, kind: string, door: CFrame)
+local function spawn(team: string, kind: string, door: CFrame): BasePart?
 	if count(team) >= SETTINGS.MaxPerTeam then
-		return
+		return nil
 	end
 	local stats: Stats = SETTINGS.Kinds[kind]
 	local path = paths[door]
@@ -484,6 +484,7 @@ local function spawn(team: string, kind: string, door: CFrame)
 	root.Parent = folder
 	byRoot[root] = m
 	table.insert(minions, m)
+	return root
 end
 
 -- One wave from every doorway, the minions leaving one after another.
@@ -561,6 +562,14 @@ export type Layout = {
 	map: Folder,
 }
 
+-- A `team` minion of `kind` at `at`, whose path ends where it stands (Studio's tests and test ground); its root, nil
+-- when the team has its most already.
+function MinionService.spawnAt(team: string, kind: string, at: Vector3): BasePart?
+	local door = CFrame.new(at)
+	paths[door] = { flat(at) }
+	return spawn(team, kind, door)
+end
+
 function MinionService.start(layout: Layout)
 	local net = ReplicatedStorage:FindFirstChild("Net") or Instance.new("Folder")
 	net.Name = "Net"
@@ -587,11 +596,7 @@ function MinionService.start(layout: Layout)
 		end
 		local spawnMinion = Instance.new("BindableFunction")
 		spawnMinion.Name = "SpawnMinion"
-		spawnMinion.OnInvoke = function(team: string, kind: string, at: Vector3)
-			local door = CFrame.new(at)
-			paths[door] = { flat(at) }
-			spawn(team, kind, door)
-		end
+		spawnMinion.OnInvoke = MinionService.spawnAt
 		spawnMinion.Parent = dev
 	end
 

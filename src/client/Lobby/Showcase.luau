@@ -175,14 +175,15 @@ function Showcase.show(hero: string)
 	local model = (source :: Model):Clone()
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if humanoid and root then
-		-- Standing on the podium facing the camera (+Z).
-		local height = humanoid.HipHeight + root.Size.Y / 2
-		model:PivotTo(at * CFrame.new(0, height, 0) * CFrame.Angles(0, math.pi, 0))
-	end
-	model.Parent = Workspace
 	local settings = Config.Heroes[hero]
 	local showcase = settings.Showcase
+	if humanoid and root then
+		-- Standing on the podium facing the camera (+Z), turned by his pose's `Turn` when it looks aside.
+		local height = humanoid.HipHeight + root.Size.Y / 2
+		local turn = math.rad(showcase and showcase.Turn or 0)
+		model:PivotTo(at * CFrame.new(0, height, 0) * CFrame.Angles(0, math.pi + turn, 0))
+	end
+	model.Parent = Workspace
 	local motion = nil
 	if settings.Pack then
 		motion = Motion.new(model, settings.Pack)

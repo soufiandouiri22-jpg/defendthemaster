@@ -4,12 +4,14 @@
 
 local Debris = game:GetService("Debris")
 local ContentProvider = game:GetService("ContentProvider")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
+local Loading = require(ReplicatedFirst:WaitForChild("Loading"))
 local Preferences = require(script.Parent.Preferences)
 
 local UiSound = {}
@@ -57,13 +59,15 @@ local CUES: { [string]: Cue } = {
 	Potion = { asset = Assets.CorkPull, start = 0, length = 0.4, gain = 0.8 },
 	Scoreboard = { asset = Assets.PaperHandling, start = 0.08, length = 0.37, gain = 0.27 },
 
+	-- The last three seconds of the player's turn in the draft: the buy phase's timpani tick.
+	CountTick = { asset = Assets.CountTick, start = 0, length = 0.8, gain = 0.5 },
+
 	-- A hero coming back on his pad, and a hero's healing there beginning.
 	Respawn = { asset = Assets.MagicExit, start = 0.15, length = 1.85, gain = 0.55 },
 	PadHeal = { asset = Assets.MagicGlow, start = 0, length = 1.2, gain = 3.75, near = 10, far = 50 },
 
-	-- The Sun Crown: taken by the enemy, falling with its carrier, fading.
+	-- The Sun Crown: taken by the enemy, fading.
 	CrownEnemy = { asset = Assets.EvilBell, start = 0.5, length = 3, gain = 1.35 },
-	CrownDropped = { asset = Assets.CrownDrop, start = 0, length = 0.5, gain = 0.5, far = 140 },
 	CrownFades = { asset = Assets.FallingShimmer, start = 0.4, length = 2.5, gain = 1.1 },
 
 	-- The minions, only near: a spitter's fireball leaving and bursting, a biter's bite, a minion crumbling (its stone
@@ -76,6 +80,25 @@ local CUES: { [string]: Cue } = {
 
 	-- A Master falling.
 	MasterFalls = { asset = Assets.DeepThud, start = 0, length = 4.5, gain = 0.8 },
+
+	-- Every hit, by anyone on anything (HitFeedback, Config.Combat.HitSounds).
+	Hit = { asset = Assets.Hit, start = 0, gain = 0.5 },
+	HitLow = { asset = Assets.HitLow, start = 0, gain = 0.5 },
+	HitRaw = { asset = Assets.HitRaw, start = 0, gain = 0.5 },
+	-- Mixkit's, brought level with HitRaw (their loudest 50 ms: golf 14.3 dB softer, heartbeat 5.8, punch 6.4); the
+	-- punch then 3.5 dB softer again (owner, 2026-10-29).
+	HitGolf = { asset = Assets.HitGolf, start = 0, gain = 2.6 },
+	HitHeart = { asset = Assets.HitHeart, start = 0, gain = 0.98 },
+	HitPunch = { asset = Assets.HitPunch, start = 0, gain = 0.7 },
+	-- The three body punches, in a row (Config.Combat.HitSounds); the file is 0.546 of HitPunch's level, so 1.28 plays
+	-- them as loud as HitPunch now.
+	HitBody1 = { asset = Assets.HitBody, start = 0, length = 0.411, gain = 1.28 },
+	HitBody2 = { asset = Assets.HitBody, start = 0.511, length = 0.437, gain = 1.28 },
+	HitBody3 = { asset = Assets.HitBody, start = 1.048, length = 0.417, gain = 1.28 },
+	-- The Ranger pack's body impacts, already as loud as the punch played last.
+	BodyImpact1 = { asset = Assets.HitBodyImpact, start = 0, length = 0.355 },
+	BodyImpact2 = { asset = Assets.HitBodyImpact, start = 0.455, length = 0.61 },
+	BodyImpact3 = { asset = Assets.HitBodyImpact, start = 1.165, length = 0.457 },
 }
 -- How long a cut sound takes to fade out at its end, so it stops without a click.
 local FADE = 0.2
@@ -138,8 +161,11 @@ local function playLoaded(sound: Sound, parent: Instance, started: (() -> ())?)
 end
 
 -- A sound of the cue `name` at `volume` and `pitch`, parented to `parent` and playing as soon as it has loaded; nil
--- when there is no such cue.
+-- when there is no such cue, or while the loading screen is up (the menu behind it hears the mouse pass over it).
 local function start(name: string, parent: Instance, volume: number?, pitch: number?, group: string): (Sound?, Cue?)
+	if not Loading.isGone() then
+		return nil, nil
+	end
 	local speed = pitch or 1
 	local sound = Instance.new("Sound")
 	sound.PlaybackSpeed = speed
@@ -189,6 +215,58 @@ end
 -- Plays `name` flat, at `volume` (1 when not given) and a little higher or lower by `pitch` (1 is as recorded).
 function UiSound.play(name: string, volume: number?, pitch: number?)
 	start(name, SoundService, volume, pitch, "Interface")
+end
+
+-- An announcement goes before every other sound (owner, 2026-10-30): the music and the effects sink to DUCK of
+-- their volume within DUCK_IN seconds while it plays and come back over DUCK_OUT, and a new one fades the one before
+-- out over CUT seconds instead of playing over it.
+local DUCK, DUCK_IN, DUCK_OUT, CUT = 0.35, 0.1, 0.6, 0.15
+local announcement: Sound? = nil
+local duckLevel = Instance.new("NumberValue")
+duckLevel.Value = 1
+duckLevel.Changed:Connect(function(level)
+	Preferences.duck(level)
+end)
+local duckTween: Tween? = nil
+local function duckTo(level: number, seconds: number)
+	if duckTween then
+		duckTween:Cancel()
+	end
+	duckTween = TweenService:Create(duckLevel, TweenInfo.new(seconds), { Value = level })
+	duckTween:Play()
+end
+
+-- Plays `name` flat as an announcement (a kill's sting), at `volume`.
+function UiSound.announce(name: string, volume: number?)
+	local before = announcement
+	if before and before.Parent then
+		TweenService:Create(before, TweenInfo.new(CUT), { Volume = 0 }):Play()
+		Debris:AddItem(before, CUT + 0.05)
+	end
+	local sound = start(name, SoundService, volume, nil, "Interface")
+	announcement = sound
+	if not sound then
+		return
+	end
+	duckTo(DUCK, DUCK_IN)
+	task.spawn(function()
+		local waited = os.clock()
+		while sound.Parent and not sound.IsPlaying and os.clock() - waited < 3 do
+			task.wait(0.05)
+		end
+		while sound.Parent and sound.IsPlaying and sound.Volume > 0 do
+			task.wait(0.05)
+		end
+		if announcement == sound then
+			announcement = nil
+			duckTo(1, DUCK_OUT)
+		end
+	end)
+end
+
+-- Whether an announcement is playing now.
+function UiSound.announcing(): boolean
+	return announcement ~= nil and announcement.Parent ~= nil
 end
 
 -- Plays `name` in the world: from `where`, a part (following it) or a point, fading out with distance.
