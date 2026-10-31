@@ -38,8 +38,10 @@ end
 if Workspace:GetAttribute("Role") == "Lobby" then
 	local Menu = require(script.Lobby.Menu)
 	local Showcase = require(script.Lobby.Showcase)
+	local VersusView = require(script.VersusView)
 	Music.start()
 	Menu.start()
+	task.spawn(VersusView.travel)
 	task.spawn(function()
 		local started = os.clock()
 		while not Showcase.model() and os.clock() - started < 10 do

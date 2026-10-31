@@ -7,8 +7,10 @@
 -- and its great orb bursts where it stops. Other heroes' motions and every thrown dagger and shot arrow come
 -- from the server; while an attack plays, the client keeps telling the server where the crosshair points, as every
 -- hit but a leap's landing and a dash's path goes there (HeroKit.follows). The crosshair (design 09) turns red on an
--- enemy and blue on an ally.
+-- enemy the next left click would hit (owner, 2026-10-31: out of reach it stays as it is), while an ability is aimed
+-- once any enemy stands where it would strike (its indicator's ring, line, cone or slam), and blue on an ally.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -649,15 +651,69 @@ local function crosshair(): ImageLabel
 	return image
 end
 
-local function teamOf(instance: Instance?): string?
+-- What `instance` belongs to that fights for a team (a hero, a Master, a minion), and that team.
+local function teamOf(instance: Instance?): (Instance?, string?)
 	while instance and instance ~= Workspace do
 		local team = instance:GetAttribute("Team")
 		if team then
-			return team
+			return instance, team
 		end
 		instance = instance.Parent
 	end
-	return nil
+	return nil, nil
+end
+
+local reachRay = RaycastParams.new()
+reachRay.FilterType = Enum.RaycastFilterType.Exclude
+local extents: { [Model]: { number } } = setmetatable({}, { __mode = "k" }) :: any
+
+-- Whether the hero's next left click (the combo's next hit) would strike `target` where the crosshair is on it, at
+-- `aim`: only what the server strikes (a minion's root part or a Combatant), by the server's own measure
+-- (HeroKit.body, HeroKit.hitReaches), and a shot only with no wall in its way.
+local function reaches(target: Instance, aim: Vector3): boolean
+	local _, root, _, settings = hero()
+	local kit = settings and settings.Kit.M1
+	if not root or not kit or kit.Kind ~= "Combo" then
+		return false
+	end
+	local minions = Workspace:FindFirstChild("Minions")
+	if not (minions and target.Parent == minions) and not CollectionService:HasTag(target, "Combatant") then
+		return false
+	end
+	local body = HeroKit.body(target, extents)
+	local hit = kit.Hits[if os.clock() <= comboUntil then combo % #kit.Hits + 1 else 1]
+	local facing = root.CFrame.LookVector
+	if not body or not HeroKit.hitReaches(hit, root.Position, aim, facing, body) then
+		return false
+	end
+	if not hit.ProjectileSpeed then
+		return true
+	end
+	local muzzle = HeroKit.muzzle(root.Position)
+	local from = HeroKit.shotOrigin(muzzle, HeroKit.aimDirection(muzzle, aim, facing))
+	reachRay.FilterDescendantsInstances = HeroKit.leapIgnore()
+	return Workspace:Raycast(from, aim - from, reachRay) == nil
+end
+
+-- Whether the ability aimed now (`key`) would strike any enemy where it stands, by the server's own measure
+-- (HeroKit.abilityStrikes): in its leap's ring where it lands, on its projectiles' way up to the first wall (and in
+-- the burst there), or in its sweeps and slam.
+local function abilityStrikes(key: string): boolean
+	local character, root, humanoid, settings = hero()
+	local kit = settings and settings.Kit[key]
+	if not character or not root or not humanoid or not kit then
+		return false
+	end
+	local aim = HeroCamera.aim()
+	local facing = root.CFrame.LookVector
+	local landing, shots =
+		HeroKit.aimed(kit, root.Position, aim, facing, heightOf(root, humanoid), HeroKit.leapIgnore())
+	for _, foe in HeroKit.foes(character:GetAttribute("Team"), extents) do
+		if HeroKit.abilityStrikes(kit, root.Position, aim, facing, landing, shots, foe.body) then
+			return true
+		end
+	end
+	return false
 end
 
 function HeroControls.start()
@@ -722,11 +778,14 @@ function HeroControls.start()
 		updateFlying()
 		local character = player.Character
 		local own = character and character:GetAttribute("Team")
-		local team = teamOf(HeroCamera.target())
-		cross.Image = if team == nil
-			then Assets.CrosshairNeutral
-			elseif team == own then Assets.CrosshairAlly
-			else Assets.CrosshairEnemy
+		local target, team = teamOf(HeroCamera.target())
+		local red = if aiming
+			then abilityStrikes(aiming)
+			else target ~= nil and team ~= nil and team ~= own and reaches(target, HeroCamera.aim())
+		cross.Image = if red
+			then Assets.CrosshairEnemy
+			elseif target and team == own then Assets.CrosshairAlly
+			else Assets.CrosshairNeutral
 	end)
 end
 

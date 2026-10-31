@@ -5,6 +5,8 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
+local Config = require(script.Parent.Config)
+
 local HeroKit = {}
 
 function HeroKit.flat(v: Vector3): Vector3
@@ -118,6 +120,228 @@ function HeroKit.segmentDistance(a: Vector3, b: Vector3, p: Vector3): (number, n
 	local length = ab:Dot(ab)
 	local t = if length > 0 then math.clamp(ap:Dot(ab) / length, 0, 1) else 0
 	return (ap - ab * t).Magnitude, t
+end
+
+-- A fighter as every hit sees it: where it stands, how wide it is, and the heights its body reaches from `bottom` to
+-- `top`.
+export type Body = { position: Vector3, radius: number, bottom: number, top: number }
+
+-- The body of a minion's root part (Workspace.Minions) or a Combatant model. `extents` keeps a model's heights round
+-- its pivot as first measured, as its bounding box moves with its animation.
+function HeroKit.body(instance: Instance, extents: { [Model]: { number } }?): Body?
+	if instance:IsA("BasePart") then
+		local position = instance.Position
+		local half = Config.Minions.Height / 2
+		return {
+			position = position,
+			radius = Config.Minions.Radius,
+			bottom = position.Y - half,
+			top = position.Y + half,
+		}
+	elseif instance:IsA("Model") then
+		local position = instance:GetPivot().Position
+		local extent = extents and extents[instance]
+		if not extent then
+			local box, size = instance:GetBoundingBox()
+			extent = { box.Position.Y - size.Y / 2 - position.Y, box.Position.Y + size.Y / 2 - position.Y }
+			if extents then
+				extents[instance] = extent
+			end
+		end
+		return {
+			position = position,
+			radius = instance:GetAttribute("Radius") or 1.5,
+			bottom = position.Y + extent[1],
+			top = position.Y + extent[2],
+		}
+	end
+	return nil
+end
+
+-- Where a projectile leaves a hero whose muzzle (HeroKit.muzzle) is at `muzzle`, flying along `direction`.
+function HeroKit.shotOrigin(muzzle: Vector3, direction: Vector3): Vector3
+	return muzzle + direction * 1.5
+end
+
+-- Where along its way from `from` to `to` (0-1) a projectile `width` studs wide touches `body`, if it does: within its
+-- width of the body's edge, at a height the body reaches.
+function HeroKit.shotTouch(from: Vector3, to: Vector3, width: number, body: Body): number?
+	local distance, along = HeroKit.segmentDistance(from, to, body.position)
+	local height = from.Y + (to.Y - from.Y) * along
+	local half = width / 2
+	if distance <= body.radius + half and height >= body.bottom - half and height <= body.top + half then
+		return along
+	end
+	return nil
+end
+
+-- Whether `hit`, one of a hero's combo hits (Kit.M1.Hits), struck from a hero whose root part is at `root` towards
+-- `aim` (`facing` when he aims at himself), reaches `body`: a swing as CombatService's strikeCone measures it, a shot
+-- anywhere on the way it flies as its stepProjectiles does. Walls in a shot's way are left to the caller.
+function HeroKit.hitReaches(hit: any, root: Vector3, aim: Vector3, facing: Vector3, body: Body): boolean
+	local muzzle = HeroKit.muzzle(root)
+	local direction = HeroKit.aimDirection(muzzle, aim, facing)
+	if not hit.ProjectileSpeed then
+		return HeroKit.inCone(
+			muzzle,
+			direction,
+			hit.Range,
+			hit.Angle,
+			body.position,
+			body.radius,
+			body.bottom,
+			body.top
+		)
+	end
+	local from = HeroKit.shotOrigin(muzzle, direction)
+	return HeroKit.shotTouch(from, from + direction * hit.Range, hit.Width, body) ~= nil
+end
+
+-- A fighter a hit may strike, with its body.
+export type Foe = { instance: Instance, body: Body }
+
+-- Every living fighter not of `team` that hits strike: the minions (their root parts in Workspace.Minions) and the
+-- Combatants (heroes, Masters). `extents` as for HeroKit.body.
+function HeroKit.foes(team: string, extents: { [Model]: { number } }?): { Foe }
+	local found = {}
+	local minions = Workspace:FindFirstChild("Minions")
+	if minions then
+		for _, root in minions:GetChildren() do
+			if root:IsA("BasePart") and root:GetAttribute("Team") ~= team and not root:GetAttribute("Dead") then
+				table.insert(found, { instance = root, body = HeroKit.body(root) :: Body })
+			end
+		end
+	end
+	for _, model in CollectionService:GetTagged("Combatant") do
+		if model:IsA("Model") and model:GetAttribute("Team") ~= team then
+			local humanoid = model:FindFirstChildOfClass("Humanoid")
+			if if humanoid then humanoid.Health > 0 else (model:GetAttribute("Health") or 0) > 0 then
+				table.insert(found, { instance = model, body = HeroKit.body(model, extents) :: Body })
+			end
+		end
+	end
+	return found
+end
+
+-- Whether a swing from `origin` along `direction`, `range` studs to the target's edge and `angle` degrees wide (360
+-- all round), strikes `body`, at the heights its body reaches.
+function HeroKit.swingStrikes(origin: Vector3, direction: Vector3, range: number, angle: number, body: Body): boolean
+	return HeroKit.inCone(origin, direction, range, angle, body.position, body.radius, body.bottom, body.top)
+end
+
+-- Whether a leap's landing at `landing` strikes `body`: within `radius` studs of its edge, all round.
+function HeroKit.landingStrikes(landing: Vector3, radius: number, body: Body): boolean
+	return HeroKit.flat(body.position - landing).Magnitude - body.radius <= radius
+end
+
+-- The directions of a fan of `count` projectiles over `spread` degrees round `direction` (round the vertical).
+function HeroKit.fan(direction: Vector3, count: number, spread: number): { Vector3 }
+	local directions = {}
+	for n = 1, count do
+		local offset = if count > 1 then -spread / 2 + spread * (n - 1) / (count - 1) else 0
+		table.insert(directions, CFrame.fromAxisAngle(Vector3.yAxis, math.rad(offset)):VectorToWorldSpace(direction))
+	end
+	return directions
+end
+
+-- What one strike of a Flurry (`kit`) at `time` seconds into it reaches: a sweep along the crosshair (Range, Angle),
+-- or from its Slam on the slam all round him (SlamRadius); and whether it is the slam.
+function HeroKit.flurryStrike(kit: any, time: number): (number, number, boolean)
+	local slam = kit.Slam ~= nil and time >= kit.Slam
+	return if slam then kit.SlamRadius else kit.Range, if slam then 360 else kit.Angle, slam
+end
+
+-- Whether a projectile bursting at `at` strikes `body`: within `reach` studs of its edge round, and of its heights.
+function HeroKit.burstStrikes(at: Vector3, reach: number, body: Body): boolean
+	return HeroKit.flat(body.position - at).Magnitude <= reach + body.radius
+		and at.Y >= body.bottom - reach
+		and at.Y <= body.top + reach
+end
+
+-- A projectile's way: where it leaves and where it stops (at the end of its range, or a wall the caller found).
+export type Shot = { from: Vector3, to: Vector3 }
+
+-- The ways of the projectiles of a Throw or an Ascend (`kit`) cast by a hero whose root part is at `root` towards `aim`
+-- (`facing` when he aims at himself): each fan's projectiles from where he lets them go (an Ascend's from where it has
+-- lifted him), as far as they fly.
+function HeroKit.shots(kit: any, root: Vector3, aim: Vector3, facing: Vector3): { Shot }
+	if kit.Kind == "Ascend" then
+		root += Vector3.new(0, HeroKit.lift(kit, kit.Release), 0)
+	end
+	local muzzle = HeroKit.muzzle(root)
+	local ways = {}
+	for _, direction in HeroKit.fan(HeroKit.aimDirection(muzzle, aim, facing), kit.Count or 1, kit.Spread or 0) do
+		local from = HeroKit.shotOrigin(muzzle, direction)
+		table.insert(ways, { from = from, to = from + direction * kit.Range })
+	end
+	return ways
+end
+
+-- Where an ability (`kit`) aimed now by a hero whose root part is at `root`, `height` studs above the ground, towards
+-- `aim` (`facing` when he aims at himself) would land and fly: a leap's landing, or its projectiles' ways up to the
+-- first wall in each (rays that pass through `exclude`, HeroKit.leapIgnore).
+function HeroKit.aimed(
+	kit: any,
+	root: Vector3,
+	aim: Vector3,
+	facing: Vector3,
+	height: number,
+	exclude: { Instance }
+): (Vector3?, { Shot }?)
+	if kit.Kind == "Leap" then
+		return HeroKit.leapLanding(root, aim, kit.Range, height, exclude), nil
+	elseif kit.Kind == "Throw" or kit.Kind == "Ascend" then
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = exclude
+		local ways = HeroKit.shots(kit, root, aim, facing)
+		for _, way in ways do
+			local wall = Workspace:Raycast(way.from, way.to - way.from, params)
+			if wall then
+				way.to = wall.Position
+			end
+		end
+		return nil, ways
+	end
+	return nil, nil
+end
+
+-- Whether an ability aimed now (a Leap, Throw, Flurry or Ascend, `kit`) strikes `body` where it stands, as
+-- CombatService.act lands it: a leap's ring round `landing`, the projectiles' `shots` (both HeroKit.aimed), or the
+-- flurry's sweeps and slam from the hero's root part at
+-- `root` towards `aim`; a projectile with a Blast also bursts where it stops.
+function HeroKit.abilityStrikes(
+	kit: any,
+	root: Vector3,
+	aim: Vector3,
+	facing: Vector3,
+	landing: Vector3?,
+	shots: { Shot }?,
+	body: Body
+): boolean
+	if kit.Kind == "Leap" then
+		return landing ~= nil and HeroKit.landingStrikes(landing, kit.Radius, body)
+	elseif kit.Kind == "Throw" or kit.Kind == "Ascend" then
+		for _, shot in shots or {} do
+			if
+				HeroKit.shotTouch(shot.from, shot.to, kit.Width, body)
+				or (kit.Blast and HeroKit.burstStrikes(shot.to, kit.Blast, body))
+			then
+				return true
+			end
+		end
+		return false
+	elseif kit.Kind == "Flurry" then
+		local muzzle = HeroKit.muzzle(root)
+		local direction = HeroKit.aimDirection(muzzle, aim, facing)
+		for _, time in kit.Hits do
+			local range, angle = HeroKit.flurryStrike(kit, time)
+			if HeroKit.swingStrikes(muzzle, direction, range, angle, body) then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 -- Where a dash from `from` (the root part) `range` studs along the flat `direction` ends: short of the first wall in

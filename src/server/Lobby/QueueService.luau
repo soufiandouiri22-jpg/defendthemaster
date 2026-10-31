@@ -6,7 +6,9 @@
 -- or the longest waited FillAfter seconds (in Ranked only once both teams have RankedHumans players), it reserves a
 -- server of the match place, writes the match's record (MatchSetup reads it there) and every player's assignment, and
 -- takes the parties out of the queue. Each lobby sends its own players to their match as soon as it sees their
--- assignment. In Studio (no teleports) the queue runs in this server alone and only says a match was found. A party
+-- assignment, after their clients have shown the match's cards ("Lineup", from the cards every party brought into the
+-- queue) and sent them along as their teleport's screen (VersusView.travel). In Studio (no teleports) the queue runs in
+-- this server alone and only shows the cards and says a match was found. A party
 -- back from a match with Play Again (its TeleportData's "again", MatchEnd) goes into the queue in that mode once all of
 -- it is here with its data, or after AGAIN_WAIT seconds with whoever came.
 
@@ -18,6 +20,7 @@ local TeleportService = game:GetService("TeleportService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local Places = require(ReplicatedStorage.Shared.Places)
 local ProfileService = require(script.Parent.Parent.ProfileService)
@@ -35,8 +38,13 @@ local LOCK_LIFE = 12
 local MATCHMAKE_EVERY, ASSIGNMENT_EVERY = 3, 1.5
 local TELEPORT_TRIES = 3
 local AGAIN_WAIT = 20
+-- How long a found match waits for its players' clients to show its cards and send them along as their teleport's
+-- screen (VersusView.travel, "Prepared") before it teleports them anyway.
+local PREPARE = 5
 
-type Entry = { ids: { number }, rating: number, at: number, job: string }
+-- A party in the queue: its players' ids, average hidden rating, since when, its lobby server, and its players' cards
+-- (Shared.Lineup, by their ids as strings) for the lineup every player of the match sees before his teleport.
+type Entry = { ids: { number }, rating: number, at: number, job: string, cards: { [string]: Lineup.Card }? }
 type Search = { mode: string, since: number, ids: { number }, renewed: number, found: boolean }
 
 -- The parties of this server that wait, by their leader's id.
@@ -44,6 +52,8 @@ local searching: { [number]: Search } = {}
 local localQueue: { [string]: { [string]: Entry } } = { QuickPlay = {}, Ranked = {} }
 -- Parties back from a match with Play Again, by their key (TeleportData's "party").
 local again: { [number]: { mode: string, ids: { number }, at: number } } = {}
+-- The players whose client has shown the found match's cards and sent them along ("Prepared").
+local prepared: { [number]: boolean } = {}
 local event: RemoteEvent
 
 local online = Places.canTeleport()
@@ -94,12 +104,15 @@ local function retry<T>(fn: () -> T, tries: number?): (boolean, T?)
 end
 
 local function put(leader: number, s: Search)
-	local entry: Entry = { ids = s.ids, rating = 0, at = s.since, job = game.JobId }
+	local entry: Entry = { ids = s.ids, rating = 0, at = s.since, job = game.JobId, cards = {} }
 	local total = 0
 	for _, id in s.ids do
 		local p = playerOf(id)
 		local data = p and ProfileService.get(p)
 		total += if data then data.Rank.Rating else Config.Ranked.StartRating
+		if p then
+			(entry.cards :: any)[tostring(id)] = Lineup.card(p)
+		end
 	end
 	entry.rating = total / math.max(1, #s.ids)
 	if online then
@@ -222,8 +235,32 @@ local function makeMatch(
 	return keys, teams, parties
 end
 
--- Reserves the match's server and hands out the assignments.
-local function startMatch(mode: string, keys: { string }, teams: { [string]: { number } }, parties: { { number } })
+-- The cards of the parties `keys` among `entries`.
+local function cardsOf(entries: { { key: string, value: Entry } }, keys: { string }): { [string]: Lineup.Card }
+	local cards = {}
+	for _, entry in entries do
+		if table.find(keys, entry.key) then
+			for id, card in entry.value.cards or {} do
+				cards[id] = card
+			end
+		end
+	end
+	return cards
+end
+
+-- The lineup the match's players see before their teleport (VersusView.travel).
+local function lineupOf(mode: string, teams: { [string]: { number } }, cards: { [string]: Lineup.Card }): any
+	return { mode = mode, teams = teams, cards = cards }
+end
+
+-- Reserves the match's server and hands out the assignments, with the lineup.
+local function startMatch(
+	mode: string,
+	keys: { string },
+	teams: { [string]: { number } },
+	parties: { { number } },
+	cards: { [string]: Lineup.Card }
+)
 	local ok, code, privateId = pcall(TeleportService.ReserveServer, TeleportService, Config.Places.Match :: number)
 	if not ok or not code then
 		warn("[QueueService] ReserveServer failed:", code)
@@ -238,8 +275,13 @@ local function startMatch(mode: string, keys: { string }, teams: { [string]: { n
 		return
 	end
 	local assignments = MemoryStoreService:GetHashMap("Assignments")
-	local assignment =
-		{ code = code, mode = mode, id = HttpService:GenerateGUID(false), at = Workspace:GetServerTimeNow() }
+	local assignment = {
+		code = code,
+		mode = mode,
+		id = HttpService:GenerateGUID(false),
+		at = Workspace:GetServerTimeNow(),
+		lineup = lineupOf(mode, teams, cards),
+	}
 	for _, ids in teams do
 		for _, id in ids do
 			retry(function()
@@ -286,7 +328,7 @@ local function matchmakeOnline(mode: string)
 		if not keys then
 			break
 		end
-		startMatch(mode, keys, teams :: any, parties :: any)
+		startMatch(mode, keys, teams :: any, parties :: any, cardsOf(entries, keys))
 		local rest = {}
 		for _, entry in entries do
 			if not table.find(keys, entry.key) then
@@ -306,7 +348,8 @@ local function matchmakeLocal(mode: string)
 	table.sort(entries, function(a, b)
 		return a.value.at < b.value.at
 	end)
-	local keys = makeMatch(mode, entries, Workspace:GetServerTimeNow())
+	local keys, teams = makeMatch(mode, entries, Workspace:GetServerTimeNow())
+	local lineup = if keys and teams then lineupOf(mode, teams, cardsOf(entries, keys)) else nil
 	for _, key in keys or {} do
 		local leader = tonumber(key) :: number
 		localQueue[mode][key] = nil
@@ -314,6 +357,8 @@ local function matchmakeLocal(mode: string)
 		if s then
 			s.found = true
 			tell(leader)
+			-- Its cards show as they will before the teleport, for a look at them.
+			send(leader, "Lineup", lineup)
 			send(
 				leader,
 				"Notice",
@@ -339,6 +384,27 @@ local function teleport(leader: number, s: Search, assignment: any)
 	local assignments = MemoryStoreService:GetHashMap("Assignments")
 	for _, id in s.ids do
 		pcall(assignments.RemoveAsync, assignments, tostring(id))
+	end
+	-- The cards first: each client shows them and sends them along as his teleport's screen, so the players see them
+	-- from here until the fight.
+	if assignment.lineup then
+		for _, member in members do
+			prepared[member.UserId] = nil
+			event:FireClient(member, "Lineup", assignment.lineup)
+		end
+		local deadline = os.clock() + PREPARE
+		while os.clock() < deadline do
+			local all = true
+			for _, member in members do
+				if member.Parent and not prepared[member.UserId] then
+					all = false
+				end
+			end
+			if all then
+				break
+			end
+			task.wait(0.1)
+		end
 	end
 	local options = Instance.new("TeleportOptions")
 	options.ReservedServerAccessCode = assignment.code
@@ -416,6 +482,8 @@ function QueueService.start()
 			event:FireClient(player, "State", stateOf(leader))
 		elseif action == "Join" then
 			join(player, mode)
+		elseif action == "Prepared" then
+			prepared[player.UserId] = true
 		elseif action == "Cancel" then
 			local leader = PartyService.partyOf(player)
 			if leader == player.UserId then
@@ -427,6 +495,7 @@ function QueueService.start()
 		QueueService.cancel(leader, "The party changed: the search stopped.")
 	end)
 	Players.PlayerRemoving:Connect(function(player)
+		prepared[player.UserId] = nil
 		QueueService.cancel(player.UserId)
 	end)
 	TeleportService.TeleportInitFailed:Connect(function(player)

@@ -117,15 +117,18 @@ function MatchSetup.start()
 	end
 end
 
--- Waits for the match's players, their data and their clients, which say so once they have everything in under the
--- loading screen ("ClientReady"): all of them, or as many as are ready within Config.Draft.Arrive seconds; without a
--- record, for the first player. So the draft and its clock start when everyone can see it.
-function MatchSetup.awaitPlayers()
-	local deadline = os.clock() + (if record then Config.Draft.Arrive else Config.Match.WaitForPlayer)
-	while os.clock() < deadline do
+-- The moment the waiting for the match's players ends, shared by MatchSetup.awaitArrivals and awaitPlayers:
+-- Config.Draft.Arrive seconds after the first wait began, without a record Config.Match.WaitForPlayer.
+local deadline: number? = nil
+
+-- Waits until every one of the match's players is in with his data and `ready` says so of him, or until the deadline;
+-- without a record, for the first player.
+local function await(ready: (Player) -> boolean)
+	deadline = deadline or os.clock() + (if record then Config.Draft.Arrive else Config.Match.WaitForPlayer)
+	while os.clock() < (deadline :: number) do
 		local present = 0
 		for _, player in Players:GetPlayers() do
-			if player:GetAttribute("Team") and ProfileService.get(player) and player:GetAttribute("ClientReady") then
+			if player:GetAttribute("Team") and ProfileService.get(player) and ready(player) then
 				present += 1
 			end
 		end
@@ -140,7 +143,25 @@ function MatchSetup.awaitPlayers()
 	end
 end
 
--- The draft's eight places in Config.Draft.Order's names: each team's players first, then its bots.
+-- Waits for the match's players to be in with their data, so who plays and with which hero is known (the cards while
+-- the match loads show it while they are still loading).
+function MatchSetup.awaitArrivals()
+	await(function()
+		return true
+	end)
+end
+
+-- Waits for the match's players, their data and their clients, which say so once they have everything in under the
+-- loading screen ("ClientReady"): all of them, or as many as are ready within Config.Draft.Arrive seconds; without a
+-- record, for the first player. So the draft and its clock start when everyone can see it.
+function MatchSetup.awaitPlayers()
+	await(function(player)
+		return player:GetAttribute("ClientReady") == true
+	end)
+end
+
+-- The draft's eight places in Config.Draft.Order's names: each team's players first, in the record's order (as the
+-- lobby showed their cards, Shared.Lineup), then its bots.
 function MatchSetup.slots(): { Slot }
 	local byTeam: { [string]: { Player } } = {}
 	for _, team in Config.TeamOrder do
@@ -150,6 +171,14 @@ function MatchSetup.slots(): { Slot }
 		local team = player:GetAttribute("Team")
 		if team and byTeam[team] and #byTeam[team] < Config.HeroesPerTeam then
 			table.insert(byTeam[team], player)
+		end
+	end
+	if record then
+		for team, list in byTeam do
+			local order = record.teams[team] or {}
+			table.sort(list, function(a, b)
+				return (table.find(order, a.UserId) or math.huge) < (table.find(order, b.UserId) or math.huge)
+			end)
 		end
 	end
 	local slots = {}

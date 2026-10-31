@@ -13,7 +13,6 @@
 -- (Actors, BotService) attack through CombatService.act, with the same checks; they move through their leaps and
 -- dashes on the server (CombatService.act gives where they land), as a player's client moves him.
 
-local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -109,47 +108,16 @@ local reaches: { [Model]: { number } } = setmetatable({}, { __mode = "k" }) :: a
 -- The enemies of `team` within `reach` studs of `centre`.
 local function enemiesNear(team: string, centre: Vector3, reach: number): { Enemy }
 	local found = {}
-	local minions = Workspace:FindFirstChild("Minions")
-	if minions then
-		local half = Config.Minions.Height / 2
-		for _, root in minions:GetChildren() do
-			if
-				root:IsA("BasePart")
-				and root:GetAttribute("Team") ~= team
-				and not root:GetAttribute("Dead")
-				and HeroKit.flat(root.Position - centre).Magnitude <= reach + Config.Minions.Radius
-			then
-				table.insert(found, {
-					instance = root,
-					position = root.Position,
-					radius = Config.Minions.Radius,
-					bottom = root.Position.Y - half,
-					top = root.Position.Y + half,
-				})
-			end
-		end
-	end
-	for _, model in CollectionService:GetTagged("Combatant") do
-		if model:IsA("Model") and model:GetAttribute("Team") ~= team then
-			local humanoid = model:FindFirstChildOfClass("Humanoid")
-			local living = if humanoid then humanoid.Health > 0 else (model:GetAttribute("Health") or 0) > 0
-			local position = model:GetPivot().Position
-			local radius = model:GetAttribute("Radius") or 1.5
-			if living and HeroKit.flat(position - centre).Magnitude <= reach + radius then
-				local extent = reaches[model]
-				if not extent then
-					local box, size = model:GetBoundingBox()
-					extent = { box.Position.Y - size.Y / 2 - position.Y, box.Position.Y + size.Y / 2 - position.Y }
-					reaches[model] = extent
-				end
-				table.insert(found, {
-					instance = model,
-					position = position,
-					radius = radius,
-					bottom = position.Y + extent[1],
-					top = position.Y + extent[2],
-				})
-			end
+	for _, foe in HeroKit.foes(team, reaches) do
+		local body = foe.body
+		if HeroKit.flat(body.position - centre).Magnitude <= reach + body.radius then
+			table.insert(found, {
+				instance = foe.instance,
+				position = body.position,
+				radius = body.radius,
+				bottom = body.bottom,
+				top = body.top,
+			})
 		end
 	end
 	return found
@@ -258,7 +226,7 @@ local function strikeCone(
 	end
 	local origin = HeroKit.muzzle(root.Position)
 	for _, enemy in enemiesNear(team, origin, range) do
-		if HeroKit.inCone(origin, direction, range, angle, enemy.position, enemy.radius, enemy.bottom, enemy.top) then
+		if HeroKit.swingStrikes(origin, direction, range, angle, enemy) then
 			damage(player, state.character, enemy, amount, magic, basic)
 		end
 	end
@@ -282,7 +250,7 @@ local function launch(
 		return
 	end
 	nextProjectile += 1
-	local origin = HeroKit.muzzle(root.Position) + direction * 1.5
+	local origin = HeroKit.shotOrigin(HeroKit.muzzle(root.Position), direction)
 	local projectile: Projectile = {
 		id = nextProjectile,
 		player = player,
@@ -320,16 +288,11 @@ local function burst(p: Projectile, at: Vector3)
 		return
 	end
 	for _, enemy in enemiesNear(p.team, at, reach) do
-		if not p.struck[enemy.instance] and at.Y >= enemy.bottom - reach and at.Y <= enemy.top + reach then
+		if not p.struck[enemy.instance] and HeroKit.burstStrikes(at, reach, enemy) then
 			p.struck[enemy.instance] = true
 			damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
 		end
 	end
-end
-
--- `direction` turned `degrees` round the vertical.
-local function turned(direction: Vector3, degrees: number): Vector3
-	return CFrame.fromAxisAngle(Vector3.yAxis, math.rad(degrees)):VectorToWorldSpace(direction)
 end
 
 -- A projectile flies where it was aimed, up or down too, strikes an enemy whose height it passes at, and stops at the
@@ -352,15 +315,8 @@ local function stepProjectiles(dt: number)
 		local best: Enemy? = nil
 		local bestAlong = math.huge
 		for _, enemy in enemiesNear(p.team, (from + to) / 2, travel / 2 + p.width) do
-			local distance, along = HeroKit.segmentDistance(from, to, enemy.position)
-			local height = from.Y + (to.Y - from.Y) * along
-			if
-				distance <= enemy.radius + p.width / 2
-				and along <= reach
-				and height >= enemy.bottom - p.width / 2
-				and height <= enemy.top + p.width / 2
-				and not p.struck[enemy.instance]
-			then
+			local along = HeroKit.shotTouch(from, to, p.width, enemy)
+			if along and along <= reach and not p.struck[enemy.instance] then
 				if p.pierce then
 					p.struck[enemy.instance] = true
 					damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
@@ -505,7 +461,7 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		slow(state, kit.Land + RECOVER, 0)
 		later(state, kit.Land, function()
 			for _, enemy in enemiesNear(team, landing, kit.Radius) do
-				if HeroKit.inCone(landing, direction, kit.Radius, 360, enemy.position, enemy.radius) then
+				if HeroKit.landingStrikes(landing, kit.Radius, enemy) then
 					damage(player, character, enemy, strength(kit.Damage), magic)
 				end
 			end
@@ -557,14 +513,11 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		state.busyUntil = now + releases[#releases] + RECOVER
 		motionEvent:FireAllClients(character, key, 0)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
-		local count, spread = kit.Count or 1, kit.Spread or 0
 		for _, time in releases do
 			later(state, time, function()
-				local toward = aimedNow()
 				local struck = {}
-				for n = 1, count do
-					local offset = if count > 1 then -spread / 2 + spread * (n - 1) / (count - 1) else 0
-					launch(player, state, team, turned(toward, offset), kit, strength(kit.Damage), magic, struck)
+				for _, way in HeroKit.fan(aimedNow(), kit.Count or 1, kit.Spread or 0) do
+					launch(player, state, team, way, kit, strength(kit.Damage), magic, struck)
 				end
 			end)
 		end
@@ -584,9 +537,7 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 			later(state, time, function()
 				-- Every sweep follows the crosshair; the slam strikes all round him, as its shockwave shows.
 				local facing = aimedNow()
-				local slam = kit.Slam ~= nil and time >= kit.Slam
-				local reach = if slam then kit.SlamRadius else kit.Range
-				local angle = if slam then 360 else kit.Angle
+				local reach, angle, slam = HeroKit.flurryStrike(kit, time)
 				local amount = if slam then strength(kit.SlamDamage, kit.SlamRatio) else strength(kit.Damage)
 				strikeCone(player, state, team, facing, reach, angle, amount, magic)
 			end)

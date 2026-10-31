@@ -8,8 +8,9 @@
 -- LONGEST seconds; then until the screen after it is there (Loading.hold: in a match the draft, which the server starts
 -- once every player's client is ready, Loading.waitReady), so the draft and its music come all at once; and a
 -- teleport carries the same screen across (Loading.forTeleport), so going from a match to the lobby or back never
--- shows a half-built world. The mouse's gauntlet (Loading.pointer) shows from its first frame on (owner, 2026-10-31:
--- the mouse goes along from the menu).
+-- shows a half-built world; to a match it carries the match's cards instead (VersusView.travel, Loading.arrived), so
+-- a player sees those from the lobby until the fight. The mouse's gauntlet (Loading.pointer) is not on the black screen (owner, 2026-10-31): it
+-- comes with a screen over it that takes the mouse (the cards while a match loads, Loading.unshield), else as it goes.
 
 local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
@@ -85,6 +86,12 @@ local POINTER_PICTURE = Vector2.new(211, 238)
 local POINTER_TIP = Vector2.new(7, 11)
 local POINTER_ORDER = 2000
 local gauntlet: ImageLabel? = nil
+-- Whether the black screen is up with nothing over it that takes the mouse: the gauntlet hides meanwhile.
+local covering = false
+-- The match's cards (VersusView), which the lobby sends along on the teleport to a match in place of the black screen:
+-- the screen that came with the teleport when it has this name, kept until VersusView takes over.
+local CARDS = "Versus"
+local cards: ScreenGui? = nil
 
 local readyNow = false
 local shown: ScreenGui? = nil
@@ -447,9 +454,9 @@ local function animate(gui: ScreenGui)
 end
 
 -- The mouse as the game's gold gauntlet, a picture following the hidden system mouse every frame (Roblox's own
--- MouseIcon falls back to its arrow over every button and on every click), from the loading screen's first frame on,
--- so it goes along from the menu without a gap; not while the camera holds the mouse in the middle (HeroCamera's
--- crosshair) or where there is no mouse. The screen does not wait for its picture. Once only; `image` replaces the
+-- MouseIcon falls back to its arrow over every button and on every click), set up with the loading screen's first
+-- frame; not on the black screen, nor while the camera holds the mouse in the middle (HeroCamera's crosshair) or where
+-- there is no mouse. The screen does not wait for its picture. Once only; `image` replaces the
 -- picture.
 function Loading.pointer(image: string?)
 	if gauntlet then
@@ -481,7 +488,7 @@ function Loading.pointer(image: string?)
 		local free = UserInputService.MouseEnabled and UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter
 		local at = UserInputService:GetMouseLocation()
 		picture.Position = UDim2.fromOffset(at.X, at.Y)
-		picture.Visible = free
+		picture.Visible = free and not covering
 		UserInputService.MouseIconEnabled = false
 	end)
 end
@@ -490,9 +497,17 @@ end
 -- colosseum's bar running).
 function Loading.show()
 	local gui = TeleportService:GetArrivingTeleportGui() or Loading.build()
+	if gui.Name == CARDS then
+		cards = gui
+	end
+	covering = cards == nil
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	ReplicatedFirst:RemoveDefaultLoadingScreen()
 	Loading.pointer()
+	if gui == cards then
+		shown = gui
+		return
+	end
 	-- Everything on it comes in together once its pictures have loaded (at once when they came along with a
 	-- teleport), or after PICTURES seconds.
 	local content = gui:FindFirstChild("Content", true)
@@ -540,9 +555,14 @@ function Loading.show()
 	shown = gui
 end
 
--- Takes this screen along on any teleport from here.
+-- Takes this screen along on any teleport from here (VersusView.travel sends the match's cards instead).
 function Loading.forTeleport()
 	TeleportService:SetTeleportGui(Loading.build())
+end
+
+-- The match's cards that came with the teleport in place of the black screen, if they did.
+function Loading.arrived(): ScreenGui?
+	return if cards and cards.Parent then cards else nil
 end
 
 -- Loads `instances` (and everything in them) and the pictures of the content ids among them, or gives up after
@@ -553,8 +573,25 @@ function Loading.preload(instances: { Instance | string }, seconds: number)
 		pcall(ContentProvider.PreloadAsync, ContentProvider, instances)
 		done = true
 	end)
+	-- PreloadAsync can be done with a picture that is already on its way for something else still loading.
+	local function loading(): boolean
+		for _, root in instances do
+			if typeof(root) == "Instance" then
+				for _, item in root:GetDescendants() do
+					if
+						(item:IsA("ImageLabel") or item:IsA("ImageButton"))
+						and item.Image ~= ""
+						and ContentProvider:GetAssetFetchStatus(item.Image) == Enum.AssetFetchStatus.Loading
+					then
+						return true
+					end
+				end
+			end
+		end
+		return false
+	end
 	local started = os.clock()
-	while not done and os.clock() - started < seconds do
+	while (not done or loading()) and os.clock() - started < seconds do
 		task.wait(0.1)
 	end
 end
@@ -595,9 +632,10 @@ function Loading.hold(): () -> ()
 	end
 end
 
--- Lets clicks through to a screen shown over this one (Versus): the shield takes them from every screen, also from
--- those with a higher DisplayOrder.
+-- Lets clicks through to a screen shown over this one (Versus), and shows the mouse for it: the shield takes them from
+-- every screen, also from those with a higher DisplayOrder.
 function Loading.unshield()
+	covering = false
 	local guard = shown and shown:FindFirstChild("Shield", true)
 	if guard and guard:IsA("GuiObject") then
 		guard.Visible = false
@@ -761,8 +799,10 @@ function Loading.finish()
 	local gui = shown
 	shown = nil
 	gone = true
+	covering = false
 	goneSignal:Fire()
-	if not gui then
+	-- The cards that came along stay until VersusView puts its own in their place.
+	if not gui or gui == cards then
 		return
 	end
 	local group = gui:FindFirstChild("Group")

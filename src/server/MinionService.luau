@@ -367,7 +367,10 @@ local function think(m: Minion, combatants: { Model }, now: number)
 	end
 	m.target = target
 
-	local step = m.stats.Speed * TICK
+	-- In Studio the Workspace attribute "TestMinionsStill" keeps every minion where it stands (it still turns and
+	-- attacks), for tests that measure from them (Tools/Tests/reach_test.luau).
+	local still = RunService:IsStudio() and Workspace:GetAttribute("TestMinionsStill") == true
+	local step = if still then 0 else m.stats.Speed * TICK
 	if target then
 		local offset = positionOf(target) - m.position
 		local gap = offset.Magnitude - radiusOf(target) - SETTINGS.Radius

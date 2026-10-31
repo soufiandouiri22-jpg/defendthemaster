@@ -1,6 +1,6 @@
--- The mouse pointer: the game's gold gauntlet (Assets.Pointer), drawn by the loading screen from its first frame on
--- (Loading.pointer, in ReplicatedFirst so it is there before anything else and goes along from the menu without a
--- gap); this hands it the picture from Assets.
+-- The mouse pointer: the game's gold gauntlet (Assets.Pointer), drawn by the loading screen (Loading.pointer, in
+-- ReplicatedFirst so it is there before anything else; hidden on the black screen itself); this hands it the picture
+-- from Assets.
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

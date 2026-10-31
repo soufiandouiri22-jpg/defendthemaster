@@ -8,18 +8,21 @@
 -- Net.LoadProgress). A player's card turns round on a click to his profile on its back (PlayerCard); the screen keeps
 -- its own time (with HOLD_TURNED a turned card held it). With EARLY it came before the server's lineup, a card showing
 -- the hero the player would play ("Showcase") and a place nobody had come for yet waiting empty until the bots filled
--- theirs. It stays until the server's "VersusUntil" (Config.Match.Versus seconds) and goes with the loading screen
--- under it. Only in a match without a draft (Config.Draft.Enabled off); a client coming in later skips it.
+-- theirs. The server gives the lineup as soon as everyone is in the server, so the screen comes while the others are
+-- still loading; it stays until they all have everything in and then the server's "VersusUntil" (Config.Match.Versus
+-- seconds more), and goes with the loading screen under it. Only in a match without a draft (Config.Draft.Enabled off); a client coming in later skips it.
 
 local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
 local TextChatService = game:GetService("TextChatService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Loading = require(ReplicatedFirst:WaitForChild("Loading"))
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local HeroCamera = require(script.Parent.HeroCamera)
@@ -58,12 +61,15 @@ local DIM = 0.42
 local STAGGER, FADE = 0.06, 0.4
 -- The longest it waits for the server's lineup before it lets the loading screen go anyway.
 local LONGEST = 60
--- The screen comes in complete (owner, 2026-10-31): built out of sight under the loading screen (WAITING FOR PLAYERS),
--- it waits for the server's lineup and then for every picture on its cards (the avatars come from Roblox only now), at
--- most PICTURES seconds. With EARLY it came at once with the lineup as it stood (each player's hero to be, the places
+-- The screen comes in complete (owner, 2026-10-31): built out of sight under the loading screen, it waits for the
+-- server's lineup and then for every picture on its cards (the avatars come from Roblox only now), at most PICTURES
+-- seconds. With EARLY it came at once with the lineup as it stood (each player's hero to be, the places
 -- nobody had come for yet WAITING...) and filled in when the server's came.
 local EARLY = false
 local PICTURES = 3
+-- The screen comes right after this client's loading screen, as League's does, and stays until every player is in
+-- (the server's "VersusUntil" comes then); waiting longer than WAITING_AFTER seconds, the tip's line says for how many.
+local WAITING_AFTER = 1
 
 local TIPS = {
 	"An ability you can raise glows on your bar: spend your points before you forget them.",
@@ -100,6 +106,8 @@ type Card = {
 	status: TextLabel?,
 	glint: UIGradient?,
 	turned: boolean?,
+	-- In the lobby (VersusView.travel) the cards do not turn: the backs need what the match's server publishes.
+	still: boolean?,
 }
 
 local player = Players.LocalPlayer
@@ -173,6 +181,51 @@ local function final(state: any): { Entry }
 				empty = false,
 			}, other)
 		)
+	end
+	return list
+end
+
+-- The places from the lobby's lineup of a found match (Net.Queue "Lineup", Shared.Lineup): each team's players in
+-- their order, then its bots with the heroes the match's server will give them.
+local function travelling(lineup: any): { Entry }
+	local list = {}
+	for _, team in Config.TeamOrder do
+		local ids = (lineup.teams or {})[team] or {}
+		local taken = {}
+		local count = math.min(#ids, Config.HeroesPerTeam)
+		for index = 1, count do
+			local id = ids[index]
+			local card = (lineup.cards or {})[tostring(id)] or {}
+			local hero = card.hero or Config.DefaultHero
+			table.insert(taken, hero)
+			table.insert(list, {
+				team = team,
+				index = index,
+				userId = id,
+				name = card.name or "",
+				hero = hero,
+				shown = card.shown,
+				division = card.division,
+				lp = card.lp,
+				placements = card.placements,
+				position = card.position,
+				level = card.level,
+				mastery = card.mastery or 0,
+				player = Players:GetPlayerByUserId(id),
+				empty = false,
+			})
+		end
+		for offset, hero in Lineup.botHeroes(taken, Config.HeroesPerTeam - count) do
+			table.insert(list, {
+				team = team,
+				index = count + offset,
+				userId = 0,
+				name = "Bot",
+				hero = hero,
+				mastery = 0,
+				empty = false,
+			})
+		end
 	end
 	return list
 end
@@ -348,7 +401,7 @@ local function draw(card: Card, entry: Entry)
 		end
 	end
 	-- A player's card turns round on a click to his profile on its back (a bot's has none); drawn again, it stays turned.
-	if entry.userId > 0 then
+	if entry.userId > 0 and not card.still then
 		local turn = PlayerCard.flippable(
 			{ card.frame },
 			card.frame,
@@ -483,18 +536,22 @@ local function build(): (ScreenGui, { [string]: Card })
 	return gui, cards
 end
 
--- Fades `gui` in (from nothing) or out over FADE seconds; the cards also rise into place one after another.
-local function show(gui: ScreenGui, cards: { [string]: Card })
+-- Fades `gui` in (from nothing) or out over FADE seconds; the cards also rise into place one after another. With
+-- `instant` it is there at once, in place of the same cards that came with the teleport.
+local function show(gui: ScreenGui, cards: { [string]: Card }, instant: boolean?)
 	local group = Instance.new("CanvasGroup")
 	group.Name = "Fade"
 	group.Size = UDim2.fromScale(1, 1)
 	group.BackgroundTransparency = 1
-	group.GroupTransparency = 1
+	group.GroupTransparency = if instant then 0 else 1
 	group.Parent = gui
 	for _, child in gui:GetChildren() do
 		if child ~= group and child:IsA("GuiObject") then
 			child.Parent = group
 		end
+	end
+	if instant then
+		return
 	end
 	Widgets.tween(group, FADE, { GroupTransparency = 0 })
 	local order = 0
@@ -544,6 +601,26 @@ local function holding(cards: { [string]: Card }): boolean
 	return false
 end
 
+-- While the server waits for players still loading (no "VersusUntil" yet), what the tip's line says instead: how many
+-- of the players on the cards are in.
+local function waiting(cards: { [string]: Card }): string?
+	if typeof(Workspace:GetAttribute("VersusUntil")) == "number" then
+		return nil
+	end
+	local total, ready = 0, 0
+	for _, card in cards do
+		local entry = card.entry
+		if entry and entry.userId > 0 then
+			total += 1
+			local other = entry.player or Players:GetPlayerByUserId(entry.userId)
+			if other and other:GetAttribute("ClientReady") == true then
+				ready += 1
+			end
+		end
+	end
+	return `WAITING FOR PLAYERS  {ready}/{total}`
+end
+
 -- Hides Roblox's chat while the screen is up: its window lies over the top left card and takes its clicks. Returns
 -- what brings it back as it was.
 local function hideChat(): () -> ()
@@ -576,7 +653,12 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		state = s
 	end)
 	event:FireServer("Hello")
-	waitReady()
+	-- The cards that came with the teleport (VersusView.travel) are up already; else the screen comes once this client
+	-- has everything in under the black one.
+	local arrived = Loading.arrived()
+	if not arrived then
+		waitReady()
+	end
 	local function over(): boolean
 		local untilAt = Workspace:GetAttribute("VersusUntil")
 		return typeof(untilAt) == "number" and Workspace:GetServerTimeNow() >= untilAt
@@ -586,6 +668,9 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	end
 	local phase = Workspace:GetAttribute("Phase")
 	if phase == "Buy" or phase == "Fight" or phase == "Ended" or over() then
+		if arrived then
+			arrived:Destroy()
+		end
 		release()
 		return
 	end
@@ -607,13 +692,26 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		Loading.preload({ gui }, PICTURES)
 		if over() then
 			gui:Destroy()
+			if arrived then
+				arrived:Destroy()
+			end
 			release()
 			HeroCamera.setEnabled(true)
 			return
 		end
 		gui.Enabled = true
 	end
-	show(gui, cards)
+	local tip = gui:FindFirstChild("Tip", true) :: TextLabel
+	-- In place of the cards that came with the teleport: the same, now turning on a click, with their tip.
+	local came = arrived and arrived:FindFirstChild("Tip", true) :: TextLabel?
+	if came then
+		tip.Text = came.Text
+	end
+	local saying = tip.Text
+	show(gui, cards, arrived ~= nil)
+	if arrived then
+		arrived:Destroy()
+	end
 	Loading.unshield()
 	local showChat = hideChat()
 	local frame = RunService.RenderStepped:Connect(function()
@@ -621,19 +719,22 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 			update(card)
 		end
 	end)
+	local shownAt = os.clock()
 	while os.clock() - started < LONGEST do
 		if state and state.phase == "Done" then
 			if not placedFinal then
 				placedFinal = true
 				place(cards, final(state))
 			end
-			local ends = Workspace:GetAttribute("VersusUntil")
-			if (typeof(ends) ~= "number" or Workspace:GetServerTimeNow() >= ends) and not holding(cards) then
+			if over() and not holding(cards) then
 				break
 			end
 		elseif not placedFinal then
 			place(cards, provisional())
 		end
+		local line = if os.clock() - shownAt >= WAITING_AFTER then waiting(cards) else nil
+		tip.Text = line or saying
+		tip.TextColor3 = if line then C.Gold else C.Cream
 		task.wait(0.25)
 	end
 	release()
@@ -646,6 +747,67 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	task.delay(0.6, function()
 		frame:Disconnect()
 		gui:Destroy()
+	end)
+end
+
+-- In the lobby: once a match is found (Net.Queue "Lineup") its cards come over the menu, complete with their pictures
+-- (at most PICTURES seconds), and go along as the teleport's screen, so the player sees them until the fight
+-- (Loading.arrived, VersusView.start); then the lobby's server teleports him ("Prepared"). If the match falls through
+-- (the queue's state is no longer Found), they go and the black screen goes along on teleports again.
+function VersusView.travel()
+	local queue = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Queue") :: RemoteEvent
+	local current: ScreenGui? = nil
+	local glinting: RBXScriptConnection? = nil
+	local function drop()
+		local gui = current
+		current = nil
+		if glinting then
+			glinting:Disconnect()
+			glinting = nil
+		end
+		if gui then
+			local group = gui:FindFirstChild("Fade") :: CanvasGroup?
+			if group then
+				Widgets.tween(group, 0.3, { GroupTransparency = 1 })
+			end
+			task.delay(0.35, function()
+				gui:Destroy()
+			end)
+			Loading.forTeleport()
+		end
+	end
+	queue.OnClientEvent:Connect(function(kind: string, payload: any)
+		if kind == "Lineup" and typeof(payload) == "table" and not current then
+			local gui, cards = build()
+			gui.Enabled = false
+			current = gui
+			for _, card in cards do
+				card.still = true
+			end
+			place(cards, travelling(payload))
+			Loading.preload({ gui }, PICTURES)
+			if current ~= gui then
+				return
+			end
+			gui.Enabled = true
+			show(gui, cards)
+			glinting = RunService.RenderStepped:Connect(function()
+				for _, card in cards do
+					update(card)
+				end
+			end)
+			-- Sent along once the cards stand in place, as they then show in the match.
+			task.wait(FADE + STAGGER * (2 * Config.HeroesPerTeam) + 0.35)
+			if current ~= gui then
+				return
+			end
+			TeleportService:SetTeleportGui(gui)
+			queue:FireServer("Prepared")
+		elseif kind == "State" and typeof(payload) == "table" then
+			if payload.state ~= "Found" and payload.state ~= "Teleporting" then
+				drop()
+			end
+		end
 	end)
 end
 

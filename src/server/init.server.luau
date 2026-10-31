@@ -77,13 +77,16 @@ if testing then
 	return
 end
 task.spawn(function()
-	MatchSetup.awaitPlayers()
 	if Config.Draft.Enabled then
+		MatchSetup.awaitPlayers()
 		DraftService.run(MatchSetup.slots())
 	else
-		-- Everyone's card shows for a while (VersusView) before the buy phase's clock runs.
-		Workspace:SetAttribute("VersusUntil", Workspace:GetServerTimeNow() + Config.Match.Versus)
+		-- Everyone's card shows from the moment his client has everything in (VersusView), with the lineup as soon as
+		-- everyone is in, until all are ready and then for a while before the buy phase's clock runs.
+		MatchSetup.awaitArrivals()
 		DraftService.assign(MatchSetup.slots())
+		MatchSetup.awaitPlayers()
+		Workspace:SetAttribute("VersusUntil", Workspace:GetServerTimeNow() + Config.Match.Versus)
 		task.wait(Config.Match.Versus)
 	end
 	BotService.start(layout, DraftService.botHeroes())
