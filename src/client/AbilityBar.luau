@@ -1,7 +1,7 @@
 -- The ability bar at the bottom centre (design 05): a slot per key (M1, M2, E, R, Shift) on a parchment panel, with the
 -- hero's icon for it (Config.Heroes[hero].Icons) over the key, each darkening from the top while its cooldown runs with the seconds left on it, and lighting up while it is held to aim.
 -- Under M2, E and R a pill with the ability's rank as pips; with a point to spend it lights up with the key that
--- raises it (1, 2, 3), which, or a click on the pill, raises the rank through Net.Upgrade (Shared.Leveling). An
+-- raises it (1, 2, 3) and the slot pulses in a gold glow, which, or a click on the pill, raises the rank through Net.Upgrade (Shared.Leveling). An
 -- ability not learned yet shows its icon greyed out. A rank raised rings like an anvil, and the ultimate (R) coming off
 -- its cooldown sounds a blade drawn.
 
@@ -55,7 +55,15 @@ type Rank = {
 	pips: { Frame },
 	key: Frame,
 	plus: TextLabel,
+	glow: Frame,
+	flash: Frame,
+	ready: boolean,
 }
+
+-- The glow round a slot that can be raised: how far it reaches past the slot, its colour, and its pulses a second.
+local GLOW = 7
+local GLOW_COLOUR = Color3.fromRGB(255, 214, 80)
+local GLOW_RATE = 1.2
 
 local player = Players.LocalPlayer
 local slots: { [string]: Slot } = {}
@@ -69,6 +77,20 @@ end
 
 local function slot(parent: Instance, key: string, index: number): Slot
 	local x = GAP + (index - 1) * (SLOT + GAP)
+	local upgradeIndex = table.find(Config.Progress.Upgrades, key)
+	-- Made before the slot, so it lies behind it and shows only as a rim round it.
+	local glow = nil
+	if upgradeIndex then
+		glow = UiStyle.frame(
+			parent,
+			UDim2.fromOffset(SLOT + GLOW * 2, SLOT + GLOW * 2),
+			UDim2.fromOffset(x - GLOW, GAP - GLOW)
+		)
+		glow.Name = "Glow"
+		glow.BackgroundColor3 = GLOW_COLOUR
+		glow.BackgroundTransparency = 1
+		UiStyle.corner(glow, 10 + GLOW)
+	end
 	local frame = UiStyle.frame(parent, UDim2.fromOffset(SLOT, SLOT), UDim2.fromOffset(x, GAP))
 	frame.Name = key
 	frame.ClipsDescendants = true
@@ -110,8 +132,13 @@ local function slot(parent: Instance, key: string, index: number): Slot
 		total = 0,
 		cooling = false,
 	}
-	local upgradeIndex = table.find(Config.Progress.Upgrades, key)
-	if upgradeIndex then
+	if upgradeIndex and glow then
+		-- A gold field over the icon that blinks while it can be raised.
+		local flash = UiStyle.frame(frame, UDim2.fromScale(1, 1), UDim2.fromScale(0, 0))
+		flash.Name = "Flash"
+		flash.BackgroundColor3 = GLOW_COLOUR
+		flash.BackgroundTransparency = 1
+		flash.ZIndex = 2
 		local pill = Instance.new("TextButton")
 		pill.Name = "Rank"
 		pill.Text = ""
@@ -144,7 +171,17 @@ local function slot(parent: Instance, key: string, index: number): Slot
 		pill.Activated:Connect(function()
 			upgrade(key)
 		end)
-		s.rank = { pill = pill, gradient = gradient, stroke = stroke, pips = pips, key = keycap, plus = plus }
+		s.rank = {
+			pill = pill,
+			gradient = gradient,
+			stroke = stroke,
+			pips = pips,
+			key = keycap,
+			plus = plus,
+			glow = glow,
+			flash = flash,
+			ready = false,
+		}
 	end
 	return s
 end
@@ -168,6 +205,11 @@ local function showRanks()
 				else ColorSequence.new(C.CreamDark, Color3.fromRGB(206, 178, 124))
 			r.stroke.Color = if can then Color3.fromRGB(255, 244, 200) else C.GoldDark
 			r.stroke.Thickness = if can then 3 else 2
+			r.ready = can
+			if not can then
+				r.glow.BackgroundTransparency = 1
+				r.flash.BackgroundTransparency = 1
+			end
 		end
 	end
 end
@@ -278,6 +320,16 @@ function AbilityBar.start()
 
 	RunService.RenderStepped:Connect(function()
 		local now = os.clock()
+		-- What can be raised pulses, so a point to spend is not forgotten.
+		local pulse = (math.sin(now * GLOW_RATE * 2 * math.pi) + 1) / 2
+		for _, s in slots do
+			local r = s.rank
+			if r and r.ready then
+				r.glow.BackgroundTransparency = 0.7 - 0.55 * pulse
+				r.flash.BackgroundTransparency = 0.95 - 0.6 * pulse
+				r.stroke.Thickness = 2 + 2 * pulse
+			end
+		end
 		for key, s in slots do
 			local left = s.endsAt - now
 			if left > 0 then

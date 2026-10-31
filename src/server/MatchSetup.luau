@@ -15,6 +15,7 @@ local Workspace = game:GetService("Workspace")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Places = require(ReplicatedStorage.Shared.Places)
 local ProfileService = require(script.Parent.ProfileService)
+local Remote = require(script.Parent.Remote)
 
 local MatchSetup = {}
 
@@ -100,20 +101,31 @@ function MatchSetup.start()
 	end
 	Workspace:SetAttribute("Mode", mode)
 	Workspace:SetAttribute("Phase", "Waiting")
+	Remote.event("ClientReady", 1, function(player)
+		player:SetAttribute("Loaded", 1)
+		player:SetAttribute("ClientReady", true)
+	end)
+	-- How far a player's loading screen is (0 to 1), for everyone's cards (VersusView).
+	Remote.event("LoadProgress", 8, function(player, share)
+		if typeof(share) == "number" and share == share and not player:GetAttribute("ClientReady") then
+			player:SetAttribute("Loaded", math.clamp(math.floor(share * 100 + 0.5) / 100, 0, 1))
+		end
+	end)
 	Players.PlayerAdded:Connect(admit)
 	for _, player in Players:GetPlayers() do
 		task.spawn(admit, player)
 	end
 end
 
--- Waits for the match's players (and their data): all of them, or as many as come within Config.Draft.Arrive seconds;
--- without a record, for the first player.
+-- Waits for the match's players, their data and their clients, which say so once they have everything in under the
+-- loading screen ("ClientReady"): all of them, or as many as are ready within Config.Draft.Arrive seconds; without a
+-- record, for the first player. So the draft and its clock start when everyone can see it.
 function MatchSetup.awaitPlayers()
 	local deadline = os.clock() + (if record then Config.Draft.Arrive else Config.Match.WaitForPlayer)
 	while os.clock() < deadline do
 		local present = 0
 		for _, player in Players:GetPlayers() do
-			if player:GetAttribute("Team") and ProfileService.get(player) then
+			if player:GetAttribute("Team") and ProfileService.get(player) and player:GetAttribute("ClientReady") then
 				present += 1
 			end
 		end

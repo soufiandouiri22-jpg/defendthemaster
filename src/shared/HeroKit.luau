@@ -151,29 +151,62 @@ function HeroKit.leapIgnore(): { Instance }
 	return ignore
 end
 
+-- How high a leap clears above the root part, so it goes over what stands low (the spawn pads, crates, low cover)
+-- and onto the bases' daises; how far above or below where he leapt from he may land; and the steepest ground (the
+-- up-pointing share of its normal) he lands on.
+local LEAP_LIFT = 7
+local LEAP_UP, LEAP_DOWN = 9, 14
+local LEAP_FLAT = 0.7
+-- He lands only where he can stand: the ground this far round the spot on each side lies within FOOTING_STEP of it,
+-- so not on a shrub, a statue's head or a brazier.
+local FOOTING, FOOTING_STEP = 1.5, 2.5
+local FOOTING_SIDES = {
+	Vector3.new(FOOTING, 0, 0),
+	Vector3.new(-FOOTING, 0, 0),
+	Vector3.new(0, 0, FOOTING),
+	Vector3.new(0, 0, -FOOTING),
+}
+
 -- Where a hero whose root part is at `from`, `height` studs above the ground, lands when leaping towards `aim` at most
--- `range` studs: the furthest spot on that line with ground at about the same height and nothing in the way. `exclude`
--- are the instances the rays ignore (characters, minions).
+-- `range` studs: the furthest spot on that line he can clear at the leap's height, with ground below it no more than
+-- LEAP_UP above or LEAP_DOWN below where he stands; without such a spot he still goes that way along the ground until
+-- something stops him (HeroKit.dashEnd). `exclude` are the instances the rays ignore (characters, minions).
 function HeroKit.leapLanding(from: Vector3, aim: Vector3, range: number, height: number, exclude: { Instance }): Vector3
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = exclude
+	params.RespectCanCollide = true
 	local direction = HeroKit.direction(from, aim, Vector3.zAxis)
 	local distance = math.min(range, HeroKit.flat(aim - from).Magnitude)
 	local ground = from.Y - height
+	-- Up first, as far as nothing overhead stops him.
+	local roof = Workspace:Spherecast(from, 1.1, Vector3.new(0, LEAP_LIFT, 0), params)
+	local top = from + Vector3.new(0, if roof then math.max(0, roof.Distance - 0.5) else LEAP_LIFT, 0)
+	local depth = (top.Y - ground) + LEAP_DOWN + 1
 	local d = distance
 	while d > 0.5 do
-		local spot = from + direction * d
-		local wall = Workspace:Spherecast(from, 1.1, direction * d, params)
+		local spot = top + direction * d
+		local wall = Workspace:Spherecast(top, 1.1, direction * d, params)
 		if not wall then
-			local below = Workspace:Raycast(spot + Vector3.new(0, 4, 0), Vector3.new(0, -12, 0), params)
-			if below and math.abs(below.Position.Y - ground) < 2.5 then
-				return Vector3.new(spot.X, below.Position.Y + height, spot.Z)
+			local below = Workspace:Raycast(spot, Vector3.new(0, -depth, 0), params)
+			if below and below.Normal.Y >= LEAP_FLAT then
+				local rise = below.Position.Y - ground
+				local steady = true
+				for _, side in FOOTING_SIDES do
+					local foot = Workspace:Raycast(spot + side, Vector3.new(0, -depth, 0), params)
+					if not foot or math.abs(foot.Position.Y - below.Position.Y) > FOOTING_STEP then
+						steady = false
+						break
+					end
+				end
+				if steady and rise <= LEAP_UP and rise >= -LEAP_DOWN then
+					return Vector3.new(spot.X, below.Position.Y + height, spot.Z)
+				end
 			end
 		end
 		d -= 1
 	end
-	return from
+	return HeroKit.dashEnd(from, direction, distance, exclude)
 end
 
 return HeroKit

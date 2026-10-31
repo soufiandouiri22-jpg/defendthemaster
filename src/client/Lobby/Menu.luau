@@ -1,7 +1,9 @@
 -- The lobby's menu (designs 10 to 15 and 17) over the hall (Lobby.Showcase): the tab bar at the top (Play, Heroes,
 -- Shop, Pass, Ranked) with a back arrow on the left and the coins and the settings on the right, and under it the
 -- page of the chosen tab; the ladder (Leaderboard) opens from the Ranked page, the settings over everything. Away
--- from Play a dark veil lies over the hall. Notices (what the server answered) slide in under the tab bar.
+-- from Play a dark veil lies over the hall. Notices (what the server answered) slide in under the tab bar. A player
+-- without a hero starts on the welcome screen (Lobby.Welcome); becoming a hero there or on the heroes page plays his
+-- transformation on the podium (Showcase.transform) with the menu out of the way.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,6 +42,14 @@ export type Api = {
 	data: () -> Profile.Data?,
 	ask: (action: string, ...any) -> ProfileClient.Answer,
 	gui: ScreenGui,
+	-- Shows or hides the menu itself (the tab bar, the pages, the vignette), for the welcome screen and a
+	-- transformation.
+	chrome: (visible: boolean) -> (),
+	-- Opens the welcome screen (Lobby.Welcome).
+	welcome: () -> (),
+	-- Makes `hero` the player's hero and, when the server agrees, runs `before` (yielding), goes to the Play page and
+	-- plays the transformation on the podium; true when he became him.
+	become: (hero: string, before: (() -> ())?) -> boolean,
 }
 
 function Menu.start()
@@ -126,6 +136,7 @@ function Menu.start()
 	end
 
 	local settingsPage: any = nil
+	local becoming = false
 	api =
 		{
 			go = go,
@@ -162,6 +173,39 @@ function Menu.start()
 				return answer
 			end,
 			gui = gui,
+			chrome = function(visible: boolean)
+				top.Visible = visible
+				pages.Visible = visible
+				vignette.Visible = visible
+			end,
+			welcome = function()
+				require(script.Parent.Welcome).open(api)
+			end,
+			become = function(hero: string, before: (() -> ())?): boolean
+				if becoming then
+					return false
+				end
+				becoming = true
+				Showcase.hold(true)
+				local answer = api.ask("Favourite", hero)
+				if not answer.ok then
+					Showcase.hold(false)
+					becoming = false
+					return false
+				end
+				if before then
+					before()
+				end
+				go("Play")
+				api.chrome(false)
+				Showcase.view(0.5, nil, 0.6)
+				task.wait(0.45)
+				Showcase.transform(hero)
+				Showcase.hold(false)
+				api.chrome(true)
+				becoming = false
+				return true
+			end,
 		}
 
 	local _, select =
@@ -180,6 +224,13 @@ function Menu.start()
 	end)
 
 	go("Play")
+
+	-- A player without a hero yet starts on the welcome screen.
+	ProfileClient.watch(function(data)
+		if (data.Favourite or "") == "" and not becoming then
+			task.spawn(api.welcome)
+		end
+	end)
 end
 
 return Menu

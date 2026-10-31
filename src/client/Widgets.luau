@@ -392,6 +392,16 @@ local TIER_COLOURS = {
 	Color3.fromRGB(240, 140, 40),
 	Color3.fromRGB(30, 26, 30),
 }
+
+-- A tier's own colour (its badge's) light, as text on a dark plate, and dark; the black Master's are gold.
+function Widgets.tierColours(tier: number): (Color3, Color3)
+	if tier >= #TIER_COLOURS then
+		return C.Gold, C.GoldDark
+	end
+	local colour = TIER_COLOURS[tier] or C.Gold
+	return colour:Lerp(Color3.new(1, 1, 1), 0.4), colour:Lerp(Color3.new(0, 0, 0), 0.3)
+end
+
 function Widgets.badge(parent: Instance, tier: number, size: number, position: UDim2?, anchor: Vector2?): ImageLabel
 	local image = Instance.new("ImageLabel")
 	image.BackgroundTransparency = 1

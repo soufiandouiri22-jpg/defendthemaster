@@ -2,7 +2,8 @@
 -- account level with its XP, and his rank with its LP), his party under it (Lobby.Party: the leader with a crown and
 -- three places to invite into), the season pass's card at the top right (its level and the last reward), and at the
 -- bottom right the mode (Quick Play or Ranked, which opens as Ranks.unlocked says) over the PLAY button, which puts
--- the party in the queue (Net.Queue, server QueueService) and while it searches shows the time and cancels.
+-- the party in the queue (Net.Queue, server QueueService) and while it searches shows the time and cancels. Until the
+-- player has chosen his hero it reads CHOOSE HERO and opens the welcome screen (Lobby.Welcome).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -161,6 +162,12 @@ local function playArea(page: Frame, api: any)
 		return Ranks.unlocked(data)
 	end
 
+	-- Whether the player still has to choose his hero (his favourite is empty): PLAY then opens the welcome screen.
+	local function heroless(): boolean
+		local data = ProfileClient.get()
+		return data ~= nil and (data.Favourite or "") == ""
+	end
+
 	local function refresh()
 		local searching = state.state == "Searching" or state.state == "Found" or state.state == "Teleporting"
 		local leader = Party.isLeader()
@@ -168,7 +175,10 @@ local function playArea(page: Frame, api: any)
 		for _, arrow in arrows do
 			arrow.Visible = not searching and leader
 		end
-		if state.state == "Searching" then
+		if not searching and heroless() then
+			playText.Text = "CHOOSE HERO"
+			Widgets.enable(play, true, "Gold")
+		elseif state.state == "Searching" then
 			playText.Text = "CANCEL"
 			Widgets.enable(play, leader, "Blue")
 		elseif state.state == "Found" or state.state == "Teleporting" then
@@ -210,7 +220,9 @@ local function playArea(page: Frame, api: any)
 			return
 		end
 		pressed = os.clock()
-		if state.state == "Searching" then
+		if state.state ~= "Searching" and heroless() then
+			api.welcome()
+		elseif state.state == "Searching" then
 			queue:FireServer("Cancel")
 		else
 			queue:FireServer("Join", mode)

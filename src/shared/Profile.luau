@@ -22,6 +22,7 @@ export type Data = {
 	Xp: number,
 	Heroes: { [string]: boolean },
 	Favourite: string,
+	Welcomed: boolean,
 	LastHero: string,
 	Rank: any,
 	Mastery: { [string]: any },
@@ -36,6 +37,7 @@ function Profile.template(): Data
 		Xp = 0,
 		Heroes = {},
 		Favourite = "",
+		Welcomed = false,
 		LastHero = "",
 		Rank = {
 			Season = Config.Season.Number,

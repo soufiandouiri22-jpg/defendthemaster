@@ -1,10 +1,11 @@
 -- Client entry point of Defend The Master. The server says what this place is (the Workspace attribute "Role"): in the
 -- lobby the menu runs (Lobby.Menu), in a match the arena's views and the HUD, with the draft before the fight and the
--- end screen after it. The loading screen (ReplicatedFirst.Loading) stays up until the place's world and pictures are
--- loaded, and goes along on every teleport from here. The mouse is the game's gold gauntlet everywhere (Pointer).
+-- end screen after it. The loading screen (ReplicatedFirst.Loading) stays up until the place's world, pictures, music
+-- and, in a match, the draft are there, and goes along on every teleport from here. The mouse is the game's gold gauntlet everywhere (Pointer).
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Loading = require(ReplicatedFirst:WaitForChild("Loading"))
@@ -55,6 +56,7 @@ local AbilityBar = require(script.AbilityBar)
 local BuyPhase = require(script.BuyPhase)
 local CrownView = require(script.CrownView)
 local DamageView = require(script.DamageView)
+local Config = require(ReplicatedStorage.Shared.Config)
 local Draft = require(script.Draft)
 local HeroAnimator = require(script.HeroAnimator)
 local HeroBars = require(script.HeroBars)
@@ -72,6 +74,7 @@ local PadView = require(script.PadView)
 local RespawnTimer = require(script.RespawnTimer)
 local Scoreboard = require(script.Scoreboard)
 local Shop = require(script.Shop)
+local VersusView = require(script.VersusView)
 
 Music.start()
 HeroSounds.start()
@@ -93,8 +96,39 @@ task.spawn(PadView.start)
 AbilityBar.start()
 ItemBar.start()
 HeroControls.start()
-task.spawn(Draft.start)
+-- The loading screen stays until the draft is up, or without a draft until both teams' cards have been shown
+-- (VersusView), except on Studio's test ground, which has neither.
+local draftShown = Loading.hold()
+if RunService:IsStudio() and Workspace:GetAttribute("TestGround") == true then
+	draftShown()
+end
+if Config.Draft.Enabled then
+	task.spawn(Draft.start, draftShown)
+else
+	task.spawn(VersusView.start, draftShown, Loading.waitReady)
+end
 task.spawn(MatchEndView.start)
+task.spawn(function()
+	-- How far this client's loading screen is, for everyone's cards, until it has everything in.
+	local report = ReplicatedStorage:WaitForChild("Net"):WaitForChild("LoadProgress", 10) :: RemoteEvent?
+	while report do
+		local share, done = Loading.progress()
+		if done then
+			break
+		end
+		report:FireServer(share)
+		task.wait(0.3)
+	end
+end)
+task.spawn(function()
+	-- The server starts the draft once every player's client has everything in.
+	Loading.waitReady()
+	local net = ReplicatedStorage:WaitForChild("Net")
+	local ready = net:WaitForChild("ClientReady", 10) :: RemoteEvent?
+	if ready then
+		ready:FireServer()
+	end
+end)
 task.spawn(function()
 	Loading.preload(everything(), 12)
 	Loading.ready()

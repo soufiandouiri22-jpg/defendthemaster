@@ -1,7 +1,7 @@
 -- The heroes' page (design 11): every hero of Config.Heroes as a card in a grid (his portrait, name and class, and
 -- owned, his price, or the season pass he comes from), filtered by class, with places for heroes still to come; and
--- on the right the chosen hero large, with his line, his four abilities and what can be done with him: make him the
--- favourite on the podium, buy him for coins, or find him in the pass. A hero's mastery (Shared.Mastery) shows as his
+-- on the right the chosen hero large, with his line, his five abilities and what can be done with him: become him (the
+-- menu's `become`: back to Play, where the podium's hero turns into him), buy him for coins, or find him in the pass. A hero's mastery (Shared.Mastery) shows as his
 -- crest on his card, and for the chosen hero with the points to the next level, the Marks of Mastery it asks, the
 -- season's next milestone and, from level Config.Mastery.Title, his title.
 
@@ -24,7 +24,8 @@ local COLUMNS = 5
 -- The grid always shows at least this many places, the rest as heroes to come.
 local PLACES = 10
 local CARD_HEIGHT = 330
-local KEYS = { "M1", "M2", "E", "R" }
+local KEYS = { "M1", "M2", "E", "R", "Dash" }
+local LABELS = { Dash = "Shift" }
 local PURPLE = Widgets.Kinds.Purple
 
 local function heroNames(): { string }
@@ -164,7 +165,7 @@ function HeroesPage.build(page: Frame, api: any)
 	line.TextWrapped = true
 	local abilities = UiStyle.frame(side, UDim2.new(1, -60, 0, 130), UDim2.fromOffset(30, 548))
 	abilities.BackgroundTransparency = 1
-	local abilityLayout = Widgets.list(abilities, "Horizontal", 18)
+	local abilityLayout = Widgets.list(abilities, "Horizontal", 12)
 	abilityLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	local masteryBox = Widgets.dark(side, UDim2.new(1, -60, 0, 98), UDim2.fromOffset(30, 680), nil, 12)
 	masteryBox.Name = "Mastery"
@@ -259,10 +260,10 @@ function HeroesPage.build(page: Frame, api: any)
 			end
 		end
 		for i, key in KEYS do
-			local slot = UiStyle.frame(abilities, UDim2.fromOffset(100, 130))
+			local slot = UiStyle.frame(abilities, UDim2.fromOffset(86, 130))
 			slot.BackgroundTransparency = 1
 			slot.LayoutOrder = i
-			local box = UiStyle.frame(slot, UDim2.fromOffset(96, 96), UDim2.fromOffset(2, 0))
+			local box = UiStyle.frame(slot, UDim2.fromOffset(84, 84), UDim2.fromOffset(1, 6))
 			UiStyle.corner(box, 10)
 			UiStyle.gradient(box, Color3.fromRGB(60, 44, 70), Color3.fromRGB(24, 18, 30))
 			UiStyle.stroke(box, C.Edge, 3)
@@ -273,25 +274,25 @@ function HeroesPage.build(page: Frame, api: any)
 			icon.Image = settings.Icons and settings.Icons[key] or ""
 			icon.Parent = box
 			UiStyle.corner(icon, 8)
-			local keyText = Widgets.label(slot, key, 26, C.Ink)
+			local keyText = Widgets.label(slot, LABELS[key] or key, 26, C.Ink)
 			keyText.Size = UDim2.new(1, 0, 0, 30)
-			keyText.Position = UDim2.fromOffset(0, 100)
+			keyText.Position = UDim2.fromOffset(0, 94)
 		end
 
 		local owned = Profile.owns(data, selected)
 		if owned and data.Favourite == selected then
-			actionText.Text = "YOUR FAVOURITE"
+			actionText.Text = "YOUR HERO"
 			actionKind = "Gold"
 			Widgets.enable(action, false, actionKind)
 			onAction = nil
 		elseif owned then
-			actionText.Text = "SET AS FAVOURITE"
+			actionText.Text = "BECOME " .. string.upper(selected)
 			actionKind = "Blue"
 			Widgets.enable(action, true, actionKind)
 			onAction = function()
-				local answer = api.ask("Favourite", selected)
-				if answer.ok then
-					api.notice(selected .. " now stands on your podium.")
+				Widgets.enable(action, false, actionKind)
+				if not api.become(selected) then
+					render()
 				end
 			end
 		elseif HeroShop.forSale(selected) then

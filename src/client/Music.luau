@@ -2,8 +2,8 @@
 -- it up or down; in the lobby the menu's own track (Assets.MenuMusic, faded in the first time), which the menu music
 -- setting turns off, in a match the match's (Assets.Music) until the match ends: then it fades out and stays out, so
 -- the VICTORY or DEFEAT sting and the results have their quiet moment (MatchEndView). Silent on Studio's test ground
--- (the Workspace attribute "TestGround", server TestGround). The track downloads under the loading screen and starts
--- the moment the screen goes (Loading.waitGone).
+-- (the Workspace attribute "TestGround", server TestGround). The track downloads under the loading screen, which waits
+-- for it (Loading.need), and starts the moment the screen goes (Loading.waitGone).
 
 local ContentProvider = game:GetService("ContentProvider")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
@@ -37,6 +37,7 @@ function Music.start()
 	sound.SoundGroup = group
 	sound.Parent = group
 	track = sound
+	Loading.need(sound)
 	task.spawn(pcall, ContentProvider.PreloadAsync, ContentProvider, { sound })
 	task.spawn(function()
 		Loading.waitGone()

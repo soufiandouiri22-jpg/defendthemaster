@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Account = require(ReplicatedStorage.Shared.Account)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Places = require(ReplicatedStorage.Shared.Places)
 local Profile = require(ReplicatedStorage.Shared.Profile)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local Ladder = require(script.Parent.Ladder)
@@ -43,6 +44,18 @@ local function publish(player: Player, data: Profile.Data)
 	player:SetAttribute("RankShown", shown(player, data.Rank))
 	player:SetAttribute("RankPlacements", data.Rank.Placements)
 	player:SetAttribute("RankPosition", Ladder.position(player.UserId))
+	player:SetAttribute("RankWins", data.Rank.Wins)
+	player:SetAttribute("RankLosses", data.Rank.Losses)
+	player:SetAttribute("RankPeak", data.Rank.Peak)
+	-- His career for the profile card others open on him (PlayerCard).
+	player:SetAttribute("CareerGames", data.Stats.Games)
+	player:SetAttribute("CareerWins", data.Stats.Wins)
+	player:SetAttribute("CareerMvps", data.Stats.Mvps)
+	-- The hero he will play in a match without a draft and his mastery of him, for his card while the match loads.
+	local hero = Profile.showcase(data)
+	local mastery = data.Mastery[hero]
+	player:SetAttribute("Showcase", hero)
+	player:SetAttribute("ShowcaseMastery", if mastery then mastery.Level else 0)
 	push:FireClient(player, data)
 	for _, callback in changed do
 		task.spawn(callback, player, data)
@@ -66,6 +79,18 @@ local function newSeason(data: Profile.Data)
 	end
 	if data.Pass.Season < season then
 		data.Pass = { Season = season, Xp = 0, Claimed = {}, BoostUntil = data.Pass.BoostUntil }
+	end
+end
+
+-- A profile from before the welcome screen (Lobby.Welcome) has its favourite cleared once, so its player chooses his
+-- hero there like a new one; he keeps everything else. Config.Account.AlwaysWelcome's have it cleared in every lobby.
+local function welcome(player: Player, data: Profile.Data)
+	if not data.Welcomed then
+		data.Favourite = ""
+		data.Welcomed = true
+	end
+	if Places.isLobby() and table.find(Config.Account.AlwaysWelcome, player.UserId) then
+		data.Favourite = ""
 	end
 end
 
@@ -94,6 +119,7 @@ local function load(player: Player)
 		return
 	end
 	newSeason(profile.Data)
+	welcome(player, profile.Data)
 	sessions[player] = profile
 	player:SetAttribute("ProfileLoaded", true)
 	publish(player, profile.Data)

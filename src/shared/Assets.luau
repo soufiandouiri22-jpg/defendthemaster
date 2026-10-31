@@ -39,6 +39,8 @@ return {
 		"rbxassetid://138571839930861",
 		"rbxassetid://98368399916607",
 	},
+	-- Where each crest's picture starts under the top of its square, as a part of its height.
+	MasteryCrestTops = { 0.105, 0.105, 0.047, 0.047, 0.273, 0.047, 0.047, 0.047, 0.047, 0.121 },
 	GradeSeals = {
 		S = "rbxassetid://134692970944818",
 		A = "rbxassetid://121349763981518",

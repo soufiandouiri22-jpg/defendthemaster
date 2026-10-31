@@ -7,7 +7,8 @@
 -- name), the match's MVP in a gold card on its left and the losing
 -- team's best player in a card of his team's colour on its right, so everyone sees who stood out. PLAY AGAIN goes back to the lobby
 -- and into the queue with his party, BACK TO MENU only back; until the server sends everyone back a clock counts
--- down. The rest of the HUD hides meanwhile.
+-- down. Clicking a player opens his profile (PlayerCard): a star card turns round to it, a row opens it large. The rest
+-- of the HUD hides meanwhile.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,6 +20,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local HeroCamera = require(script.Parent.HeroCamera)
 local Music = require(script.Parent.Music)
+local PlayerCard = require(script.Parent.PlayerCard)
 local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 local Widgets = require(script.Parent.Widgets)
@@ -51,6 +53,14 @@ local BAND_H = 100
 local CARD_W = 380
 local CARD_GAP = 24
 local BUTTON_W = 560
+-- A star card's mastery crest: its width and how far above the card's foot it ends. The avatar round on the other
+-- side, a little larger than its barrel, has its YOU tag over its foot, the two raised together until the tag stands
+-- clear of the plate under it.
+local CREST, CREST_BOTTOM = 104, 168
+local AVATAR = 84
+local AVATAR_BOTTOM = CREST_BOTTOM + CREST - AVATAR + 11
+local TAG_W, TAG_H = 84, 30
+local TAG_MIDDLE = AVATAR_BOTTOM - 7
 -- The results (from HEAD_TOP, where the heading's plate and lettering begin, down to the rewards band) and the buttons
 -- with the clock under them (NEXT_H high) stand with as much room above the results as between them and the buttons
 -- and under the buttons: so the whole stands in the middle of the screen, and the buttons in the middle of the room
@@ -226,6 +236,48 @@ local function title(gui: ScreenGui, won: boolean): CanvasGroup
 	return image
 end
 
+-- What the profile (PlayerCard) of the player on `row` starts from.
+local function info(row: any): PlayerCard.Info
+	return {
+		userId = row.userId,
+		name = row.name,
+		hero = row.hero,
+		mastery = row.mastery,
+		shown = row.shown,
+		division = row.division,
+	}
+end
+
+-- Makes `target` open the profile card (PlayerCard) of the player on `row` when clicked, lighting up under the mouse;
+-- a bot has none.
+local function opens(target: GuiObject, row: any, radius: number)
+	if row.userId <= 0 then
+		return
+	end
+	local light = UiStyle.frame(target, UDim2.fromScale(1, 1))
+	light.Name = "Hover"
+	light.BackgroundColor3 = Color3.new(1, 1, 1)
+	light.BackgroundTransparency = 1
+	UiStyle.corner(light, radius)
+	local button = Instance.new("TextButton")
+	button.Name = "Profile"
+	button.Text = ""
+	button.BackgroundTransparency = 1
+	button.Size = UDim2.fromScale(1, 1)
+	button.ZIndex = 10
+	button.Parent = target
+	Widgets.feel(button)
+	button.MouseEnter:Connect(function()
+		Widgets.tween(light, 0.12, { BackgroundTransparency = 0.85 })
+	end)
+	button.MouseLeave:Connect(function()
+		Widgets.tween(light, 0.12, { BackgroundTransparency = 1 })
+	end)
+	button.Activated:Connect(function()
+		PlayerCard.open(target, info(row))
+	end)
+end
+
 -- Both teams' heroes; returns how high the panel is.
 local function scoreboard(parent: Instance, result: any): number
 	local outer, inner =
@@ -307,6 +359,7 @@ local function scoreboard(parent: Instance, result: any): number
 		if row.mvp then
 			medal(line, 38, UDim2.new(1, -8, 0.5, 0), Vector2.new(1, 0.5))
 		end
+		opens(line, row, 8)
 		y += ROW
 	end
 	local high = y + 34
@@ -367,15 +420,43 @@ local function starCard(parent: Instance, row: any, side: number, high: number, 
 	damage.Position = UDim2.fromOffset(16, 112)
 	gradeShield(plate, row.grade, 92, UDim2.new(1, -14, 0.5, 0), Vector2.new(1, 0.5))
 	if (row.mastery or 0) > 0 then
-		Widgets.crest(card, row.mastery, 104, UDim2.new(1, -18, 1, -168), Vector2.new(1, 1))
+		Widgets.crest(card, row.mastery, CREST, UDim2.new(1, -18, 1, -CREST_BOTTOM), Vector2.new(1, 1))
 	end
 
+	-- A player's own avatar (a bot has none) in a round over the portrait's corner, his YOU tag on its rim.
+	if row.userId > 0 then
+		local round = UiStyle.frame(
+			card,
+			UDim2.fromOffset(AVATAR, AVATAR),
+			UDim2.new(0, 18 + CREST / 2, 1, -AVATAR_BOTTOM),
+			Vector2.new(0.5, 1)
+		)
+		round.Name = "Avatar"
+		UiStyle.corner(round, UDim.new(0.5, 0))
+		UiStyle.gradient(round, fill[1], fill[2])
+		UiStyle.stroke(round, if mvp then C.Gold else fill[1], 4)
+		local head = Instance.new("ImageLabel")
+		head.BackgroundTransparency = 1
+		head.Size = UDim2.fromScale(1, 1)
+		head.Image = "rbxthumb://type=AvatarHeadShot&id=" .. row.userId .. "&w=150&h=150"
+		head.Parent = round
+		UiStyle.corner(head, UDim.new(0.5, 0))
+	end
 	if row.userId == player.UserId and row.userId > 0 then
-		local you = UiStyle.frame(card, UDim2.fromOffset(96, 38), UDim2.new(0, 28, 1, -172), Vector2.new(0, 1))
-		UiStyle.corner(you, 10)
+		local you = UiStyle.frame(
+			card,
+			UDim2.fromOffset(TAG_W, TAG_H),
+			UDim2.new(0, 18 + CREST / 2, 1, -TAG_MIDDLE),
+			Vector2.new(0.5, 0.5)
+		)
+		you.ZIndex = 3
+		UiStyle.corner(you, 9)
 		UiStyle.gradient(you, Color3.fromRGB(255, 226, 140), Color3.fromRGB(236, 182, 76))
 		UiStyle.stroke(you, C.Edge, 3)
-		Widgets.label(you, "YOU", 24, C.Cream, nil, C.Edge)
+		Widgets.label(you, "YOU", 22, C.Cream, nil, C.Edge).ZIndex = you.ZIndex + 1
+	end
+	if row.userId > 0 then
+		PlayerCard.flippable({ holder, card }, card, info(row), 16)
 	end
 end
 
@@ -625,30 +706,31 @@ local function results(gui: ScreenGui, titleImage: CanvasGroup, event: RemoteEve
 	local after = UiStyle.frame(canvas, UDim2.new(1, 0, 0, NEXT_H), UDim2.new(0, 0, 2 / 3, total / 3 - NEXT_H))
 	after.BackgroundTransparency = 1
 	after.Name = "Next"
+	-- PLAY AGAIN on the right in gold, as PLAY on the menu; BACK TO MENU beside it in blue.
 	local again, againText = Widgets.button(
 		after,
 		"PLAY AGAIN",
-		"Blue",
-		UDim2.fromOffset(BUTTON_W, 90),
-		UDim2.new(0.5, -12, 0, 0),
-		Vector2.new(1, 0),
-		48
-	)
-	again.Name = "PlayAgain"
-	local menu, menuText = Widgets.button(
-		after,
-		"BACK TO MENU",
 		"Gold",
 		UDim2.fromOffset(BUTTON_W, 90),
-		UDim2.new(0.5, 12, 0, 0),
+		UDim2.new(0.5, 12, 0, -8),
 		Vector2.new(0, 0),
 		48
 	)
+	again.Name = "PlayAgain"
+	Widgets.shimmer(again)
+	local menu, menuText = Widgets.button(
+		after,
+		"BACK TO MENU",
+		"Blue",
+		UDim2.fromOffset(BUTTON_W, 90),
+		UDim2.new(0.5, -12, 0, -8),
+		Vector2.new(1, 0),
+		48
+	)
 	menu.Name = "BackToMenu"
-	Widgets.shimmer(menu)
 	local clock = Widgets.label(after, "", 22, C.Cream, nil, C.Edge)
 	clock.Size = UDim2.new(1, 0, 0, 28)
-	clock.Position = UDim2.fromScale(0, 1)
+	clock.Position = UDim2.new(0, 0, 1, 4)
 	clock.AnchorPoint = Vector2.new(0, 1)
 	Widgets.every(clock, 0.5, function()
 		local left = (result.returnAt or 0) - Workspace:GetServerTimeNow()
@@ -662,16 +744,16 @@ local function results(gui: ScreenGui, titleImage: CanvasGroup, event: RemoteEve
 		end
 		chosen = true
 		label.Text = "GOING BACK..."
-		Widgets.enable(again, false, "Blue")
-		Widgets.enable(menu, false, "Gold")
+		Widgets.enable(again, false, "Gold")
+		Widgets.enable(menu, false, "Blue")
 		event:FireServer(action)
 		task.delay(12, function()
 			-- Still here: the teleport failed, so the buttons work again.
 			if gui.Parent then
 				chosen = false
 				againText.Text, menuText.Text = "PLAY AGAIN", "BACK TO MENU"
-				Widgets.enable(again, true, "Blue")
-				Widgets.enable(menu, true, "Gold")
+				Widgets.enable(again, true, "Gold")
+				Widgets.enable(menu, true, "Blue")
 			end
 		end)
 	end

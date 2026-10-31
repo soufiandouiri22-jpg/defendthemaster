@@ -66,6 +66,13 @@ local CUES: { [string]: Cue } = {
 	Respawn = { asset = Assets.MagicExit, start = 0.15, length = 1.85, gain = 0.55 },
 	PadHeal = { asset = Assets.MagicGlow, start = 0, length = 1.2, gain = 3.75, near = 10, far = 50 },
 
+	-- The player's avatar turning into his hero on the podium (Lobby.Showcase): the power gathering and swirling round
+	-- him, the blast that turns him, and the shimmer the hero stands in.
+	TransformCharge = { asset = Assets.MagicTwirl, start = 0, length = 1.4, gain = 1.1 },
+	TransformSwirl = { asset = Assets.MagicExit, start = 0.15, length = 1.85, gain = 0.9 },
+	TransformBoom = { asset = Assets.FightBoom, start = 0, gain = 1.5 },
+	TransformShimmer = { asset = Assets.FallingShimmer, start = 0.4, length = 2.5, gain = 1.1 },
+
 	-- The Sun Crown: taken by the enemy, fading.
 	CrownEnemy = { asset = Assets.EvilBell, start = 0.5, length = 3, gain = 1.35 },
 	CrownFades = { asset = Assets.FallingShimmer, start = 0.4, length = 2.5, gain = 1.1 },
@@ -219,8 +226,10 @@ end
 
 -- An announcement goes before every other sound (owner, 2026-10-30): the music and the effects sink to DUCK of
 -- their volume within DUCK_IN seconds while it plays and come back over DUCK_OUT, and a new one fades the one before
--- out over CUT seconds instead of playing over it.
+-- out over CUT seconds instead of playing over it. They come back as soon as the sting dies away (owner, 2026-10-30):
+-- once it has played HELD seconds and stayed under TAIL of its loudest for QUIET seconds, its tail plays over them.
 local DUCK, DUCK_IN, DUCK_OUT, CUT = 0.35, 0.1, 0.6, 0.15
+local HELD, TAIL, QUIET = 0.5, 0.3, 0.15
 local announcement: Sound? = nil
 local duckLevel = Instance.new("NumberValue")
 duckLevel.Value = 1
@@ -254,12 +263,29 @@ function UiSound.announce(name: string, volume: number?)
 		while sound.Parent and not sound.IsPlaying and os.clock() - waited < 3 do
 			task.wait(0.05)
 		end
+		local began = os.clock()
+		local loudest, quietSince = 0, nil
+		while sound.Parent and sound.IsPlaying and sound.Volume > 0 do
+			local loudness = sound.PlaybackLoudness
+			loudest = math.max(loudest, loudness)
+			if loudness < loudest * TAIL then
+				quietSince = quietSince or os.clock()
+				if os.clock() - began >= HELD and os.clock() - quietSince >= QUIET then
+					break
+				end
+			else
+				quietSince = nil
+			end
+			task.wait(0.05)
+		end
+		if announcement == sound then
+			duckTo(1, DUCK_OUT)
+		end
 		while sound.Parent and sound.IsPlaying and sound.Volume > 0 do
 			task.wait(0.05)
 		end
 		if announcement == sound then
 			announcement = nil
-			duckTo(1, DUCK_OUT)
 		end
 	end)
 end

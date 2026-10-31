@@ -638,10 +638,13 @@ Config.Items = {
 
 -- The start of a match: after the draft (Config.Draft) the heroes have `BuyTime` seconds to shop before the fight
 -- begins. Until then nobody can attack, no minions come and no passive coins are paid; the match clock starts with the
--- fight. A match without a queue record (Studio) waits `WaitForPlayer` seconds for its first player.
+-- fight. A match without a queue record (Studio) waits `WaitForPlayer` seconds for its first player. Without a draft
+-- both teams' players are shown on their cards (VersusView) for `Versus` seconds once everyone has his hero, before the
+-- buy phase starts (owner, 2026-10-31).
 Config.Match = {
 	BuyTime = 15,
 	WaitForPlayer = 20,
+	Versus = 4.5,
 }
 
 -- The Sun Crown, the objective on the plateau in the middle: it appears `FirstAt` seconds into the fight and floats
@@ -976,7 +979,9 @@ Config.Heroes = {
 			M2 = "rbxassetid://94119815193611",
 			E = "rbxassetid://113948018234539",
 			R = "rbxassetid://117092938457390",
-			Dash = "rbxassetid://104572602673907",
+			-- Rowan himself hopping out of green wind (the bow alone of before: rbxassetid://104572602673907,
+			-- Art/Icons/Rowan/Dash_bow.png).
+			Dash = "rbxassetid://101776187267573",
 		},
 		Pack = "Ranger",
 		-- The bow and the arrow are skinned to the pack's bones, the quiver is rigid on his back (Shared.Motion).
@@ -1267,7 +1272,7 @@ Config.DefaultHero = "Shadowren"
 Config.Pads = {
 	Heal = 0.10,
 	Tick = 1,
-	CombatPause = 5,
+	CombatPause = 3,
 }
 
 Config.Respawn = {
@@ -1492,12 +1497,15 @@ Config.Season = {
 }
 
 -- A player's account (Shared.Account): what he starts with, and the account XP each level asks, `First` for the first
--- and `PerLevel` more for every one after it up to level `Plateau`, the same after it; there is no top level.
+-- and `PerLevel` more for every one after it up to level `Plateau`, the same after it; there is no top level. The
+-- accounts of `AlwaysWelcome` (by UserId) have their hero cleared every time they come into the lobby, so they always
+-- see the welcome screen (Lobby.Welcome): the owner's DraivoGames, to try it (owner, 2026-10-30).
 Config.Account = {
 	StartCoins = 500,
 	First = 300,
 	PerLevel = 50,
 	Plateau = 30,
+	AlwaysWelcome = { 11859499496 },
 }
 
 -- Ranked (Shared.Ranks), as League of Legends (Docs/League_Reference.md): the tiers in order, the first `Divided` with
@@ -1643,7 +1651,10 @@ Config.Queue = {
 -- The draft (design 07, DraftService): the teams pick in `Order`, `Turn` seconds each; a bot picks after a moment
 -- between `BotDelay`'s two. Each hero once per match, while the picker has an untaken one of his own. After the last
 -- pick the heroes are shown for `Ready` seconds. The match waits `Arrive` seconds for its players to come in.
+-- Without `Enabled` there is no draft: every player comes in as the hero he chose in the lobby (his favourite) and
+-- the bots take theirs from Config.Bots.Lineup (DraftService.assign); the draft stays here to be switched back on.
 Config.Draft = {
+	Enabled = false,
 	Order = { "Blue1", "Red1", "Red2", "Blue2", "Blue3", "Red3", "Red4", "Blue4" },
 	Turn = 25,
 	BotDelay = { 1.2, 2.5 },

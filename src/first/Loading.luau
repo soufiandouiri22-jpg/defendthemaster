@@ -1,10 +1,15 @@
--- The loading screen: one picture of a fight in the colosseum with the game's logo in it, LOADING and a running bar under
--- it. It lives in ReplicatedFirst
+-- The loading screen (STYLE): black with two white blades of the Master's greatsword that swing together, clash and
+-- turn round together, and LOADING with how far it is and a bar that fills as far (owner, 2026-10-31: no logo); or
+-- the colosseum it had before (owner, 2026-10-31: kept for when the new one does not please), one picture with the
+-- logo in it, LOADING and a running bar. It lives in ReplicatedFirst
 -- so it is up before anything else: on joining (LoadingScreen) it stays until the client has loaded what its first look
--- shows (Loading.ready, from the client once its world and pictures are in), nothing is downloading any more and the
--- world has rendered a moment behind it, or after LONGEST seconds; and a teleport carries
--- the same screen across (Loading.forTeleport), so going from a match to the lobby or back never shows a half-built
--- world.
+-- shows (Loading.ready, from the client once its world and pictures are in), nothing is downloading any more, the
+-- world has rendered a moment behind it and every picture and sound the player meets when it goes is in, or after
+-- LONGEST seconds; then until the screen after it is there (Loading.hold: in a match the draft, which the server starts
+-- once every player's client is ready, Loading.waitReady), so the draft and its music come all at once; and a
+-- teleport carries the same screen across (Loading.forTeleport), so going from a match to the lobby or back never
+-- shows a half-built world. The mouse's gauntlet (Loading.pointer) shows from its first frame on (owner, 2026-10-31:
+-- the mouse goes along from the menu).
 
 local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
@@ -12,8 +17,33 @@ local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Loading = {}
+
+-- Which screen shows: "Blades", or "Colosseum" for the one before.
+local STYLE = "Blades"
+
+-- The blades (Tools/loading_blades.py): the Master's greatsword lying flat with its tip to the right, sharp
+-- (Art/UI/loading_blade.png) or soft and round like a toy sword (Art/UI/loading_blade_soft.png), and the soft white
+-- light behind them (Art/UI/loading_light.png). Sizes are shares of the screen's height.
+local BLADES = { Sharp = "rbxassetid://104061655905115", Soft = "rbxassetid://76085931021800" }
+local BLADE = BLADES.Soft
+local LIGHT = "rbxassetid://87753297282222"
+local BLADE_ASPECT = 1024 / 310
+local BLADE_LONG = 0.34
+local BLADES_AT = 0.44
+local LIGHT_SIZE = 0.62
+-- One round of the blades in seconds: they swing together until SWUNG, clash, hold until TURN, turn half round
+-- together until TURNED and swing apart again until the round's end; OPEN degrees apart at the widest.
+local ROUND, SWUNG, TURN, TURNED = 2.6, 0.42, 0.9, 2.05
+-- The blades' own clock goes on at most this many seconds a frame: after a frame the game stalled on (the world coming
+-- in) they carry on from where they were instead of jumping ahead to catch up.
+local STEP = 1 / 20
+local OPEN = 58
+-- LOADING and the bar under the blades.
+local LABEL_AT, LABEL_SIZE = 0.665, 0.034
+local BAR_AT, BAR_LONG, BAR_THICK = 0.715, 0.3, 0.006
 
 -- The colosseum in sharp focus (owner, 2026-10-28) with Docs/Designs/Logo/dtm_logo_main.png, LOADING and the bar under
 -- it as one block exactly in the middle of the screen, as three pictures made by Tools/loading_art.py and uploaded
@@ -42,11 +72,32 @@ local PICTURES = 4
 local QUIET = 0.5
 -- The world renders at least this long and this many frames behind the screen before it goes.
 local SETTLE, SETTLE_FRAMES = 3.5, 150
+-- The screen waits at most this long for what holds it (a match waits Config.Draft.Arrive for its players), and then
+-- this long for the pictures of the screen under it.
+local HELD = 45
+local SHOWN = 5
+-- The mouse pointer: the game's gold gauntlet (Shared.Assets.Pointer, which Pointer.start passes on; this copy only
+-- until it does, as ReplicatedStorage is not here yet), its height on the screen, the picture's size and its fingertip
+-- (where it clicks) in it; above every other screen, the loading screen (1000) included.
+local POINTER = "rbxassetid://124420581695634"
+local POINTER_HIGH = 54
+local POINTER_PICTURE = Vector2.new(211, 238)
+local POINTER_TIP = Vector2.new(7, 11)
+local POINTER_ORDER = 2000
+local gauntlet: ImageLabel? = nil
 
 local readyNow = false
 local shown: ScreenGui? = nil
 local gone = false
 local goneSignal = Instance.new("BindableEvent")
+local holds = 0
+local needs: { Instance } = {}
+local readyAll = false
+local readySignal = Instance.new("BindableEvent")
+-- How far the loading is (0 to 1, never going back), and whether all that is left is waiting for what holds the
+-- screen (the other players).
+local progress = 0
+local waiting = false
 
 local function corner(parent: Instance, radius: UDim)
 	local c = Instance.new("UICorner")
@@ -96,8 +147,106 @@ local function fade(root: Instance, visible: boolean, seconds: number): Tween?
 	return last
 end
 
--- A new loading screen.
-function Loading.build(): ScreenGui
+-- An empty button over it all that takes every click, so nothing of the menu behind it can be pressed. Roblox still
+-- tells the buttons behind when the mouse comes over them, which is why UiSound stays silent until the screen goes.
+local function shield(group: Frame)
+	local button = Instance.new("TextButton")
+	button.Name = "Shield"
+	button.Text = ""
+	button.BackgroundTransparency = 1
+	button.AutoButtonColor = false
+	button.Selectable = false
+	button.Size = UDim2.fromScale(1, 1)
+	button.Parent = group
+end
+
+-- A frame sized and placed in shares of the screen's height, round its middle at `x` of the width and `y` of the
+-- height.
+local function tall(
+	parent: Instance,
+	name: string,
+	class: string,
+	x: number,
+	y: number,
+	wide: number,
+	high: number
+): any
+	local item = Instance.new(class)
+	item.Name = name
+	item.BackgroundTransparency = 1
+	item.AnchorPoint = Vector2.new(0.5, 0.5)
+	item.Position = UDim2.fromScale(x, y)
+	item.SizeConstraint = Enum.SizeConstraint.RelativeYY
+	item.Size = UDim2.fromScale(wide, high)
+	item.Parent = parent
+	return item
+end
+
+-- The black screen with the blades.
+local function buildBlades(): ScreenGui
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "Loading"
+	gui.IgnoreGuiInset = true
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 1000
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	local group = Instance.new("Frame")
+	group.Name = "Group"
+	group.Size = UDim2.fromScale(1, 1)
+	group.BackgroundTransparency = 1
+	group.Parent = gui
+	local back = Instance.new("Frame")
+	back.Name = "Back"
+	back.Size = UDim2.fromScale(1, 1)
+	back.BackgroundColor3 = Color3.new(0, 0, 0)
+	back.BorderSizePixel = 0
+	back.Parent = group
+	local content = Instance.new("Frame")
+	content.Name = "Content"
+	content.Size = UDim2.fromScale(1, 1)
+	content.BackgroundTransparency = 1
+	content.Parent = group
+
+	local light = tall(content, "Light", "ImageLabel", 0.5, BLADES_AT, LIGHT_SIZE, LIGHT_SIZE)
+	light.Image = LIGHT
+	light.ImageTransparency = 0.9
+	local ring = tall(content, "Ring", "Frame", 0.5, BLADES_AT, 0.1, 0.1)
+	corner(ring, UDim.new(0.5, 0))
+	local ringEdge = Instance.new("UIStroke")
+	ringEdge.Color = Color3.new(1, 1, 1)
+	ringEdge.Thickness = 3
+	ringEdge.Transparency = 1
+	ringEdge.Parent = ring
+	for _, name in { "BladeBack", "BladeFront" } do
+		local blade = tall(content, name, "ImageLabel", 0.5, BLADES_AT, BLADE_LONG, BLADE_LONG / BLADE_ASPECT)
+		blade.Image = BLADE
+	end
+
+	local label = tall(content, "Label", "TextLabel", 0.5, LABEL_AT, 1, LABEL_SIZE)
+	label.Font = Enum.Font.FredokaOne
+	label.Text = "LOADING"
+	label.TextScaled = true
+	label.TextColor3 = Color3.new(1, 1, 1)
+	local track = tall(content, "Track", "Frame", 0.5, BAR_AT, BAR_LONG, BAR_THICK)
+	track.BackgroundTransparency = 0.82
+	track.BackgroundColor3 = Color3.new(1, 1, 1)
+	track.BorderSizePixel = 0
+	track.ClipsDescendants = true
+	corner(track, UDim.new(0.5, 0))
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BackgroundColor3 = Color3.new(1, 1, 1)
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	corner(fill, UDim.new(0.5, 0))
+
+	shield(group)
+	return gui
+end
+
+-- The colosseum screen that came before.
+local function buildColosseum(): ScreenGui
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "Loading"
 	gui.IgnoreGuiInset = true
@@ -223,42 +372,151 @@ function Loading.build(): ScreenGui
 	shine.Color = ColorSequence.new(GOLD, GOLD_DARK)
 	shine.Parent = fill
 
-	-- Over it all an empty button that takes every click, so nothing of the menu behind it can be pressed. Roblox still
-	-- tells the buttons behind when the mouse comes over them, which is why UiSound stays silent until the screen goes.
-	local shield = Instance.new("TextButton")
-	shield.Name = "Shield"
-	shield.Text = ""
-	shield.BackgroundTransparency = 1
-	shield.AutoButtonColor = false
-	shield.Selectable = false
-	shield.Size = UDim2.fromScale(1, 1)
-	shield.Parent = group
+	shield(group)
 	return gui
 end
 
--- Shows the screen that came with a teleport, or a new one, in place of Roblox's own, with its bar running.
+-- A new loading screen.
+function Loading.build(): ScreenGui
+	return if STYLE == "Colosseum" then buildColosseum() else buildBlades()
+end
+
+-- 0 at `from`, 1 at `to`, eased in and out.
+local function ease(t: number, from: number, to: number): number
+	local x = math.clamp((t - from) / (to - from), 0, 1)
+	return x * x * (3 - 2 * x)
+end
+
+-- Runs the blades, the light, the clash's ring, the bar and LOADING with its share every frame until the screen goes.
+-- The blades turn on from where the last round left them (half a turn each round), so no round starts with a jump.
+local function animate(gui: ScreenGui)
+	local front = gui:FindFirstChild("BladeFront", true) :: ImageLabel
+	local back = gui:FindFirstChild("BladeBack", true) :: ImageLabel
+	local light = gui:FindFirstChild("Light", true) :: ImageLabel?
+	local ring = gui:FindFirstChild("Ring", true) :: Frame?
+	local ringEdge = ring and ring:FindFirstChildOfClass("UIStroke")
+	local fill = gui:FindFirstChild("Fill", true) :: Frame?
+	local label = gui:FindFirstChild("Label", true) :: TextLabel?
+	local bladeSize = front.Size
+	local clock = 0
+	local seen = 0
+	local connection
+	connection = RunService.RenderStepped:Connect(function(dt)
+		if not gui.Parent then
+			connection:Disconnect()
+			return
+		end
+		local step = math.min(dt, STEP)
+		clock += step
+		local round = math.floor(clock / ROUND)
+		local t = clock - round * ROUND
+		-- Apart at the round's start and end, together from SWUNG (overshooting a little as they strike) to TURNED.
+		local closing = math.clamp(t / SWUNG, 0, 1)
+		local strike = 1 - closing ^ 2.4
+		local spread = if t < SWUNG then strike else ease(t, TURNED, ROUND) ^ 1.6
+		local bounce = if t >= SWUNG then math.sin(math.min(1, (t - SWUNG) / 0.22) * math.pi) * -0.08 else 0
+		local turn = (round + ease(t, TURN, TURNED)) * 180
+		local open = OPEN * (spread + bounce)
+		front.Rotation = turn - 45 + open
+		back.Rotation = turn - 135 - open
+		-- The clash: the blades jump a little, a ring races out and the light flares.
+		local since = t - SWUNG
+		local pop = if since >= 0 then math.exp(-since * 9) else 0
+		local grow = 1 + 0.07 * pop
+		front.Size = UDim2.fromScale(bladeSize.X.Scale * grow, bladeSize.Y.Scale * grow)
+		back.Size = front.Size
+		-- Once the screen fades out the ring is left to the fade.
+		if ring and ringEdge and not gone then
+			local out = if since >= 0 then math.clamp(since / 0.55, 0, 1) else 1
+			local wide = 0.12 + 0.36 * (1 - (1 - out) ^ 3)
+			ring.Size = UDim2.fromScale(wide, wide)
+			ringEdge.Transparency = 0.35 + 0.65 * out
+		end
+		if light then
+			local size = LIGHT_SIZE * (1 + 0.18 * pop)
+			light.Size = UDim2.fromScale(size, size)
+		end
+		seen += (progress - seen) * step * 5
+		if fill then
+			fill.Size = UDim2.fromScale(seen, 1)
+		end
+		if label then
+			label.Text = if waiting then "WAITING FOR PLAYERS" else `LOADING  {math.floor(seen * 100 + 0.5)}%`
+		end
+	end)
+end
+
+-- The mouse as the game's gold gauntlet, a picture following the hidden system mouse every frame (Roblox's own
+-- MouseIcon falls back to its arrow over every button and on every click), from the loading screen's first frame on,
+-- so it goes along from the menu without a gap; not while the camera holds the mouse in the middle (HeroCamera's
+-- crosshair) or where there is no mouse. The screen does not wait for its picture. Once only; `image` replaces the
+-- picture.
+function Loading.pointer(image: string?)
+	if gauntlet then
+		gauntlet.Image = image or gauntlet.Image
+		return
+	end
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "Pointer"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	-- After parenting: a ScreenGui created at runtime can ignore DisplayOrder set before it has a parent.
+	gui.DisplayOrder = POINTER_ORDER
+	local picture = Instance.new("ImageLabel")
+	picture.Name = "Gauntlet"
+	picture.BackgroundTransparency = 1
+	picture.Image = image or POINTER
+	picture.Size = UDim2.fromOffset(math.round(POINTER_HIGH * POINTER_PICTURE.X / POINTER_PICTURE.Y), POINTER_HIGH)
+	picture.AnchorPoint = POINTER_TIP / POINTER_PICTURE
+	picture.Active = false
+	picture.Parent = gui
+	gauntlet = picture
+	task.spawn(function()
+		pcall(ContentProvider.PreloadAsync, ContentProvider, { picture })
+	end)
+	RunService:BindToRenderStep("Pointer", Enum.RenderPriority.Last.Value, function()
+		-- The draft and the end screen switch every other screen off while they are up.
+		gui.Enabled = true
+		local free = UserInputService.MouseEnabled and UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter
+		local at = UserInputService:GetMouseLocation()
+		picture.Position = UDim2.fromOffset(at.X, at.Y)
+		picture.Visible = free
+		UserInputService.MouseIconEnabled = false
+	end)
+end
+
+-- Shows the screen that came with a teleport, or a new one, in place of Roblox's own, with its blades turning (or the
+-- colosseum's bar running).
 function Loading.show()
 	local gui = TeleportService:GetArrivingTeleportGui() or Loading.build()
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	ReplicatedFirst:RemoveDefaultLoadingScreen()
-	-- The picture, the logo, LOADING and the bar come in together once the pictures have loaded (at once when they came
-	-- along with a teleport), or after PICTURES seconds.
+	Loading.pointer()
+	-- Everything on it comes in together once its pictures have loaded (at once when they came along with a
+	-- teleport), or after PICTURES seconds.
 	local content = gui:FindFirstChild("Content", true)
 	local art = gui:FindFirstChild("Art", true) :: ImageLabel?
-	local logo = gui:FindFirstChild("Logo", true) :: ImageLabel?
-	local glow = gui:FindFirstChild("Glow", true) :: ImageLabel?
 	if art then
 		fit(art, gui.AbsoluteSize)
 		gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 			fit(art, gui.AbsoluteSize)
 		end)
 	end
-	if content and art and logo and glow and not (art.IsLoaded and logo.IsLoaded and glow.IsLoaded) then
+	local pictures = {}
+	local missing = false
+	for _, item in if content then content:GetDescendants() else {} do
+		if item:IsA("ImageLabel") then
+			table.insert(pictures, item)
+			missing = missing or not item.IsLoaded
+		end
+	end
+	if content and missing then
 		fade(content, false, 0)
 		task.spawn(function()
 			local done = false
 			task.spawn(function()
-				pcall(ContentProvider.PreloadAsync, ContentProvider, { art, logo, glow })
+				pcall(ContentProvider.PreloadAsync, ContentProvider, pictures)
 				done = true
 			end)
 			local started = os.clock()
@@ -269,7 +527,9 @@ function Loading.show()
 		end)
 	end
 	local fill = gui:FindFirstChild("Fill", true) :: Frame?
-	if fill then
+	if gui:FindFirstChild("BladeFront", true) then
+		animate(gui)
+	elseif fill then
 		fill.Position = UDim2.fromScale(-0.3, 0)
 		TweenService:Create(
 			fill,
@@ -317,21 +577,147 @@ function Loading.isGone(): boolean
 	return gone
 end
 
--- Waits for the game, the client (Loading.ready) and every download, then lets the world render a while behind the
--- screen (its lights take a moment to settle where the camera now stands), at most LONGEST seconds, and fades out.
+-- How far the loading is, 0 to 1 (the bar), and whether the client has everything in (Loading.waitReady).
+function Loading.progress(): (number, boolean)
+	return progress, readyAll
+end
+
+-- Keeps the screen up until the returned function is called (the screen that comes after it is there, Draft), at
+-- most HELD seconds.
+function Loading.hold(): () -> ()
+	holds += 1
+	local released = false
+	return function()
+		if not released then
+			released = true
+			holds -= 1
+		end
+	end
+end
+
+-- Lets clicks through to a screen shown over this one (Versus): the shield takes them from every screen, also from
+-- those with a higher DisplayOrder.
+function Loading.unshield()
+	local guard = shown and shown:FindFirstChild("Shield", true)
+	if guard and guard:IsA("GuiObject") then
+		guard.Visible = false
+	end
+end
+
+-- Keeps the screen up until `instance` (a Sound) has loaded, so it can start the moment the screen goes.
+function Loading.need(instance: Instance)
+	table.insert(needs, instance)
+end
+
+-- Waits until the client has everything in (Loading.finish), while the screen is still up: the moment to tell the
+-- server it may start (the draft waits for it).
+function Loading.waitReady()
+	if not readyAll then
+		readySignal.Event:Wait()
+	end
+end
+
+local function failed(id: string): boolean
+	local ok, status = pcall(ContentProvider.GetAssetFetchStatus, ContentProvider, id)
+	return ok and (status == Enum.AssetFetchStatus.Failure or status == Enum.AssetFetchStatus.TimedOut)
+end
+
+local function seen(item: GuiObject): boolean
+	local at: Instance? = item
+	while at and not at:IsA("LayerCollector") do
+		if at:IsA("GuiObject") and not at.Visible then
+			return false
+		end
+		at = at.Parent
+	end
+	return at ~= nil and (at :: LayerCollector).Enabled
+end
+
+-- How much of what the player will see when the screen goes is not in yet: every picture shown on the screens under
+-- it (Roblox draws a picture only once it is shown, so these load now, under the screen), and every sound needed.
+local function left(): number
+	local count = 0
+	for _, sound in needs do
+		if sound.Parent and sound:IsA("Sound") and not sound.IsLoaded and not failed(sound.SoundId) then
+			count += 1
+		end
+	end
+	local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	for _, gui in if playerGui then playerGui:GetChildren() else {} do
+		if
+			gui == shown
+			or gui == (gauntlet and gauntlet.Parent)
+			or not gui:IsA("LayerCollector")
+			or not gui.Enabled
+		then
+			continue
+		end
+		for _, item in gui:GetDescendants() do
+			if
+				(item:IsA("ImageLabel") or item:IsA("ImageButton"))
+				and item.Image ~= ""
+				and not item.IsLoaded
+				and seen(item)
+				and not failed(item.Image)
+			then
+				count += 1
+			end
+		end
+	end
+	return count
+end
+
+local function allIn(): boolean
+	return left() == 0
+end
+
+-- The bar never goes back.
+local function reach(share: number)
+	progress = math.max(progress, math.clamp(share, 0, 1))
+end
+
+-- The share of a stage that runs from `from` to `to` done, as `done` (0 to 1) of it.
+local function stage(from: number, to: number, done: number)
+	reach(from + (to - from) * math.clamp(done, 0, 1))
+end
+
+-- How far the downloads are: what has come in of the most that waited at once since the returned function was made.
+local function downloads(): () -> number
+	local most = 0
+	return function()
+		local size = ContentProvider.RequestQueueSize
+		most = math.max(most, size)
+		return if most > 0 then 1 - size / most else 0
+	end
+end
+
+-- Waits for the game, the client (Loading.ready) and every download, lets the world render a while behind the screen
+-- (its lights take a moment to settle where the camera now stands) and waits until all it will show is in, at most
+-- LONGEST seconds; then for whatever holds it (Loading.hold) and again until the screen under it is in, at most HELD
+-- seconds; and fades out. The bar shows how far: the game in (to LOADED), the client's own loading by its downloads (to
+-- CLIENT), the last downloads (to FETCHED), the world settling (to SETTLED) and the pictures under it (to the end).
+local LOADED, CLIENT, FETCHED, SETTLED = 0.1, 0.6, 0.7, 0.85
 function Loading.finish()
 	local started = os.clock()
 	local function late(): boolean
 		return os.clock() - started >= LONGEST
 	end
-	if not game:IsLoaded() then
-		game.Loaded:Wait()
-	end
-	while not readyNow and not late() do
+	local fetched = downloads()
+	while not game:IsLoaded() do
+		stage(0, LOADED, fetched())
 		task.wait(0.1)
 	end
+	reach(LOADED)
+	fetched = downloads()
+	while not readyNow and not late() do
+		stage(LOADED, CLIENT, fetched())
+		task.wait(0.1)
+	end
+	reach(CLIENT)
+	fetched = downloads()
 	local emptySince = nil
 	while not late() do
+		stage(CLIENT, FETCHED, fetched())
 		if ContentProvider.RequestQueueSize > 0 then
 			emptySince = nil
 		elseif not emptySince then
@@ -341,10 +727,36 @@ function Loading.finish()
 		end
 		task.wait(0.1)
 	end
+	reach(FETCHED)
 	local frames, since = 0, os.clock()
 	while (frames < SETTLE_FRAMES or os.clock() - since < SETTLE) and not late() do
 		RunService.RenderStepped:Wait()
 		frames += 1
+		stage(FETCHED, SETTLED, math.min(frames / SETTLE_FRAMES, (os.clock() - since) / SETTLE))
+	end
+	reach(SETTLED)
+	local most = 0
+	while not late() do
+		local count = left()
+		most = math.max(most, count)
+		if count == 0 then
+			break
+		end
+		stage(SETTLED, 1, 1 - count / most)
+		task.wait(0.1)
+	end
+	reach(1)
+	readyAll = true
+	readySignal:Fire()
+	local heldSince = os.clock()
+	waiting = holds > 0
+	while holds > 0 and os.clock() - heldSince < HELD do
+		task.wait(0.05)
+	end
+	waiting = false
+	local shownSince = os.clock()
+	while not allIn() and os.clock() - shownSince < SHOWN do
+		task.wait(0.05)
 	end
 	local gui = shown
 	shown = nil

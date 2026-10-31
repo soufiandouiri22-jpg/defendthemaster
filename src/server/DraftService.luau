@@ -5,7 +5,7 @@
 -- with few heroes a taken one may be picked again. Bots, and players who left, pick after a moment. Every change goes
 -- to every client (Net.Draft) with that client's own heroes; the Workspace attribute "Phase" is "Draft" meanwhile and
 -- "Ready" while the picks are shown at the end. The picked hero is the player's "Hero" attribute (HeroService) and his
--- profile's LastHero.
+-- profile's LastHero. The draft is off while Config.Draft.Enabled is (DraftService.assign then gives everyone his hero).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -179,6 +179,25 @@ function DraftService.run(slots: { MatchSetup.Slot })
 	endsAt = Workspace:GetServerTimeNow() + SETTINGS.Ready
 	broadcast()
 	task.wait(SETTINGS.Ready)
+	phase = "Done"
+	broadcast()
+end
+
+-- The match without a draft (Config.Draft.Enabled off): every player of `slots` gets the hero he chose in the lobby
+-- (Profile.showcase: his favourite, else the last one he played, else the default), every bot his lineup's next.
+function DraftService.assign(slots: { MatchSetup.Slot })
+	picks = {}
+	for _, slot in slots do
+		local pick = table.clone(slot) :: any
+		pick.locked = false
+		table.insert(picks, pick)
+	end
+	for _, pick in picks do
+		local data = if pick.player and pick.player.Parent then ProfileService.get(pick.player) else nil
+		local hero = if data then Profile.showcase(data) elseif pick.player then Config.DefaultHero else botHero(pick)
+		lock(pick, hero)
+	end
+	turn = #picks + 1
 	phase = "Done"
 	broadcast()
 end

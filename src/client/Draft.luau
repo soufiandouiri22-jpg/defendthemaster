@@ -2,7 +2,8 @@
 -- the two teams down the sides (each place's hero, rank and name, the one picking aglow), who is picking and his time
 -- at the top, the heroes in the middle (filtered by class; the player's own, the taken ones marked PICKED), the chosen
 -- hero under them with LOCK IN. Anyone may look at heroes; on his turn the player's choice is shown to everyone
--- (Net.Draft "Hover"), LOCK IN takes it ("Lock") and its last seconds tick. The rest of the HUD hides meanwhile. When the picks have been shown ("Ready") the draft goes and the camera is the hero's again.
+-- (Net.Draft "Hover"), LOCK IN takes it ("Lock") and its last seconds tick. The rest of the HUD hides meanwhile. When the picks have been shown ("Ready") the draft goes and the camera is the hero's again. The loading screen stays
+-- over the arena until the draft is up (Loading.hold): the server starts it once every player's client is ready.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -133,7 +134,7 @@ local function hideHud(own: ScreenGui): () -> ()
 	end
 end
 
-local function build(event: RemoteEvent)
+local function build(event: RemoteEvent, up: () -> ())
 	local gui = UiStyle.screen("Draft", player:WaitForChild("PlayerGui"), 20)
 	gui.Enabled = false
 
@@ -607,6 +608,7 @@ local function build(event: RemoteEvent)
 			open()
 		elseif s.phase == "Done" then
 			close()
+			up()
 			return
 		else
 			return
@@ -622,15 +624,17 @@ local function build(event: RemoteEvent)
 		wasMine = mine
 		updateTitle()
 		Draft.render()
+		up()
 	end)
 	event:FireServer("Hello")
 end
 
 function Draft.render() end
 
-function Draft.start()
+-- Builds the draft; `up` is called once it is up (or the match is past it), which lets the loading screen go.
+function Draft.start(up: () -> ())
 	local event = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Draft") :: RemoteEvent
-	build(event)
+	build(event, up)
 end
 
 return Draft

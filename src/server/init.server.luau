@@ -1,9 +1,11 @@
 -- Server entry point of Defend The Master. The lobby (Shared.Places) builds the menu's hall and runs the menu, the
--- party and the queue; a match builds the colosseum, waits for its players (MatchSetup), drafts the heroes
--- (DraftService) and plays the match to its end (MatchEnd).
+-- party and the queue; a match builds the colosseum, waits for its players (MatchSetup), gives everyone his hero
+-- (DraftService: the one chosen in the lobby, or a draft when Config.Draft.Enabled) and plays the match to its end
+-- (MatchEnd).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Places = require(ReplicatedStorage.Shared.Places)
 local Ladder = require(script.Ladder)
 local MenuService = require(script.MenuService)
@@ -68,7 +70,7 @@ CrownService.start(layout)
 MatchEnd.start()
 print(if testing then "[DefendTheMaster] server started on the test ground" else "[DefendTheMaster] server started")
 
--- The test ground starts at once with the player's own hero; a match drafts first.
+-- The test ground starts at once with the player's own hero; a match first gives everyone his.
 if testing then
 	HeroService.release()
 	TestGround.minions(MinionService.spawnAt)
@@ -76,7 +78,14 @@ if testing then
 end
 task.spawn(function()
 	MatchSetup.awaitPlayers()
-	DraftService.run(MatchSetup.slots())
+	if Config.Draft.Enabled then
+		DraftService.run(MatchSetup.slots())
+	else
+		-- Everyone's card shows for a while (VersusView) before the buy phase's clock runs.
+		Workspace:SetAttribute("VersusUntil", Workspace:GetServerTimeNow() + Config.Match.Versus)
+		DraftService.assign(MatchSetup.slots())
+		task.wait(Config.Match.Versus)
+	end
 	BotService.start(layout, DraftService.botHeroes())
 	HeroService.release()
 	MatchService.begin()
