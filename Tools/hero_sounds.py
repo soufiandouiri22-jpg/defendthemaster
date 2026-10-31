@@ -97,6 +97,49 @@ PACKS = {
             "Blast": (["Blast"], 0.9),
         },
     },
+    "ScytheWielder": {
+        "folder": ROOT / "Vendor/ScytheWielder/Sounds",
+        "clips": [
+            # Mortael's attacks (Config.Heroes.Mortael.Kit) and the clips under them.
+            "RA-SCW-023", "RA-SCW-024", "RA-SCW-025", "RA-SCW-038", "RA-SCW-035", "RA-SCW-086", "RA-SCW-057",
+            "RA-SCW-005", "RA-SCW-006", "RA-SCW-007", "RA-SCW-002", "RA-SCW-011", "RA-SCW-013", "RA-SCW-033",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        # His fall's cloth: the first garment's body movements only, not all 49 of the pack's.
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # The dash plays 057 at 1.2 times for a moment only, too short for its two long recordings (3.6 and 4.1 s):
+        # it keeps a quick swish of the first basic attack as he sets off (Start 0.5 s, 0.6 s into the clip).
+        "mute": ["RA-SCW-057"],
+        "extra": {
+            "RA-SCW-057": [(0.55, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.8)],
+            # The finisher has no cues: the basic attack's swishes (loudest about 0.06 s in) on each swing of its
+            # blade (fastest at 0.35, 0.60, 0.75, 2.00 and pulled from the ground at 2.30 s), a step and his cloth as
+            # he jumps (1.40 s); the ground struck where he lands is the Slam event.
+            "RA-SCW-086": [
+                (0.29, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.7),
+                (0.54, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.7),
+                (0.69, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.6),
+                (1.36, ["A71849bc6957b", "A52c8b099fb37", "A04a16cb4c370"], 0.5),
+                (1.38, ["A1fe7fbf5cd09", "Af3065edadcc9", "Af2d53416ac23"], 0.7),
+                (1.94, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.9),
+                (2.24, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.45),
+            ],
+        },
+        # Recordings no cue plays any more that stay in the uploaded file, so its regions keep matching: 058's
+        # three swishes, the finisher's sound before 2026-10-31, which ran out of step with it.
+        "keep": ["A4eac67974f6b"],
+        # The ground struck where his leaps land: 072's scythe dropping (loudest 0.22 s in) over 038's hard knock.
+        "mixes": {
+            "Slam": [("Ab5c6cdc947da", 0.12), ("A452150559a77", 0.0)],
+        },
+        "events": {
+            "Slam": (["Slam"], 0.9),
+        },
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no
@@ -151,7 +194,8 @@ def select(pack, sound_map):
     clips = {}
     named = pack["clips"] if isinstance(pack["clips"], dict) else {clip_id: clip_id for clip_id in pack["clips"]}
     for key, clip_id in named.items():
-        animation = sound_map["animations"][clip_id]
+        # A clip the pack left without any sound (the Scythe Wielder's finisher) has only the cues added here.
+        animation = sound_map["animations"].get(clip_id, {"cues": []})
         sets = sound_map["soundSets"].get(clip_id)
         routes = sets["sets"][sets["default"]]["routes"] if sets else None
         cues = []
@@ -184,6 +228,8 @@ def select(pack, sound_map):
         for cue in cues:
             for s in cue.get("sounds", []):
                 need(s)
+    for s in pack.get("keep", []):
+        need(s)
 
     events = {name: {"sounds": [need(s) for s in sounds], "volume": volume} for name, (sounds, volume) in pack["events"].items()}
     return clips, contacts, events, needed

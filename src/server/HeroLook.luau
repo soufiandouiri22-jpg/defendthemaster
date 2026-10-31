@@ -34,6 +34,78 @@ function HeroLook.description(name: string): HumanoidDescription
 	return description
 end
 
+-- Sets the weapon part `part` on fire, a quieter copy of his dash's trail (FireEffects.dash, owner 2026-10-31): the
+-- same flames and embers, smaller and fewer, left behind as it swings, with a little smoke and a glow.
+local function burn(part: BasePart)
+	local flames = Instance.new("ParticleEmitter")
+	flames.Name = "Flames"
+	flames.Texture = "rbxasset://textures/particles/fire_main.dds"
+	flames.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 60)),
+		ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 118, 28)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 40, 10)),
+	})
+	flames.LightEmission = 0.6
+	flames.LightInfluence = 0
+	flames.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.8),
+		NumberSequenceKeypoint.new(0.4, 1.2),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	flames.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	flames.Lifetime = NumberRange.new(0.3, 0.55)
+	flames.Rate = 50
+	flames.Speed = NumberRange.new(0.5, 1.5)
+	flames.SpreadAngle = Vector2.new(180, 180)
+	flames.Acceleration = Vector3.new(0, 10, 0)
+	flames.RotSpeed = NumberRange.new(-160, 160)
+	flames.Rotation = NumberRange.new(0, 360)
+	flames.Shape = Enum.ParticleEmitterShape.Box
+	flames.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	flames.Parent = part
+
+	local embers = Instance.new("ParticleEmitter")
+	embers.Name = "Embers"
+	embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	embers.Color = ColorSequence.new(Color3.fromRGB(255, 236, 170), Color3.fromRGB(255, 118, 28))
+	embers.LightEmission = 1
+	embers.LightInfluence = 0
+	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0) })
+	embers.Lifetime = NumberRange.new(0.5, 0.9)
+	embers.Rate = 10
+	embers.Speed = NumberRange.new(2, 5)
+	embers.SpreadAngle = Vector2.new(180, 180)
+	embers.Acceleration = Vector3.new(0, -24, 0)
+	embers.Parent = part
+
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Name = "Smoke"
+	smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	smoke.Color = ColorSequence.new(Color3.fromRGB(72, 60, 52), Color3.fromRGB(32, 26, 22))
+	smoke.LightInfluence = 0.4
+	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1.6) })
+	smoke.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.2, 0.7),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	smoke.Lifetime = NumberRange.new(0.8, 1.3)
+	smoke.Rate = 6
+	smoke.Speed = NumberRange.new(0.5, 1.2)
+	smoke.Acceleration = Vector3.new(0, 3, 0)
+	smoke.Parent = part
+
+	local light = Instance.new("PointLight")
+	light.Name = "Glow"
+	light.Color = Color3.fromRGB(255, 118, 28)
+	light.Brightness = 1.2
+	light.Range = 8
+	light.Parent = part
+end
+
 local function arm(character: Model, hero: string)
 	local settings = Config.Heroes[hero]
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -69,6 +141,9 @@ local function arm(character: Model, hero: string)
 				-- turn; both bind to the pack rig's root part, which becomes the hero's.
 				d.Part0 = root
 				d.C0 = shift * d.C0
+			end
+			if d:IsA("BasePart") and table.find(settings.Burning or {}, d.Name) then
+				burn(d)
 			end
 		end
 		weapon.Parent = folder

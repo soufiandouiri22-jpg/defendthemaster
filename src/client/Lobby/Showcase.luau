@@ -87,7 +87,6 @@ local function colourOf(hero: string): Color3
 	local showcase = settings and settings.Showcase
 	return if showcase and showcase.Aura then showcase.Aura else DEFAULT_AURA
 end
-
 -- The podium pad's rune circle, light and motes, made once and coloured `colour`.
 local function lightPlate(at: CFrame, colour: Color3)
 	if not plate then
@@ -144,7 +143,15 @@ local function lightPlate(at: CFrame, colour: Color3)
 	p.motes.Color = ColorSequence.new(WHITE, soft)
 end
 
-local function aura(model: Model, colour: Color3, at: CFrame)
+-- Whether `hero`'s aura burns (Showcase.Fire): hotter flames under dark smoke, where his colour alone would melt into
+-- the hall's warm light.
+local function burns(hero: string): boolean
+	local settings = Config.Heroes[hero]
+	local showcase = settings and settings.Showcase
+	return showcase ~= nil and showcase.Fire == true
+end
+
+local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
 		return
@@ -156,7 +163,13 @@ local function aura(model: Model, colour: Color3, at: CFrame)
 	local wisps = Instance.new("ParticleEmitter")
 	wisps.Name = "Wisps"
 	wisps.Texture = "rbxasset://textures/particles/fire_main.dds"
-	wisps.Color = ColorSequence.new(colour:Lerp(WHITE, 0.25), colour)
+	wisps.Color = if fire
+		then ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 220, 110)),
+			ColorSequenceKeypoint.new(0.4, colour),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 30, 10)),
+		})
+		else ColorSequence.new(colour:Lerp(WHITE, 0.25), colour)
 	wisps.LightEmission = 0.8
 	wisps.LightInfluence = 0
 	wisps.Size = NumberSequence.new({
@@ -170,7 +183,7 @@ local function aura(model: Model, colour: Color3, at: CFrame)
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	wisps.Lifetime = NumberRange.new(0.9, 1.6)
-	wisps.Rate = 26
+	wisps.Rate = if fire then 48 else 26
 	wisps.Speed = NumberRange.new(1.2, 2.4)
 	wisps.SpreadAngle = Vector2.new(25, 25)
 	wisps.Acceleration = Vector3.new(0, 2.2, 0)
@@ -188,15 +201,42 @@ local function aura(model: Model, colour: Color3, at: CFrame)
 	embers.LightInfluence = 0
 	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) })
 	embers.Lifetime = NumberRange.new(1.8, 3)
-	embers.Rate = 14
+	embers.Rate = if fire then 30 else 14
 	embers.Speed = NumberRange.new(0.6, 1.4)
 	embers.SpreadAngle = Vector2.new(70, 70)
 	embers.Acceleration = Vector3.new(0, 1.2, 0)
 	embers.Parent = attachment
 
+	if fire then
+		local smoke = Instance.new("ParticleEmitter")
+		smoke.Name = "Smoke"
+		smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		smoke.Color = ColorSequence.new(Color3.fromRGB(40, 34, 32), Color3.fromRGB(12, 10, 10))
+		smoke.LightInfluence = 0.3
+		smoke.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.8),
+			NumberSequenceKeypoint.new(1, 2.4),
+		})
+		smoke.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.25, 0.55),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		smoke.Lifetime = NumberRange.new(1.6, 2.6)
+		smoke.Rate = 14
+		smoke.Speed = NumberRange.new(1, 2)
+		smoke.SpreadAngle = Vector2.new(20, 20)
+		smoke.Acceleration = Vector3.new(0, 1.5, 0)
+		smoke.RotSpeed = NumberRange.new(-30, 30)
+		smoke.Rotation = NumberRange.new(0, 360)
+		smoke.Shape = Enum.ParticleEmitterShape.Cylinder
+		smoke.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+		smoke.Parent = attachment
+	end
+
 	local light = Instance.new("PointLight")
 	light.Color = colour
-	light.Brightness = 1.6
+	light.Brightness = if fire then 3 else 1.6
 	light.Range = 11
 	light.Parent = attachment
 
@@ -213,7 +253,7 @@ local function aura(model: Model, colour: Color3, at: CFrame)
 	glow.CFrame = at * CFrame.new(0, 0.03, 0) * CFrame.Angles(0, 0, math.rad(90))
 	glow.Material = Enum.Material.Neon
 	glow.Color = colour
-	glow.Transparency = 0.82
+	glow.Transparency = if fire then 0.6 else 0.82
 	glow.Parent = model
 end
 
@@ -337,7 +377,7 @@ function Showcase.show(hero: string)
 	animate(entry)
 	local colour = colourOf(hero)
 	if hero ~= Showcase.Avatar then
-		aura(entry.model, colour, podium())
+		aura(entry.model, colour, podium(), burns(hero))
 	end
 	lightPlate(podium(), colour)
 	current = entry
@@ -756,7 +796,7 @@ function Showcase.transform(hero: string)
 	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0) })
 	embers:Emit(60)
 
-	aura(after.model, colour, at)
+	aura(after.model, colour, at, burns(hero))
 	lightPlate(at, colour)
 	tween(runeTurn, 1.6, { Value = RUNE_TURN })
 	if p then

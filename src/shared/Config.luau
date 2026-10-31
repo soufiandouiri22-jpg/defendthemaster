@@ -810,11 +810,12 @@ Config.Minions = {
 -- lands at its time in the motion, on the server. For every hero, every swing, shot and throw goes where the crosshair
 -- points, upwards and downwards as well (owner, 2026-10-29); a leap lands on the spot aimed at, a dash keeps to the
 -- ground. Indicators (design 06): "Arrow" (a skillshot), "Zone" (a range
--- round the hero and the spot aimed at), "Cone", "Ring" (what a slam round him reaches). A combo hit with a `ProjectileSpeed` is a shot instead of a swing,
--- and its `Recover` the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
+-- round the hero and the spot aimed at), "Cone", "Ring" (what a slam round him reaches). A combo hit with a `ProjectileSpeed` is a shot instead of a swing;
+-- a combo hit's `Recover` is the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
 -- `Pierce` strikes everyone it passes once. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
+-- A "Leap"'s `Swings` strike all round him before he lands, at each of their `Hits` (`Damage`, `Ratio`, `Range`).
 -- An "Ascend" plays its `Motion` and then its `Then`, lifting him off the ground meanwhile (HeroKit.lift), and lets
 -- one projectile go at `Release`, `OrbScale` times his usual orb, which bursts over `Blast` studs where it stops.
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first.
@@ -825,7 +826,7 @@ Config.Minions = {
 -- hero is every player's from the start; one with a `Price` is sold for coins in the heroes' shop (Shared.HeroShop),
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
 -- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
--- when that clip looks aside, and the colour of his aura.
+-- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke.
 -- Every hero gets one, a pose from his own pack as Shadowren's weapon pose.
 Config.Heroes = {
 	Shadowren = {
@@ -1257,6 +1258,135 @@ Config.Heroes = {
 				Move = 0.3,
 				Stop = 0.5,
 				Shot = { Release = 0.30, Damage = 35, Ratio = 0.25, Range = 30, ProjectileSpeed = 90, Width = 2 },
+			},
+		},
+	},
+	-- A grim reaper with a great scythe (owner, 2026-10-31). His keys are the owner's first choice from the pack, to
+	-- be changed once he has seen every clip in the showroom (Tools/Showroom/scythe_wielder_showroom.luau).
+	Mortael = {
+		Role = "Warrior",
+		Description = "Reaps all around him with his great scythe.",
+		Starter = true,
+		-- Facing ahead with his scythe held low beside him (owner, 2026-10-31; RA-SCW-015 before).
+		-- Facing ahead with his scythe held low beside him (owner, 2026-10-31; RA-SCW-015 before).
+		Showcase = { Motion = "RA-SCW-014", Aura = Color3.fromRGB(255, 104, 24), Fire = true },
+		-- His leaps land in fire and his dash leaves a trail of it, instead of shadow (FireEffects).
+		Effects = "Fire",
+		-- A warrior stands in the fight: more than the assassin's 900.
+		Health = 1100,
+		Scales = "Attack",
+		Look = {
+			Shirt = 108579446832597,
+			Pants = 112462572964483,
+			-- A skull under a hood, which covers the whole head.
+			HatAccessory = "133981153383131",
+			BackAccessory = "86936824034786",
+			HideHead = true,
+			Skin = Color3.fromRGB(222, 214, 196),
+		},
+		Portrait = { Image = "rbxassetid://90289952486206", Face = { 100, 30, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Mortael, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Mortael, keyed by Tools/key_icons.py --glow).
+		Icons = {
+			M1 = "rbxassetid://111241458886845",
+			M2 = "rbxassetid://81040759913794",
+			E = "rbxassetid://92512918709031",
+			R = "rbxassetid://97464825397698",
+			Dash = "rbxassetid://115904017856160",
+		},
+		Pack = "ScytheWielder",
+		-- The scythe is rigid, its shaft and blade each on a Motor6D from the root part (Shared.Motion).
+		Weapons = { "Scythe" },
+		-- The parts of his weapons that burn (HeroLook): the scythe's blade.
+		Burning = { "Scythe02" },
+		Motions = {
+			Idle = "RA-SCW-015",
+			Run = "RA-SCW-005",
+			RunLeft = "RA-SCW-006",
+			RunRight = "RA-SCW-007",
+			Back = "RA-SCW-002",
+			Takeoff = "RA-SCW-011",
+			Air = "RA-SCW-012",
+			Land = "RA-SCW-013",
+			Death = "RA-SCW-033",
+		},
+		-- The times are where the blade sweeps fastest in the pack's clips, and where the clips lift him off the ground
+		-- and bring him down (measured on the pack's rig).
+		Kit = {
+			-- Three wide, heavy sweeps, each followed through before the next (Recover): about 0.85 seconds a swing
+			-- against Shadowren's 0.45 (owner, 2026-10-31: a warrior, not an assassin), ending in a heavy blow. A little
+			-- under Shadowren's damage a second (65 against 67), as the price of reaching 8 studs instead of 6, in wider arcs.
+			M1 = {
+				Kind = "Combo",
+				Speed = 1,
+				Ratio = 0.6,
+				Reset = 1.8,
+				Hits = {
+					{ Motion = "RA-SCW-023", Hit = 0.40, Recover = 0.35, Damage = 45, Range = 8, Angle = 140 },
+					{ Motion = "RA-SCW-024", Hit = 0.37, Recover = 0.35, Damage = 50, Range = 8, Angle = 120 },
+					{ Motion = "RA-SCW-025", Hit = 0.43, Recover = 0.45, Damage = 80, Range = 8, Angle = 160 },
+				},
+			},
+			-- Leaning into wide sweeps, four times past the front, the third the furthest (owner, 2026-10-31). The
+			-- turning sweep all round him (RA-SCW-045: Hits 0.43, 1.0 and 1.9, Angle 360) was on E before.
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-SCW-038",
+				Indicator = "Cone",
+				Cooldown = 7,
+				Hits = { 0.40, 1.20, 1.70, 2.60 },
+				Damage = 30,
+				Ratio = 0.35,
+				Range = 9,
+				Angle = 150,
+			},
+			-- A short leap with an overhead sweep, landing in a ring of damage (owner, 2026-10-31; on M2 before). Before
+			-- he jumps he cuts, spins and cuts again all round him (the blade fastest at 0.35, 0.85 and 1.05), lightly.
+			E = {
+				Kind = "Leap",
+				Motion = "RA-SCW-035",
+				Indicator = "Zone",
+				Cooldown = 8,
+				Range = 12,
+				Radius = 8,
+				Damage = 100,
+				Ratio = 1,
+				Takeoff = 1.45,
+				Land = 2.0,
+				Swings = { Hits = { 0.35, 0.85, 1.05 }, Damage = 15, Ratio = 0.15, Range = 8 },
+			},
+			-- A leap high into the air and down onto the spot aimed at, scythe first. Before he jumps he cuts and spins
+			-- once all round him (the blade fastest at 0.35 and 0.75, about 9 studs out), which strike too; he strikes
+			-- the ground at 2.07 and bounces up once more before he stands. The landing is far from where the swings
+			-- reach, so one foe seldom takes both.
+			R = {
+				Kind = "Leap",
+				Motion = "RA-SCW-086",
+				Indicator = "Zone",
+				Cooldown = 40,
+				Range = 22,
+				Radius = 12,
+				Damage = 240,
+				Ratio = 1.3,
+				Takeoff = 0.73,
+				Land = 2.07,
+				Swings = { Hits = { 0.35, 0.75 }, Damage = 30, Ratio = 0.3, Range = 9 },
+			},
+			-- A leaping cut to where he aims (Shift), striking everyone he passes through once. The pack has no dash,
+			-- so it is the leap of RA-SCW-057, played a little faster; heavier and less often than Shadowren's. It
+			-- leaves a trail of fire (FireEffects.dash).
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-SCW-057",
+				Speed = 1.2,
+				Cooldown = 7,
+				Range = 14,
+				Width = 4,
+				Damage = 25,
+				Ratio = 0.3,
+				Start = 0.5,
+				Move = 0.8,
+				Stop = 1.05,
 			},
 		},
 	},

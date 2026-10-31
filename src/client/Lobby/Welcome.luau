@@ -136,7 +136,7 @@ function Welcome.open(api: any)
 	local cards = Instance.new("ScrollingFrame")
 	cards.BackgroundTransparency = 1
 	cards.BorderSizePixel = 0
-	cards.Size = UDim2.new(1, -40, 0, CARD_HEIGHT + 28)
+	cards.Size = UDim2.new(1, -40, 0, CARD_HEIGHT + 34)
 	cards.Position = UDim2.fromOffset(20, 56)
 	cards.ScrollBarThickness = 6
 	cards.ScrollBarImageColor3 = C.GoldDark
@@ -145,8 +145,22 @@ function Welcome.open(api: any)
 	cards.CanvasSize = UDim2.new()
 	cards.Parent = side
 	local cardLayout = Widgets.list(cards, "Horizontal", 22)
-	cardLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	cardLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	-- Room at the ends for the chosen card, which grows and gets a thicker edge, and under the cards for the scroll
+	-- bar, so it stays clear of that edge.
+	local cardPadding = Instance.new("UIPadding")
+	cardPadding.PaddingLeft = UDim.new(0, 12)
+	cardPadding.PaddingRight = UDim.new(0, 12)
+	cardPadding.PaddingBottom = UDim.new(0, 6)
+	cardPadding.Parent = cards
+	-- Centred while the cards fit; once they are wider than the panel they start at its left edge, as centring
+	-- would cut off the first card.
+	local function alignCards()
+		local fits = cardLayout.AbsoluteContentSize.X + 24 <= cards.AbsoluteSize.X
+		cardLayout.HorizontalAlignment = if fits then Enum.HorizontalAlignment.Center else Enum.HorizontalAlignment.Left
+	end
+	cardLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(alignCards)
+	cards:GetPropertyChangedSignal("AbsoluteSize"):Connect(alignCards)
 
 	local heroName = Widgets.label(side, "", 64, C.Ink)
 	heroName.Size = UDim2.new(1, 0, 0, 70)
@@ -273,6 +287,7 @@ function Welcome.open(api: any)
 	if not buttons[selected] then
 		selected = next(buttons) or Config.DefaultHero
 	end
+	alignCards()
 
 	local function arrive()
 		Showcase.view(PODIUM_AT, PODIUM_FOV, 1)

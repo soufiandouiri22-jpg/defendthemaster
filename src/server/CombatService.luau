@@ -459,6 +459,21 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		state.busyUntil = now + kit.Land + RECOVER
 		motionEvent:FireAllClients(character, key, 0, landing)
 		slow(state, kit.Land + RECOVER, 0)
+		local swings = kit.Swings
+		for _, at in if swings then swings.Hits else {} do
+			later(state, at, function()
+				strikeCone(
+					player,
+					state,
+					team,
+					direction,
+					swings.Range,
+					360,
+					strength(swings.Damage, swings.Ratio),
+					magic
+				)
+			end)
+		end
 		later(state, kit.Land, function()
 			for _, enemy in enemiesNear(team, landing, kit.Radius) do
 				if HeroKit.landingStrikes(landing, kit.Radius, enemy) then

@@ -3,7 +3,7 @@
 -- Everything aims where the player looks (HeroCamera.aim), up and down too. The client plays its own motion at once and asks the server
 -- (Net.HeroAction), which decides the hits; a refused attack is undone. The leap moves the hero itself, from takeoff
 -- to landing, to the spot the server works out the same way (HeroKit.leapLanding), and lands in a shockwave of shadow
--- (ShadowEffects), as does every other hero's leap; an Ascend holds him up in the air till it ends (HeroKit.lift),
+-- (ShadowEffects), or of fire for a hero whose `Effects` are "Fire" (FireEffects), as does every other hero's leap; an Ascend holds him up in the air till it ends (HeroKit.lift),
 -- and its great orb bursts where it stops. Other heroes' motions and every thrown dagger and shot arrow come
 -- from the server; while an attack plays, the client keeps telling the server where the crosshair points, as every
 -- hit but a leap's landing and a dash's path goes there (HeroKit.follows). The crosshair (design 09) turns red on an
@@ -21,6 +21,7 @@ local Workspace = game:GetService("Workspace")
 local AbilityBar = require(script.Parent.AbilityBar)
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
+local FireEffects = require(script.Parent.FireEffects)
 local HeroAnimator = require(script.Parent.HeroAnimator)
 local HeroCamera = require(script.Parent.HeroCamera)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
@@ -158,7 +159,12 @@ local function landLater(character: Model, landing: Vector3, kit: any)
 			groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
 			local below = Workspace:Raycast(landing, Vector3.new(0, -(height + 2), 0), groundRay)
 			local ground = if below then below.Position else landing - Vector3.new(0, height, 0)
-			ShadowEffects.shockwave(ground, kit.Radius)
+			local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+			if settings and settings.Effects == "Fire" then
+				FireEffects.shockwave(ground, kit.Radius)
+			else
+				ShadowEffects.shockwave(ground, kit.Radius)
+			end
 			shakeNear(ground, 0.4)
 			slamSound(character)
 		end
@@ -202,8 +208,10 @@ local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local drop = if root and humanoid then Vector3.new(0, heightOf(root, humanoid), 0) else Vector3.zero
 	if kit.Trail ~= false then
+		local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+		local trail = if settings and settings.Effects == "Fire" then FireEffects.dash else ShadowEffects.dash
 		task.delay(kit.Start, function()
-			ShadowEffects.dash(from - drop, to - drop, kit.Move - kit.Start)
+			trail(from - drop, to - drop, kit.Move - kit.Start)
 		end)
 	end
 	task.delay(kit.Stop, function()

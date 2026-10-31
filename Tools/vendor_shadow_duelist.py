@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Unpacks the bought whole-pack ZIPs (KitsBlox, Docs/Third_Party.md) into Vendor/: the Shadow Duelist (Shadowren)
-into Vendor/ShadowDuelist/, the Ranger (Rowan) into Vendor/Ranger/ and the Elementalist (the dark mage) into
-Vendor/Elementalist/, each with its animations and its sounds.
+into Vendor/ShadowDuelist/, the Ranger (Rowan) into Vendor/Ranger/, the Elementalist (the dark mage) into
+Vendor/Elementalist/ and the Scythe Wielder (the reaper) into Vendor/ScytheWielder/, each with its animations and its
+sounds.
 
 Their licence forbids sharing the files, so Vendor/ stays out of git: run this once on a new machine with the ZIPs
 in ~/Downloads. Rojo serves each pack's playback module and rig from there (default.project.json).
 
-    python3 Tools/vendor_shadow_duelist.py [ShadowDuelist] [Ranger] [Elementalist]
+    python3 Tools/vendor_shadow_duelist.py [ShadowDuelist] [Ranger] [Elementalist] [ScytheWielder]
 """
 
 import pathlib
@@ -24,6 +25,8 @@ PACKS = {
     "RobloxAnimations-Ranger-Sounds-v1.3.1.zip": ("Ranger", "Sounds"),
     "RobloxAnimations-Elementalist-v1.1.1.zip": ("Elementalist", "Animations"),
     "RobloxAnimations-Elementalist-Sounds-v1.3.1.zip": ("Elementalist", "Sounds"),
+    "RobloxAnimations-Scythe-Wielder-v1.3.0.zip": ("ScytheWielder", "Animations"),
+    "RobloxAnimations-Scythe-Wielder-Sounds-v1.3.1.zip": ("ScytheWielder", "Sounds"),
 }
 
 
