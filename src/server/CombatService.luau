@@ -423,7 +423,8 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 	if kit.Kind == "Combo" then
 		local step = if now <= state.comboUntil then state.combo % #kit.Hits + 1 else 1
 		local hit = kit.Hits[step]
-		local speed = kit.Speed * Items.attackSpeed(player)
+		-- A hit may play faster or slower than the rest of the combo (its own Speed).
+		local speed = kit.Speed * (hit.Speed or 1) * Items.attackSpeed(player)
 		local length = Motion.meta(settings.Pack, hit.Motion).duration / speed
 		local eclipse = if state.eclipse then 1 + (Items.effect(player, "Eclipse") or 0) else 1
 		state.eclipse = false
@@ -536,6 +537,30 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				end
 			end)
 		end
+	elseif kit.Kind == "Strike" then
+		-- He stays where he stands and calls strikes down on the spot aimed at as he cast it, which only strike
+		-- there, at their times; his motion itself strikes no one. Not given back as a landing: he does not go there.
+		local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
+		local spot = HeroKit.leapLanding(
+			root.Position,
+			aim,
+			kit.Range,
+			humanoid.HipHeight + root.Size.Y / 2,
+			HeroKit.leapIgnore()
+		)
+		local last = kit.Strikes[#kit.Strikes]
+		state.busyUntil = now + last + RECOVER
+		motionEvent:FireAllClients(character, key, 0, spot)
+		slow(state, last + RECOVER, 0)
+		for _, at in kit.Strikes do
+			later(state, at, function()
+				for _, enemy in enemiesNear(team, spot, kit.Radius) do
+					if HeroKit.landingStrikes(spot, kit.Radius, enemy) then
+						damage(player, character, enemy, strength(kit.Damage), magic)
+					end
+				end
+			end)
+		end
 	elseif kit.Kind == "Ascend" then
 		-- He hangs in the air (his client lifts him, a bot BotService) and cannot walk till he stands again.
 		state.busyUntil = now + kit.Land + RECOVER
@@ -548,13 +573,33 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		state.busyUntil = now + length
 		motionEvent:FireAllClients(character, key, 0)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
-		for _, time in kit.Hits do
+		for hit, time in kit.Hits do
 			later(state, time, function()
 				-- Every sweep follows the crosshair; the slam strikes all round him, as its shockwave shows.
 				local facing = aimedNow()
 				local reach, angle, slam = HeroKit.flurryStrike(kit, time)
 				local amount = if slam then strength(kit.SlamDamage, kit.SlamRatio) else strength(kit.Damage)
-				strikeCone(player, state, team, facing, reach, angle, amount, magic)
+				if not kit.Zap then
+					strikeCone(player, state, team, facing, reach, angle, amount, magic)
+					return
+				end
+				-- A shock strikes one of those the sweep reaches (HeroKit.zapTarget), as his client draws it.
+				local standing = rootOf(character)
+				if not standing then
+					return
+				end
+				local origin = HeroKit.muzzle(standing.Position)
+				local reached, positions = {}, {}
+				for _, enemy in enemiesNear(team, origin, reach) do
+					if HeroKit.swingStrikes(origin, facing, reach, angle, enemy) then
+						table.insert(reached, enemy)
+						table.insert(positions, enemy.position)
+					end
+				end
+				local target = HeroKit.zapTarget(kit, hit, origin, positions)
+				if target then
+					damage(player, character, reached[target], amount, magic)
+				end
 			end)
 		end
 	end

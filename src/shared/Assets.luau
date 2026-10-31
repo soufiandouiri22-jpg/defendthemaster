@@ -106,6 +106,8 @@ return {
 	RockBreak = "rbxassetid://9118588165",
 	GlassShards = "rbxassetid://9114591567",
 	DeepThud = "rbxassetid://1843025759",
+	ZapAttack = "rbxassetid://9120985853",
+	Thunder = "rbxassetid://9116282875",
 	-- Candidates for the sound of every hit (Config.Combat.HitSounds): the game's own dry crunches, wide,
 	-- deeper, and deeper with a sharp crack (Art/Sounds/Hit.wav, HitLow.wav and HitRaw.wav, made and uploaded by
 	-- Tools/hit_sound.py; the owner's picks, 2026-10-29).

@@ -816,6 +816,12 @@ Config.Minions = {
 -- `Pierce` strikes everyone it passes once. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
 -- A "Leap"'s `Swings` strike all round him before he lands, at each of their `Hits` (`Damage`, `Ratio`, `Range`).
+-- A "Strike" keeps him where he stands and strikes the spot aimed at (up to `Range` away) at each of its `Strikes`
+-- (seconds from the cast), everyone within `Radius` of it, from the sky (LightningEffects); his motion itself strikes
+-- no one. A `Hold` plays its motion at `Speed` from `From` to `To` seconds into the clip, a moment drawn out.
+-- A "Flurry" with `Zap` shoots lightning from the point of his weapon at each of its `Hits` (LightningEffects.zap),
+-- each at one enemy the sweep reaches, the nearest `Targets` taking them in turn (HeroKit.zapTarget), or straight
+-- ahead to its `Range` when it reaches no one.
 -- An "Ascend" plays its `Motion` and then its `Then`, lifting him off the ground meanwhile (HeroKit.lift), and lets
 -- one projectile go at `Release`, `OrbScale` times his usual orb, which bursts over `Blast` studs where it stops.
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first.
@@ -827,13 +833,24 @@ Config.Minions = {
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
 -- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
 -- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke.
--- Every hero gets one, a pose from his own pack as Shadowren's weapon pose.
+-- Every hero gets one, a pose from his own pack as Shadowren's weapon pose. `Enter` is the move he makes when he lands
+-- on the podium after the transformation (owner, 2026-10-31, each chosen on the podium), facing the camera: its clip
+-- played at `Speed` `From` that many seconds in (its start without) `Until` that many (its end without), short so it
+-- ends soon after the transformation's sound (owner, 2026-11-01), and `Then` either "Breathe" (he keeps that
+-- frame, breathing) or "Pose" (he steps into his pose, the left foot in `Step` seconds and then the right in
+-- `StepRight`, as long without, turning to his `Turn` as he steps, with no standing up from a crouch). With `Low` he
+-- stands no taller in it than in his pose.
 Config.Heroes = {
 	Shadowren = {
 		Role = "Assassin",
 		Description = "Strikes from the shadows and vanishes.",
 		Starter = true,
-		Showcase = { Motion = "RA-SHD-076", Aura = Color3.fromRGB(146, 64, 236) },
+		-- His entrance is only his looks at his daggers, both and then one.
+		Showcase = {
+			Motion = "RA-SHD-076",
+			Enter = { Motion = "RA-SHD-072", From = 1.3, Until = 3.8, Then = "Pose", Step = 0.38, StepRight = 0.24 },
+			Aura = Color3.fromRGB(146, 64, 236),
+		},
 		Health = 900,
 		-- His kit deals physical damage, growing with Attack (each key's `Ratio` of it, Config.Items).
 		Scales = "Attack",
@@ -962,7 +979,11 @@ Config.Heroes = {
 		Role = "Archer",
 		Description = "Rains arrows on his foes from afar.",
 		Starter = true,
-		Showcase = { Motion = "RA-RNG-014", Aura = Color3.fromRGB(110, 200, 120) },
+		Showcase = {
+			Motion = "RA-RNG-014",
+			Enter = { Motion = "RA-RNG-064", Speed = 1.4, Then = "Breathe" },
+			Aura = Color3.fromRGB(110, 200, 120),
+		},
 		Health = 760,
 		Scales = "Attack",
 		Look = {
@@ -1088,8 +1109,13 @@ Config.Heroes = {
 		Description = "Hurls dark magic from his staff.",
 		Starter = true,
 		-- His ready stance looks aside, so he stands turned until his face nearly meets the camera, with his raised hand
-		-- still clear of it.
-		Showcase = { Motion = "RA-ELM-017", Turn = -28, Aura = Color3.fromRGB(150, 70, 230) },
+		-- still clear of it. His entrance is slowed, then he steps into that stance.
+		Showcase = {
+			Motion = "RA-ELM-017",
+			Turn = -28,
+			Enter = { Motion = "RA-ELM-064", Speed = 0.6, Then = "Pose", Step = 0.36, Low = true },
+			Aura = Color3.fromRGB(150, 70, 230),
+		},
 		Health = 720,
 		-- His kit deals magic damage, growing with Magic (Config.Items).
 		Scales = "Magic",
@@ -1269,7 +1295,12 @@ Config.Heroes = {
 		Starter = true,
 		-- Facing ahead with his scythe held low beside him (owner, 2026-10-31; RA-SCW-015 before).
 		-- Facing ahead with his scythe held low beside him (owner, 2026-10-31; RA-SCW-015 before).
-		Showcase = { Motion = "RA-SCW-014", Aura = Color3.fromRGB(255, 104, 24), Fire = true },
+		Showcase = {
+			Motion = "RA-SCW-014",
+			Enter = { Motion = "RA-SCW-064", From = 4.4, Until = 6.5, Then = "Breathe" },
+			Aura = Color3.fromRGB(255, 104, 24),
+			Fire = true,
+		},
 		-- His leaps land in fire and his dash leaves a trail of it, instead of shadow (FireEffects).
 		Effects = "Fire",
 		-- A warrior stands in the fight: more than the assassin's 900.
@@ -1387,6 +1418,174 @@ Config.Heroes = {
 				Start = 0.5,
 				Move = 0.8,
 				Stop = 1.05,
+			},
+		},
+	},
+	-- Brontar, a crusader knight with a greatsword and golden lightning (owner, 2026-10-31; the RobloxAnimations
+	-- Greatsword Knight pack): a warrior on Mortael's level, his attacks chosen by the owner in the showroom and timed
+	-- on the pack's clips (Tools/clip_hits.py).
+	Brontar = {
+		Role = "Warrior",
+		Description = "Cleaves through his foes with a greatsword.",
+		Starter = true,
+		-- On the podium in his idle with a golden aura, crackling as in the fight (owner, 2026-10-31).
+		-- His entrance is the swing of his greatsword onto his shoulder, facing the camera.
+		Showcase = {
+			Motion = "RA-GSK-072",
+			Enter = { Motion = "RA-GSK-070", From = 3.5, Until = 5, Then = "Breathe" },
+			Aura = Color3.fromRGB(255, 205, 60),
+		},
+		-- His dash leaves a trail of yellow lightning, instead of shadow (LightningEffects).
+		Effects = "Lightning",
+		Health = 1100,
+		Scales = "Attack",
+		Look = {
+			-- Crusader Armor (1.0), Crusader Helmet and Crusader Cape (White) from the catalog (owner, 2026-10-31). Also
+			-- tried: the black knight, Dark Knight armour 13412229654, Royal Knight leggings 102797600975193, Black
+			-- Medieval Helm 124914691152141 and Black Royal Knight's Cape 130118870017586, his eyes in the helm's visor
+			-- (VisorEyes, Art/Faces/knight_visor_eyes.png, rbxassetid://103234325383880); Blue infinity studios' White
+			-- and gold nightmare knight plate armor 96294780307568 and legs 140205637223366 with their White Abyssal
+			-- Warlord Helmet 99389315979098.
+			-- Kept for another hero (owner, 2026-10-31), Nexus Exchange Group's Plague Blessed set, rusty green with
+			-- teal trims and bare arms:
+			--   Layered = { { Id = 92775313494880, Type = Enum.AccessoryType.Jacket },
+			--     { Id = 77796878473601, Type = Enum.AccessoryType.Pants } },
+			--   HatAccessory = "122001710045857", BackAccessory = "130575010765083",
+			--   ShouldersAccessory = "77222922391539,135262495813296",
+			Layered = { { Id = 11462148792, Type = Enum.AccessoryType.DressSkirt } },
+			HatAccessory = "11462150810",
+			BackAccessory = "73112264371344",
+			-- [Animated] Tired Anime Demon w/ Yellow Eyes (bundle 191152447832218, owner 2026-10-31) with its Default Mood.
+			Head = 111545403653088,
+			Mood = 14618207727,
+			-- Glowing yellow eyes in his helm's slit as in his portrait (owner, 2026-10-31; Art/Faces/brontar_eyes.png).
+			-- The slit is painted on, so each eye lies just in front of its half of the helm's front, which slopes back
+			-- 28 degrees each way from a ridge 0.88 studs in front of the head's centre.
+			VisorEyes = {
+				Image = "rbxassetid://134346939973336",
+				Pixels = { 1024, 256 },
+				Width = 0.53,
+				Aspect = 0.5,
+				-- A little below the slit's top edge, as in the portrait (owner, 2026-10-31).
+				Height = 0.31,
+				Apart = 0.3,
+				Depth = 0.75,
+				Turn = 28,
+				Glow = 3,
+			},
+			-- Small golden bolts crackle all over him now and then (LightningEffects; owner, 2026-10-31).
+			Crackle = true,
+			Skin = Color3.fromRGB(234, 184, 146),
+		},
+		-- His face to the right, so the blade of his sword shows beside it (owner, 2026-10-31).
+		Portrait = { Image = "rbxassetid://70793868914813", Face = { 300, 20, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Brontar, each a GenerateImage drawing on magenta in
+		-- Art/Icons/keyed/Brontar, keyed by Tools/key_icons.py --glow); his dash shows him, as every hero's does.
+		Icons = {
+			M1 = "rbxassetid://84467130339541",
+			M2 = "rbxassetid://111972882999771",
+			E = "rbxassetid://74206212358630",
+			R = "rbxassetid://107528327381897",
+			Dash = "rbxassetid://107224308098742",
+		},
+		Pack = "GreatswordKnight",
+		-- The greatsword is held in his right hand as on the pack's rig (HeroLook).
+		Weapons = { "Greatsword" },
+		Motions = {
+			Idle = "RA-GSK-015",
+			Run = "RA-GSK-005",
+			RunLeft = "RA-GSK-006",
+			RunRight = "RA-GSK-007",
+			Back = "RA-GSK-002",
+			Takeoff = "RA-GSK-011",
+			Air = "RA-GSK-012",
+			Land = "RA-GSK-013",
+			Death = "RA-GSK-033",
+		},
+		Kit = {
+			M1 = {
+				Kind = "Combo",
+				Speed = 1,
+				Ratio = 0.6,
+				Reset = 1.8,
+				Hits = {
+					-- The hits where the sword's tip moves fastest (Tools/clip_hits.py).
+					{ Motion = "RA-GSK-023", Hit = 0.35, Recover = 0.35, Damage = 45, Range = 8, Angle = 140 },
+					{ Motion = "RA-GSK-024", Hit = 0.42, Recover = 0.35, Damage = 50, Range = 8, Angle = 120 },
+					-- The finisher is Distant Challenge played 2.2 times as fast (owner, 2026-10-31: beautiful but too
+					-- slow), so its blow at 0.98 seconds lands at 0.45, as quickly as the first two.
+					{
+						Motion = "RA-GSK-060",
+						Speed = 2.2,
+						Hit = 0.98,
+						Recover = 0.45,
+						Damage = 80,
+						Range = 8,
+						Angle = 160,
+					},
+				},
+			},
+			-- Rending Combination (owner, 2026-10-31): two cuts down and a heavy third (Tools/clip_hits.py), the sword
+			-- reaching about 8.5 studs.
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-GSK-043",
+				Indicator = "Cone",
+				Cooldown = 7,
+				Hits = { 0.22, 0.75, 1.32 },
+				Damage = 40,
+				-- Three cuts growing with Attack about as much as Mortael's four (1.35 against 1.4).
+				Ratio = 0.45,
+				Range = 9,
+				Angle = 150,
+			},
+			-- Iron Resolve (owner, 2026-10-31): one wide sweep in front of him where he stands, the sword fastest at
+			-- 0.38 seconds and reaching about 10.7 studs (Tools/clip_hits.py).
+			E = {
+				Kind = "Flurry",
+				Motion = "RA-GSK-049",
+				Indicator = "Cone",
+				Cooldown = 8,
+				-- Three shocks in quick succession from his sword's point (owner, 2026-10-31), while he holds it
+				-- thrust straight ahead, its point 11 studs out, from 0.45 to 1.27 seconds into the clip
+				-- (Tools/clip_hits.py); the 100 damage of the one swing before, split in three. They share themselves
+				-- out over the nearest three enemies in front of him: one takes all three, two take two and one.
+				Hits = { 0.5, 0.65, 0.8 },
+				Damage = 35,
+				Ratio = 0.35,
+				Range = 20,
+				Angle = 50,
+				Zap = true,
+				Targets = 3,
+			},
+			-- Dusk Finale (owner, 2026-10-31): he raises his sword and lightning falls from the sky on the spot aimed
+			-- at; only the lightning strikes, not the swing before it. His sword points straight up from 1.2 to 1.65
+			-- seconds into the clip (Tools/clip_hits.py), which plays at a quarter of its speed there, 1.8 seconds,
+			-- while four bolts fall, each striking the whole ring. The ring on the ground warns of them until the last.
+			R = {
+				Kind = "Strike",
+				Motion = "RA-GSK-068",
+				Indicator = "Zone",
+				Cooldown = 40,
+				Range = 24,
+				Radius = 9,
+				Hold = { From = 1.2, To = 1.65, Speed = 0.25 },
+				Strikes = { 1.35, 1.8, 2.25, 2.7 },
+				Damage = 60,
+				Ratio = 0.33,
+			},
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-GSK-056",
+				Speed = 1.2,
+				Cooldown = 7,
+				Range = 14,
+				Width = 4,
+				Damage = 25,
+				Ratio = 0.3,
+				Start = 0.3,
+				Move = 0.6,
+				Stop = 0.9,
 			},
 		},
 	},

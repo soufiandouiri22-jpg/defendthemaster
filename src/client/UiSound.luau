@@ -88,6 +88,14 @@ local CUES: { [string]: Cue } = {
 	-- A Master falling.
 	MasterFalls = { asset = Assets.DeepThud, start = 0, length = 4.5, gain = 0.8 },
 
+	-- Each shock of Brontar's zap and each bolt of his strike from the sky (Config.Heroes.Brontar.Kit.E and R): only
+	-- the sharp attack at the start of Pro Sound Effects' "Zaps Sharp Attack 1" (owner, 2026-10-31), without the hum
+	-- that follows it.
+	Zap = { asset = Assets.ZapAttack, start = 0.2, length = 0.45, gain = 1 },
+	-- The thunder rolling under the strike's bolts (owner, 2026-10-31): Pro Sound Effects' "Lightning Strike Sharp
+	-- Hissing Crack 5" from its build-up, its crack 0.6 seconds in, rumbling on for about three seconds; heard far.
+	Thunder = { asset = Assets.Thunder, start = 0.9, length = 3.8, gain = 1.6, near = 40, far = 150 },
+
 	-- Every hit, by anyone on anything (HitFeedback, Config.Combat.HitSounds).
 	Hit = { asset = Assets.Hit, start = 0, gain = 0.5 },
 	HitLow = { asset = Assets.HitLow, start = 0, gain = 0.5 },

@@ -33,9 +33,10 @@ end
 
 -- Whether the hits of `kit` go where the crosshair points as each lands or leaves his hand rather than where it
 -- pointed at the cast, so turning while the attack plays hits whoever he turns to: every swing, throw, shot and sweep
--- does. A leap lands on the spot chosen at its cast and a dash keeps its path; only a dash's shot follows.
+-- does. A leap lands on, and a strike from the sky falls on, the spot chosen at its cast and a dash keeps its path;
+-- only a dash's shot follows.
 function HeroKit.follows(kit: any): boolean
-	if kit.Kind == "Leap" then
+	if kit.Kind == "Leap" or kit.Kind == "Strike" then
 		return false
 	elseif kit.Kind == "Dash" then
 		return kit.Shot ~= nil
@@ -251,6 +252,23 @@ function HeroKit.flurryStrike(kit: any, time: number): (number, number, boolean)
 	return if slam then kit.SlamRadius else kit.Range, if slam then 360 else kit.Angle, slam
 end
 
+-- Which of the enemies a Zap flurry's (`kit`) `hit`th shock (from 1) reaches, at `positions`, it strikes (an index
+-- into them), seen from `origin`: the nearest `kit.Targets` of them take its shocks in turn, nearest first, so one
+-- enemy takes them all and two share them, the nearer taking the extra one. Nil when it reaches no one.
+function HeroKit.zapTarget(kit: any, hit: number, origin: Vector3, positions: { Vector3 }): number?
+	if #positions == 0 then
+		return nil
+	end
+	local order = {}
+	for i in positions do
+		table.insert(order, i)
+	end
+	table.sort(order, function(a, b)
+		return (positions[a] - origin).Magnitude < (positions[b] - origin).Magnitude
+	end)
+	return order[(hit - 1) % math.min(#order, kit.Targets or #order) + 1]
+end
+
 -- Whether a projectile bursting at `at` strikes `body`: within `reach` studs of its edge round, and of its heights.
 function HeroKit.burstStrikes(at: Vector3, reach: number, body: Body): boolean
 	return HeroKit.flat(body.position - at).Magnitude <= reach + body.radius
@@ -288,7 +306,7 @@ function HeroKit.aimed(
 	height: number,
 	exclude: { Instance }
 ): (Vector3?, { Shot }?)
-	if kit.Kind == "Leap" then
+	if kit.Kind == "Leap" or kit.Kind == "Strike" then
 		return HeroKit.leapLanding(root, aim, kit.Range, height, exclude), nil
 	elseif kit.Kind == "Throw" or kit.Kind == "Ascend" then
 		local params = RaycastParams.new()
@@ -319,7 +337,7 @@ function HeroKit.abilityStrikes(
 	shots: { Shot }?,
 	body: Body
 ): boolean
-	if kit.Kind == "Leap" then
+	if kit.Kind == "Leap" or kit.Kind == "Strike" then
 		return landing ~= nil and HeroKit.landingStrikes(landing, kit.Radius, body)
 	elseif kit.Kind == "Throw" or kit.Kind == "Ascend" then
 		for _, shot in shots or {} do

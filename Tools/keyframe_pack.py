@@ -3,7 +3,7 @@
 Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack rig's joints in its Configuration, its
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
-    python3 Tools/keyframe_pack.py Elementalist
+    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
@@ -29,6 +29,17 @@ PACKS = {
             "parent": "RightHand",
             "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
             "c1": [0, 1.72821, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+    },
+    # The Greatsword Knight's clips lie in subfolders per kind; its sword hangs from the right hand ("Attach
+    # Greatsword.lua", Weapon Attachment.json).
+    "GreatswordKnight": {
+        "clips": "Individual Animations/with-greatsword",
+        "weapon": {
+            "name": "Greatsword",
+            "parent": "RightHand",
+            "c0": [0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, -1],
+            "c1": [0, -2.49969, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
         },
     },
 }
@@ -143,11 +154,14 @@ def clip(path: pathlib.Path, parts: set[str]) -> tuple[str, dict]:
             constant.append(style == 1)
         tracks[part] = {"values": floats(values), "constant": constant if any(constant) else None}
     loop = sp["Loop"].text == "true"
-    clip_id = name.split(" ")[0]
+    # The Elementalist names its sequences "<id> <name>"; the Greatsword Knight only its files.
+    clip_id = path.stem.split(" ")[0]
+    if name.startswith(clip_id + " "):
+        name = name[len(clip_id) + 1 :]
     return clip_id, {
         "meta": {
             "id": clip_id,
-            "name": name[len(clip_id) + 1 :],
+            "name": name,
             "duration": times[-1] if times else 0,
             "loop": loop,
             "markers": markers,
@@ -196,7 +210,7 @@ def main() -> int:
 
     parts = {j["part1"] for j in joints} | {weapon["name"]}
     clips = {}
-    for path in sorted((source / pack["clips"]).glob("*.rbxmx")):
+    for path in sorted((source / pack["clips"]).rglob("*.rbxmx")):
         clip_id, data = clip(path, parts)
         clips[clip_id] = data
     (player / "Data.luau").write_text(encoding="utf-8", data=

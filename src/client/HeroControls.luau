@@ -29,11 +29,14 @@ local HeroSounds = require(script.Parent.HeroSounds)
 local Indicators = require(script.Parent.Indicators)
 local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
+local LightningEffects = require(script.Parent.LightningEffects)
 local ShadowEffects = require(script.Parent.ShadowEffects)
+local UiSound = require(script.Parent.UiSound)
 
 local HeroControls = {}
 
 local RECOVER = 0.12
+local THUNDER_CRACK = 0.6
 -- How often an attack that follows the crosshair (HeroKit.follows) tells the server where it points while it plays.
 local AIM_EVERY = 0.05
 local KEY_OF: { [Enum.KeyCode | Enum.UserInputType]: string } = {
@@ -192,6 +195,110 @@ local function slamLater(character: Model, kit: any)
 	end)
 end
 
+-- A strike from the sky (`kit`, Kind "Strike") on the spot `spot` (at a hero's root height, HeroKit.leapLanding):
+-- its warning there from now till the last bolt, and a bolt at each of `kit.Strikes`, the first in the middle and
+-- the others somewhere inside the ring, each cracking as the zap's shocks do, louder, over thunder that cracks with the
+-- first bolt and rolls on under the rest (its crack comes THUNDER_CRACK seconds into UiSound's Thunder).
+local function strikeLater(character: Model, spot: Vector3, kit: any)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not humanoid or not root then
+		return
+	end
+	local height = heightOf(root, humanoid)
+	groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
+	local below = Workspace:Raycast(spot, Vector3.new(0, -(height + 2), 0), groundRay)
+	local ground = if below then below.Position else spot - Vector3.new(0, height, 0)
+	LightningEffects.warn(ground, kit.Radius, kit.Strikes[#kit.Strikes])
+	task.delay(math.max(0, kit.Strikes[1] - THUNDER_CRACK), UiSound.at, "Thunder", ground)
+	for i, at in kit.Strikes do
+		task.delay(at, function()
+			local angle, out =
+				math.random() * math.pi * 2, if i == 1 then 0 else kit.Radius * (0.3 + math.random() * 0.4)
+			local where = ground + Vector3.new(math.cos(angle), 0, math.sin(angle)) * out
+			LightningEffects.strike(where, kit.Radius)
+			UiSound.at("Zap", where, 1.4)
+			shakeNear(ground, 0.7)
+			slamSound(character)
+		end)
+	end
+end
+
+local zapExtents: { [Model]: { number } } = setmetatable({}, { __mode = "k" }) :: any
+
+-- The point of `character`'s weapon: the far end of the longest part he holds (up its length), or his chest.
+local function weaponPoint(character: Model, root: BasePart): Vector3
+	local weapons = character:FindFirstChild("Weapons")
+	local longest: BasePart? = nil
+	for _, part in if weapons then weapons:GetDescendants() else {} do
+		if part:IsA("BasePart") and (not longest or part.Size.Y > longest.Size.Y) then
+			longest = part
+		end
+	end
+	if not longest then
+		return HeroKit.muzzle(root.Position)
+	end
+	return (longest.CFrame * CFrame.new(0, longest.Size.Y / 2, 0)).Position
+end
+
+-- `kit.Zap`'s lightning at each of the flurry's hits: from his weapon's point to the enemy that shock strikes
+-- (HeroKit.zapTarget among those the sweep reaches, as the server measures it), or straight ahead to its reach when
+-- it reaches no one; each with a crack from his weapon's point (UiSound's Zap).
+local function zapLater(character: Model, kit: any)
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return
+	end
+	for hit, time in kit.Hits do
+		task.delay(time, function()
+			if not root.Parent or HeroAnimator.playing(character) ~= kit.Motion then
+				return
+			end
+			local muzzle = HeroKit.muzzle(root.Position)
+			local facing = root.CFrame.LookVector
+			local direction = if character == player.Character
+				then HeroKit.aimDirection(muzzle, HeroCamera.aim(), facing)
+				else facing
+			local range, angle = HeroKit.flurryStrike(kit, time)
+			local from = weaponPoint(character, root)
+			local reached, positions = {}, {}
+			for _, foe in HeroKit.foes(character:GetAttribute("Team"), zapExtents) do
+				if HeroKit.swingStrikes(muzzle, direction, range, angle, foe.body) then
+					table.insert(reached, foe.body)
+					table.insert(positions, foe.body.position)
+				end
+			end
+			local target = HeroKit.zapTarget(kit, hit, muzzle, positions)
+			UiSound.at("Zap", from)
+			if target then
+				local body = reached[target]
+				LightningEffects.zap(from, Vector3.new(body.position.X, (body.bottom + body.top) / 2, body.position.Z))
+			else
+				LightningEffects.zap(from, muzzle + direction * range)
+			end
+		end)
+	end
+end
+
+-- A moment of `kit`'s motion drawn out (`kit.Hold`): from `From` to `To` seconds into the clip it plays at `Speed`,
+-- unless something else plays by then.
+local function holdLater(character: Model, kit: any)
+	local hold = kit.Hold
+	if not hold then
+		return
+	end
+	task.delay(hold.From, function()
+		if HeroAnimator.playing(character) == kit.Motion then
+			HeroAnimator.setSpeed(character, hold.Speed)
+		end
+	end)
+	task.delay(hold.From + (hold.To - hold.From) / hold.Speed, function()
+		if HeroAnimator.playing(character) == kit.Motion then
+			HeroAnimator.setSpeed(character, 1)
+		end
+	end)
+end
+
 -- An Ascend's second motion (`kit.Then`), as its first (`length` seconds) ends, unless that was cut short.
 local function thenLater(character: Model, kit: any, length: number)
 	task.delay(math.max(0, length - 0.03), function()
@@ -209,7 +316,11 @@ local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any
 	local drop = if root and humanoid then Vector3.new(0, heightOf(root, humanoid), 0) else Vector3.zero
 	if kit.Trail ~= false then
 		local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
-		local trail = if settings and settings.Effects == "Fire" then FireEffects.dash else ShadowEffects.dash
+		local kind = settings and settings.Effects
+		local trail = if kind == "Fire"
+			then FireEffects.dash
+			elseif kind == "Lightning" then LightningEffects.dash
+			else ShadowEffects.dash
 		task.delay(kit.Start, function()
 			trail(from - drop, to - drop, kit.Move - kit.Start)
 		end)
@@ -263,7 +374,7 @@ local function cast(key: string)
 		local step = if now <= comboUntil then combo % #kit.Hits + 1 else 1
 		local hit = kit.Hits[step]
 		combo, comboUntil = step, now + kit.Reset
-		local speed = kit.Speed * Items.attackSpeed(player)
+		local speed = kit.Speed * (hit.Speed or 1) * Items.attackSpeed(player)
 		busyUntil = now + (hit.Hit + (hit.Recover or 0)) / speed + RECOVER
 		local length = HeroAnimator.play(character, hit.Motion, speed)
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
@@ -290,6 +401,13 @@ local function cast(key: string)
 		leap = { started = now, from = root.Position, to = to, takeoff = kit.Takeoff, land = kit.Land, sharp = false }
 		slow(humanoid, kit.Land + RECOVER, 0)
 		landLater(character, to, kit)
+	elseif kit.Kind == "Strike" then
+		local last = kit.Strikes[#kit.Strikes]
+		busyUntil = now + last + RECOVER
+		local spot = HeroKit.leapLanding(root.Position, aim, kit.Range, heightOf(root, humanoid), HeroKit.leapIgnore())
+		slow(humanoid, last + RECOVER, 0)
+		holdLater(character, kit)
+		strikeLater(character, spot, kit)
 	elseif kit.Kind == "Throw" then
 		local releases = HeroKit.releases(kit)
 		busyUntil = now + releases[#releases] + RECOVER
@@ -312,6 +430,9 @@ local function cast(key: string)
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
 		if kit.Slam then
 			slamLater(character, kit)
+		end
+		if kit.Zap then
+			zapLater(character, kit)
 		end
 	end
 end
@@ -422,7 +543,12 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 		return
 	end
 	if kit.Kind == "Combo" then
-		HeroAnimator.play(character, kit.Hits[step].Motion, kit.Speed * (character:GetAttribute("AttackSpeed") or 1))
+		local hit = kit.Hits[step]
+		HeroAnimator.play(
+			character,
+			hit.Motion,
+			kit.Speed * (hit.Speed or 1) * (character:GetAttribute("AttackSpeed") or 1)
+		)
 	elseif kit.Kind == "Dash" then
 		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if root and landing then
@@ -437,8 +563,14 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	end
 	if kit.Kind == "Leap" and landing then
 		landLater(character, landing, kit)
+	elseif kit.Kind == "Strike" and landing then
+		holdLater(character, kit)
+		strikeLater(character, landing, kit)
 	elseif kit.Slam then
 		slamLater(character, kit)
+	end
+	if kit.Zap then
+		zapLater(character, kit)
 	end
 end
 

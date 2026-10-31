@@ -205,6 +205,14 @@ function HeroAnimator.play(character: Model, id: string, speed: number, startTim
 	return hero.motion:play(id, speed, startTime, inPlace)
 end
 
+-- Plays the clip `character`'s hero plays over its base on at `speed` from now.
+function HeroAnimator.setSpeed(character: Model, speed: number)
+	local hero = heroes[character]
+	if hero and not hero.dead then
+		hero.motion:setSpeed(speed)
+	end
+end
+
 -- The clip `character`'s hero plays over its base, if any.
 function HeroAnimator.playing(character: Model): string?
 	local hero = heroes[character]

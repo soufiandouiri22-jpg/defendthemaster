@@ -16,12 +16,21 @@ local BODY_COLOURS = { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor
 function HeroLook.description(name: string): HumanoidDescription
 	local look = Config.Heroes[name].Look
 	local description = Instance.new("HumanoidDescription")
-	description.Shirt = look.Shirt
-	description.Pants = look.Pants
+	description.Shirt = look.Shirt or 0
+	description.Pants = look.Pants or 0
 	description.HairAccessory = look.HairAccessory or ""
 	description.FaceAccessory = look.FaceAccessory or ""
 	description.HatAccessory = look.HatAccessory or ""
 	description.BackAccessory = look.BackAccessory or ""
+	description.ShouldersAccessory = look.ShouldersAccessory or ""
+	-- Layered clothing (a 3D jacket or armour that wraps round the body), worn in the order listed.
+	if look.Layered then
+		local layered = {}
+		for order, item in look.Layered do
+			table.insert(layered, { AssetId = item.Id, AccessoryType = item.Type, IsLayered = true, Order = order })
+		end
+		description:SetAccessories(layered, false)
+	end
 	-- A dynamic head from the catalog with its own animated face, and the mood it plays.
 	description.Head = look.Head or 0
 	description.MoodAnimation = look.Mood or 0
@@ -169,6 +178,51 @@ function HeroLook.dress(character: Model, hero: string)
 	end
 	if look.BlankFace and head and head:IsA("MeshPart") then
 		head.TextureID = ""
+	end
+	local visor = look.VisorEyes
+	if visor and head and head:IsA("BasePart") then
+		-- Eyes (a picture) on a plate in his helm's visor, `Height` studs above the head's centre and `Depth` in front
+		-- of it, where the helm hides the eyes the face has lower down. With `Apart` each half of the picture (`Pixels`
+		-- wide and high) has its own plate, `Apart` studs to either side and turned `Turn` degrees outwards, lying on a
+		-- helm whose front comes to a point. With `Glow` they shine that many times brighter than white, unlit, so the
+		-- bloom makes them glow.
+		local sides = if visor.Apart then { 1, -1 } else { 0 }
+		for i, side in sides do
+			local plate = Instance.new("Part")
+			plate.Name = "VisorEyes"
+			plate.Size = Vector3.new(visor.Width, visor.Width * visor.Aspect, 0.012)
+			plate.Transparency = 1
+			plate.CanCollide = false
+			plate.CanQuery = false
+			plate.CanTouch = false
+			plate.Massless = true
+			plate.CastShadow = false
+			plate.CFrame = head.CFrame
+				* CFrame.new(side * (visor.Apart or 0), visor.Height, -visor.Depth)
+				* CFrame.Angles(0, -side * math.rad(visor.Turn or 0), 0)
+			local gui = Instance.new("SurfaceGui")
+			gui.Face = Enum.NormalId.Front
+			gui.LightInfluence = if visor.Glow then 0 else 1
+			gui.Brightness = visor.Glow or 1
+			gui.CanvasSize = Vector2.new(512, 512 * visor.Aspect)
+			local picture = Instance.new("ImageLabel")
+			picture.Size = UDim2.fromScale(1, 1)
+			picture.BackgroundTransparency = 1
+			picture.Image = visor.Image
+			if side ~= 0 then
+				-- The picture's left half shows on the plate on the head's +X, which is on the left seen from the front.
+				local half = Vector2.new(visor.Pixels[1] / 2, visor.Pixels[2])
+				picture.ImageRectSize = half
+				picture.ImageRectOffset = Vector2.new((i - 1) * half.X, 0)
+			end
+			picture.Parent = gui
+			gui.Parent = plate
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = head
+			weld.Part1 = plate
+			weld.Parent = plate
+			plate.Parent = head
+		end
 	end
 	local mouth = look.Mouth
 	if mouth and head and head:IsA("BasePart") then

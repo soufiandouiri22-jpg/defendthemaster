@@ -71,6 +71,15 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   `python3 Tools/key_icons.py <drawing> <out.png> [--glow] [--like <icon of the set>]` (`--glow` for soft slashes,
   smoke and trails) and `--check`; the green drawings stay in `Art/Icons/keyed/<set>/`. Every ability icon shows
   what that ability does in the hero's kit.
+- A hero's attacks and poses are always chosen in a showroom in Play (owner, 2026-10-31: "dit moet onze standaard
+  werkwijze worden"), never from dolls in Edit or from screenshots: the owner walks his own character over a platform
+  high above the test ground between one clone of the hero per motion, each repeating it under a label with its
+  number, length and name. The owner is always that hero himself there (owner, 2026-10-31: "dat ik ook zelf die
+  poppetje ben"), his look, weapon and movement: a new hero first gets a test entry in `Config.Heroes` (look, pack,
+  weapons, movement clips, a placeholder kit) and `TestHero` names him, and the showroom clones the player's own hero.
+  Play goes there by itself (owner, 2026-10-31): the Workspace attributes `Match` and `TestGround` ticked,
+  `TestMinions` unticked, `TestHero` set and `TestShowroom` listing the clips ("23-25, 35-68" or "all"), built by
+  `src/client/Showroom.luau` on every spawn. The older `Tools/Showroom/` scripts do the same from the command bar.
 - Every picture a menu page or the HUD can show is loaded by the loading screen, so a page is complete the first time
   it opens (owner, 2026-10-28 and 2026-10-29). `src/client/Pictures.luau` collects every `rbxassetid://` in
   `Shared.Config` and `Shared.Assets`: a new or replaced picture's id goes there (with an uploaded replacement, swap

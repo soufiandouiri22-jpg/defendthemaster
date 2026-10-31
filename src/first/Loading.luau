@@ -19,6 +19,7 @@ local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local Loading = {}
 
@@ -594,6 +595,50 @@ function Loading.preload(instances: { Instance | string }, seconds: number)
 	while (not done or loading()) and os.clock() - started < seconds do
 		task.wait(0.1)
 	end
+	-- A loaded picture still takes a moment the first time it is drawn (the welcome screen's ability icons came in
+	-- late, owner 2026-10-31); once drawn it shows at once, so each is drawn here, small, under this screen.
+	local any = false
+	for _, root in instances do
+		any = any or typeof(root) == "string"
+	end
+	if not any then
+		return
+	end
+	local warm = Instance.new("ScreenGui")
+	warm.Name = "WarmPictures"
+	warm.IgnoreGuiInset = true
+	warm.ResetOnSpawn = false
+	warm.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	warm.DisplayOrder = 999
+	local drawn = {}
+	for _, root in instances do
+		if typeof(root) == "string" then
+			local picture = Instance.new("ImageLabel")
+			picture.BackgroundTransparency = 1
+			picture.ImageTransparency = 0.99
+			picture.Size = UDim2.fromOffset(4, 4)
+			picture.Image = root
+			picture.Parent = warm
+			table.insert(drawn, picture)
+		end
+	end
+	local function undrawn(): boolean
+		for _, picture in drawn do
+			if
+				not picture.IsLoaded
+				and ContentProvider:GetAssetFetchStatus(picture.Image) ~= Enum.AssetFetchStatus.Failure
+			then
+				return true
+			end
+		end
+		return false
+	end
+	while undrawn() and os.clock() - started < seconds do
+		task.wait(0.05)
+	end
+	RunService.RenderStepped:Wait()
+	RunService.RenderStepped:Wait()
+	warm:Destroy()
 end
 
 -- The client has what its first look shows: the screen may go.
@@ -660,15 +705,31 @@ local function failed(id: string): boolean
 	return ok and (status == Enum.AssetFetchStatus.Failure or status == Enum.AssetFetchStatus.TimedOut)
 end
 
+-- Whether `a` and `b` (GuiObjects) overlap on the screen.
+local function overlap(a: GuiObject, b: GuiObject): boolean
+	local aMin, bMin = a.AbsolutePosition, b.AbsolutePosition
+	local aMax, bMax = aMin + a.AbsoluteSize, bMin + b.AbsoluteSize
+	return aMin.X < bMax.X and bMin.X < aMax.X and aMin.Y < bMax.Y and bMin.Y < aMax.Y
+end
+
+-- Whether `item` is drawn: shown, on the screen and not cut away by what clips it (a card scrolled out of sight is
+-- never drawn, so its picture never loads, owner 2026-11-01).
 local function seen(item: GuiObject): boolean
 	local at: Instance? = item
 	while at and not at:IsA("LayerCollector") do
-		if at:IsA("GuiObject") and not at.Visible then
+		if
+			at:IsA("GuiObject") and (not at.Visible or (at ~= item and at.ClipsDescendants and not overlap(item, at)))
+		then
 			return false
 		end
 		at = at.Parent
 	end
-	return at ~= nil and (at :: LayerCollector).Enabled
+	if not at or not (at :: LayerCollector).Enabled then
+		return false
+	end
+	local screen = (Workspace.CurrentCamera :: Camera).ViewportSize
+	local min, max = item.AbsolutePosition, item.AbsolutePosition + item.AbsoluteSize
+	return max.X > 0 and max.Y > 0 and min.X < screen.X and min.Y < screen.Y
 end
 
 -- How much of what the player will see when the screen goes is not in yet: every picture shown on the screens under

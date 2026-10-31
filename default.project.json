@@ -44,6 +44,16 @@
 					"$path": "Vendor/Elementalist/Animations/Included Rig.rbxmx"
 				}
 			},
+			"GreatswordKnight": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/GreatswordKnight/Build/ComponentPlayer"
+				},
+				"Rig": {
+					"$path": "Vendor/GreatswordKnight/Animations/Included Rig.rbxmx"
+				}
+			},
 			"GreataxeBerserker": {
 				"$className": "Folder",
 				"Rig": {

@@ -203,7 +203,7 @@ function Welcome.open(api: any)
 	end)
 
 	local selected = Config.DefaultHero
-	local buttons: { [string]: { button: TextButton, edge: UIStroke, scale: UIScale } } = {}
+	local buttons: { [string]: { button: TextButton, edge: UIStroke } } = {}
 
 	local function showHero()
 		local settings = Config.Heroes[selected]
@@ -240,7 +240,6 @@ function Welcome.open(api: any)
 			local chosen = hero == selected
 			b.edge.Color = if chosen then C.Xp else C.Gold
 			b.edge.Thickness = if chosen then 6 else 3
-			tween(b.scale, 0.15, { Scale = if chosen then 1.05 else 0.96 })
 		end
 	end
 
@@ -276,8 +275,7 @@ function Welcome.open(api: any)
 		cardRole.Size = UDim2.new(1, 0, 0, 26)
 		cardRole.Position = UDim2.fromOffset(0, 222)
 		Widgets.feel(b)
-		local scale = b:FindFirstChildOfClass("UIScale") :: UIScale
-		buttons[hero] = { button = b, edge = edge, scale = scale }
+		buttons[hero] = { button = b, edge = edge }
 		b.Activated:Connect(function()
 			if selected ~= hero and become.Active then
 				choose(hero)

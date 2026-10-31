@@ -20,6 +20,7 @@ local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
+local LightningEffects = require(script.Parent.Parent.LightningEffects)
 local Motion = require(ReplicatedStorage.Shared.Motion)
 local Profile = require(ReplicatedStorage.Shared.Profile)
 local ProfileClient = require(script.Parent.Parent.ProfileClient)
@@ -48,10 +49,12 @@ local PARTS_WAIT = 10
 -- How high the avatar rises while he turns, and how long the transformation's parts take in seconds.
 local RISE = 1.2
 local CHARGE, DROP = 1.9, 0.42
+-- How long each foot takes stepping into his pose after his entrance, unless it says otherwise (its `Step`).
+local STEP = 0.45
 -- The ribbons of light whirling round him.
 local STRANDS = 9
 
-type Entry = { hero: string, model: Model, motion: any?, pivot: CFrame }
+type Entry = { hero: string, model: Model, motion: any?, pivot: CFrame, update: ((dt: number) -> ())? }
 
 local current: Entry? = nil
 local wanted = ""
@@ -281,39 +284,72 @@ local function source(hero: string): Model?
 	return model
 end
 
--- Where `model` stands on the podium, `offset` from its middle: on his feet, facing the camera (+Z), turned by his
--- pose's `Turn` when it looks aside.
-local function standing(model: Model, hero: string, offset: Vector3?): CFrame
+-- `hero`'s entrance on the podium (Config's Showcase.Enter), if he has one.
+local function entrance(hero: string): { [string]: any }?
+	local settings = Config.Heroes[hero]
+	return settings and settings.Showcase and settings.Showcase.Enter
+end
+
+-- The degrees `hero` stands turned on the podium: facing the camera while he makes his entrance and when he keeps its
+-- last frame, else turned by his pose's `Turn` when it looks aside.
+local function turnOf(hero: string, entering: boolean?): number
+	local settings = Config.Heroes[hero]
+	local enter = entrance(hero)
+	if enter and (entering or enter.Then == "Breathe") then
+		return 0
+	end
+	return settings and settings.Showcase and settings.Showcase.Turn or 0
+end
+
+-- Where `model` stands on the podium, `offset` from its middle: on his feet, facing the camera (+Z), turned `turn`
+-- degrees.
+local function standing(model: Model, turn: number, offset: Vector3?): CFrame
 	local at = podium()
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local height = if humanoid and root then humanoid.HipHeight + root.Size.Y / 2 else 3
-	local settings = Config.Heroes[hero]
-	local turn = math.rad(settings and settings.Showcase and settings.Showcase.Turn or 0)
-	return at * CFrame.new(offset or Vector3.zero) * CFrame.new(0, height, 0) * CFrame.Angles(0, math.pi + turn, 0)
+	return at
+		* CFrame.new(offset or Vector3.zero)
+		* CFrame.new(0, height, 0)
+		* CFrame.Angles(0, math.pi + math.rad(turn), 0)
 end
 
--- A copy of `hero`'s model standing on the podium, not yet in the world.
-local function make(hero: string): Entry?
+-- A copy of `hero`'s model standing on the podium, not yet in the world; `entering` as he begins his entrance.
+local function make(hero: string, entering: boolean?): Entry?
 	local model = source(hero)
 	if not model then
 		return nil
 	end
 	local copy = model:Clone()
-	local pivot = standing(copy, hero)
+	local pivot = standing(copy, turnOf(hero, entering))
 	copy:PivotTo(pivot)
 	return { hero = hero, model = copy, motion = nil, pivot = pivot }
 end
 
--- Puts `entry` in the world and starts his pose: a hero's showcase pose, the avatar's standard idle.
-local function animate(entry: Entry)
+-- Puts `entry` in the world and starts his pose: a hero's showcase pose, the avatar's standard idle. With an entrance
+-- he stands where it ends, or `entering` on the frame it starts from until Showcase.transform lets it play
+-- (playEntrance).
+local function animate(entry: Entry, entering: boolean?)
 	entry.model.Parent = Workspace
 	local settings = Config.Heroes[entry.hero]
 	if settings and settings.Pack then
 		local motion = Motion.new(entry.model, settings.Pack)
+		local enter = entrance(entry.hero)
 		local idle = settings.Showcase and settings.Showcase.Motion or settings.Motions.Idle
 		if idle then
 			motion:setBase(idle, 1)
+		end
+		if enter and enter.Low then
+			motion:keepLow()
+		end
+		if enter and entering then
+			motion:play(enter.Motion, 1, enter.From, true, true)
+			motion:setSpeed(0)
+		elseif enter and enter.Then == "Breathe" then
+			local stop = enter.Until or Motion.meta(settings.Pack, enter.Motion).duration
+			motion:play(enter.Motion, 1, stop, true, true)
+			motion:setSpeed(0)
+			motion:breathe()
 		end
 		entry.motion = motion
 	elseif entry.hero == Showcase.Avatar then
@@ -356,6 +392,44 @@ local function animate(entry: Entry)
 	end
 end
 
+-- Plays `entry`'s entrance (at its `Speed`): its clip from `From` up to `Until`, then he keeps that frame,
+-- breathing, or steps into his pose, turning as he steps to the way it faces.
+local function playEntrance(entry: Entry)
+	local settings = Config.Heroes[entry.hero]
+	local enter = entrance(entry.hero)
+	local motion = entry.motion
+	if not (settings and enter and motion) then
+		return
+	end
+	motion:play(enter.Motion, enter.Speed or 1, enter.From, true, true)
+	motion:stopAt(enter.Until or Motion.meta(settings.Pack, enter.Motion).duration)
+	local stepping: number? = nil
+	local from, to = turnOf(entry.hero, true), turnOf(entry.hero)
+	local left = enter.Step or STEP
+	local right = enter.StepRight or left
+	entry.update = function(dt: number)
+		if not stepping then
+			if not motion:reached() then
+				return
+			end
+			if enter.Then ~= "Pose" then
+				motion:breathe()
+				entry.update = nil
+				return
+			end
+			motion:stepInto(left, right)
+			stepping = 0
+		end
+		stepping += dt
+		local t = math.clamp(stepping / (left + right), 0, 1)
+		entry.pivot = standing(entry.model, from + (to - from) * t * t * (3 - 2 * t))
+		entry.model:PivotTo(entry.pivot)
+		if t >= 1 then
+			entry.update = nil
+		end
+	end
+end
+
 -- Puts `hero` on the podium, or keeps him there when he already stands on it.
 function Showcase.show(hero: string)
 	wanted = hero
@@ -378,6 +452,7 @@ function Showcase.show(hero: string)
 	local colour = colourOf(hero)
 	if hero ~= Showcase.Avatar then
 		aura(entry.model, colour, podium(), burns(hero))
+		LightningEffects.crackle(entry.model)
 	end
 	lightPlate(podium(), colour)
 	current = entry
@@ -528,7 +603,7 @@ function Showcase.transform(hero: string)
 	local colour = colourOf(hero)
 	local bright = colour:Lerp(WHITE, 0.45)
 	local before = current
-	local after = make(hero)
+	local after = make(hero, true)
 	if not after then
 		busy = false
 		Showcase.show(hero)
@@ -757,7 +832,7 @@ function Showcase.transform(hero: string)
 	silhouette.DepthMode = Enum.HighlightDepthMode.Occluded
 	silhouette.Parent = after.model
 	after.model:PivotTo(after.pivot * CFrame.new(0, RISE, 0))
-	animate(after)
+	animate(after, true)
 	current = after
 
 	-- 3. The landing: the hero drops onto the podium, a smaller shockwave and embers, the camera settles back, his
@@ -772,6 +847,7 @@ function Showcase.transform(hero: string)
 	fall:Disconnect()
 	frame:Disconnect()
 	after.model:PivotTo(after.pivot)
+	playEntrance(after)
 	Showcase.shake(0.45)
 	UiSound.play("TransformShimmer", 1)
 	local land = glowPart(
@@ -797,6 +873,7 @@ function Showcase.transform(hero: string)
 	embers:Emit(60)
 
 	aura(after.model, colour, at, burns(hero))
+	LightningEffects.crackle(after.model)
 	lightPlate(at, colour)
 	tween(runeTurn, 1.6, { Value = RUNE_TURN })
 	if p then
@@ -865,6 +942,9 @@ function Showcase.start()
 		local c = current
 		if c and c.motion then
 			c.motion:step(dt)
+			if c.update then
+				c.update(dt)
+			end
 		end
 	end)
 	ProfileClient.watch(function(data)

@@ -24,6 +24,11 @@ local PACK_ROOT_HEIGHT = 2.35
 local BASE_FADE = 0.15
 local ACTION_FADE_IN = 0.08
 local ACTION_FADE_OUT = 0.2
+-- A foot stepping into the base pose (Motion.stepInto) lifts its knee up to this many degrees.
+local STEP_LIFT = 28
+-- Breathing (Motion.breathe): one breath in this many seconds, the chest and the head tipping this many degrees, coming
+-- in over BREATH_IN seconds.
+local BREATH, BREATH_CHEST, BREATH_HEAD, BREATH_IN = 3.6, 1.6, 1, 0.6
 
 type Prop = { world: CFrame, scale: Vector3 }
 
@@ -51,6 +56,8 @@ type Clip = {
 	inPlace: boolean,
 	-- Kept at its last pose once it ends (a fall), instead of fading back to the base.
 	hold: boolean,
+	-- Where it stands still, short of its end (Motion.stopAt).
+	stopAt: number?,
 }
 
 export type Cue = { Time: number, [string]: any }
@@ -79,6 +86,12 @@ export type Motion = typeof(setmetatable(
 		action: Clip?,
 		actionWeight: number,
 		lastAction: Pose?,
+		-- Stepping from the pose the clip over the base ended in into the base (Motion.stepInto).
+		stepping: { from: Pose, time: number, left: number, right: number }?,
+		-- Seconds since he began to breathe (Motion.breathe).
+		breathing: number?,
+		-- Never standing taller than the base clip (Motion.keepLow).
+		low: boolean,
 		cues: { [string]: { Cue } }?,
 		onCue: ((cue: Cue) -> ())?,
 	},
@@ -183,6 +196,9 @@ function Motion.new(character: Model, packName: string): Motion
 		action = nil,
 		actionWeight = 0,
 		lastAction = nil,
+		stepping = nil,
+		breathing = nil,
+		low = false,
 		cues = nil,
 		onCue = nil,
 	}, Motion)
@@ -286,6 +302,41 @@ local function blend(a: Pose, b: Pose, w: number): Pose
 	return { body = body, bones = bones, props = props, opacity = if w < 0.5 then a.opacity else b.opacity }
 end
 
+local function ease(x: number): number
+	x = math.clamp(x, 0, 1)
+	return x * x * (3 - 2 * x)
+end
+
+local LEGS = {
+	LeftUpperLeg = "Left",
+	LeftLowerLeg = "Left",
+	LeftFoot = "Left",
+	RightUpperLeg = "Right",
+	RightLowerLeg = "Right",
+	RightFoot = "Right",
+}
+
+-- `from` eased into `to`: the body by `w`, each leg by its side's weight in `feet`.
+local function stepped(from: Pose, to: Pose, w: number, feet: { [string]: number }): Pose
+	local body, bones, props = {}, {}, {}
+	for name, cf in to.body do
+		local old = from.body[name]
+		local side = LEGS[name]
+		body[name] = if old then old:Lerp(cf, if side then feet[side] else w) else cf
+	end
+	for name, cf in to.bones do
+		local old = from.bones[name]
+		bones[name] = if old then old:Lerp(cf, w) else cf
+	end
+	for name, prop in to.props do
+		local old = from.props[name]
+		props[name] = if old
+			then { world = old.world:Lerp(prop.world, w), scale = old.scale:Lerp(prop.scale, w) }
+			else prop
+	end
+	return { body = body, bones = bones, props = props, opacity = to.opacity }
+end
+
 local function newClip(self: Motion, id: string, speed: number, time: number?): Clip
 	local _, meta = self.player.Sample(nil, id, 0)
 	return { id = id, time = time or 0, speed = speed, meta = meta, fresh = true, inPlace = false, hold = false }
@@ -366,6 +417,13 @@ function Motion.play(
 	return self.action.meta.duration / speed
 end
 
+-- Plays the clip played over the base on at `speed` from now (a held moment in it: Kit's `Hold`).
+function Motion.setSpeed(self: Motion, speed: number)
+	if self.action then
+		self.action.speed = speed
+	end
+end
+
 function Motion.stop(self: Motion)
 	if self.action then
 		self.lastAction = self:sample(self.action)
@@ -377,6 +435,44 @@ function Motion.playing(self: Motion): string?
 	return if self.action then self.action.id else nil
 end
 
+-- Lets the clip played over the base stand still `seconds` in.
+function Motion.stopAt(self: Motion, seconds: number)
+	if self.action then
+		self.action.stopAt = seconds
+	end
+end
+
+-- Whether the clip played over the base stands still where Motion.stopAt said.
+function Motion.reached(self: Motion): boolean
+	local action = self.action
+	return action ~= nil and action.stopAt ~= nil and action.time >= action.stopAt
+end
+
+-- Ends the clip played over the base by stepping into the base: the left foot lifted and set down in its place in
+-- `left` seconds, then the right in `right`, the body easing over all of it, instead of sliding there (the menu's
+-- podium).
+function Motion.stepInto(self: Motion, left: number, right: number)
+	local action = self.action
+	if not action then
+		return
+	end
+	self.stepping = { from = self:sample(action), time = 0, left = left, right = right }
+	self.action = nil
+	self.actionWeight = 0
+	self.lastAction = nil
+end
+
+-- Breathes from now on, the chest rising and falling over whatever pose he holds (the menu's podium).
+function Motion.breathe(self: Motion)
+	self.breathing = 0
+end
+
+-- Keeps him from now on no taller than the base clip stands, whatever is played over it: a clip standing straight
+-- sinks to the height of a lower stance (Mavorak on the menu's podium, owner 2026-11-01).
+function Motion.keepLow(self: Motion)
+	self.low = true
+end
+
 -- Moves the clocks on by `dt` seconds and poses the character.
 function Motion.step(self: Motion, dt: number)
 	local base = self.base
@@ -385,6 +481,8 @@ function Motion.step(self: Motion, dt: number)
 	end
 	advance(self, base, dt * base.speed, self.actionWeight < 0.5)
 	local pose = self:sample(base)
+	local rootPart = self.rootPart
+	local low = if self.low and rootPart and pose.body[rootPart] then pose.body[rootPart].Y else nil
 	if self.previous and self.baseBlend < 1 then
 		self.previous.time += dt * self.previous.speed
 		self.baseBlend = math.min(1, self.baseBlend + dt / BASE_FADE)
@@ -394,6 +492,10 @@ function Motion.step(self: Motion, dt: number)
 	local action = self.action
 	if action then
 		advance(self, action, dt * action.speed, true)
+		if action.stopAt and action.time >= action.stopAt then
+			action.time = action.stopAt
+			action.speed = 0
+		end
 		if action.time >= action.meta.duration and not action.hold then
 			self:stop()
 		else
@@ -407,7 +509,53 @@ function Motion.step(self: Motion, dt: number)
 			pose = blend(pose, self.lastAction, self.actionWeight)
 		end
 	end
+	local stepping = self.stepping
+	local lifts: { [string]: number }? = nil
+	if stepping then
+		stepping.time += dt
+		local left, right = stepping.time / stepping.left, (stepping.time - stepping.left) / stepping.right
+		local seconds = stepping.left + stepping.right
+		pose = stepped(stepping.from, pose, ease(stepping.time / seconds), { Left = ease(left), Right = ease(right) })
+		lifts = { Left = left, Right = right }
+		if stepping.time >= seconds then
+			self.stepping = nil
+		end
+	end
+	if low and rootPart then
+		local root = pose.body[rootPart]
+		if root and root.Y > low then
+			pose = table.clone(pose)
+			pose.body = table.clone(pose.body)
+			pose.body[rootPart] = root - Vector3.new(0, root.Y - low, 0)
+		end
+	end
 	self:apply(pose)
+	if lifts then
+		for side, w in lifts do
+			if w > 0 and w < 1 then
+				local k = math.sin(w * math.pi) * math.rad(STEP_LIFT)
+				local upper = self.joints[side .. "UpperLeg"]
+				local lower = self.joints[side .. "LowerLeg"]
+				if upper and lower then
+					local a, b = upper.instance :: any, lower.instance :: any
+					a.Transform *= CFrame.Angles(k, 0, 0)
+					b.Transform *= CFrame.Angles(-2 * k, 0, 0)
+				end
+			end
+		end
+	end
+	if self.breathing then
+		self.breathing += dt
+		local b = math.sin(self.breathing * 2 * math.pi / BREATH) * math.min(1, self.breathing / BREATH_IN)
+		local chest = self.joints.UpperTorso
+		local head = self.joints.Head
+		if chest then
+			(chest.instance :: any).Transform *= CFrame.Angles(math.rad(-BREATH_CHEST * b), 0, 0)
+		end
+		if head then
+			(head.instance :: any).Transform *= CFrame.Angles(math.rad(BREATH_HEAD * b), 0, 0)
+		end
+	end
 end
 
 function Motion.apply(self: Motion, pose: Pose)

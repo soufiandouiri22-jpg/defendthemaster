@@ -140,6 +140,28 @@ PACKS = {
             "Slam": (["Slam"], 0.9),
         },
     },
+    "GreatswordKnight": {
+        "folder": ROOT / "Vendor/GreatswordKnight/Sounds",
+        "clips": [
+            # Brontar's attacks (Config.Heroes.Brontar.Kit) and the clips under them.
+            "RA-GSK-023", "RA-GSK-024", "RA-GSK-060", "RA-GSK-043", "RA-GSK-049", "RA-GSK-068", "RA-GSK-056",
+            "RA-GSK-005", "RA-GSK-006", "RA-GSK-007", "RA-GSK-002", "RA-GSK-011", "RA-GSK-013", "RA-GSK-033",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # The combo's finisher swings as the first two (owner, 2026-10-31: its own spin and heavy blow were too heavy to
+        # hear on every basic attack): their swing, loudest 0.04 s in, on its blow at 0.98 s of the clip played 2.2
+        # times as fast.
+        "mute": ["RA-GSK-060"],
+        "extra": {
+            "RA-GSK-060": [(0.89, ["A3c9d46617057", "Affbd494f9af1", "A9e079ff9b56d"], 0.4)],
+        },
+        "events": {},
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no
