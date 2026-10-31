@@ -164,11 +164,11 @@ function Welcome.open(api: any)
 
 	local heroName = Widgets.label(side, "", 64, C.Ink)
 	heroName.Size = UDim2.new(1, 0, 0, 70)
-	heroName.Position = UDim2.fromOffset(0, CARD_HEIGHT + 92)
+	heroName.Position = UDim2.fromOffset(0, CARD_HEIGHT + 98)
 	local heroRole = Widgets.label(side, "", 32, C.Ink)
 	heroRole.Size = UDim2.new(1, 0, 0, 38)
-	heroRole.Position = UDim2.fromOffset(0, CARD_HEIGHT + 158)
-	local rule = UiStyle.frame(side, UDim2.new(1, -100, 0, 2), UDim2.fromOffset(50, CARD_HEIGHT + 204))
+	heroRole.Position = UDim2.fromOffset(0, CARD_HEIGHT + 164)
+	local rule = UiStyle.frame(side, UDim2.new(1, -100, 0, 2), UDim2.fromOffset(50, CARD_HEIGHT + 210))
 	rule.BackgroundColor3 = C.GoldDark
 	rule.BackgroundTransparency = 0.4
 	local line = Widgets.label(side, "", 27, C.Ink)
