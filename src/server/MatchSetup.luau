@@ -16,6 +16,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Places = require(ReplicatedStorage.Shared.Places)
 local ProfileService = require(script.Parent.ProfileService)
 local Remote = require(script.Parent.Remote)
+local TraceService = require(script.Parent.TraceService)
 
 local MatchSetup = {}
 
@@ -54,6 +55,7 @@ local function admit(player: Player)
 	if record then
 		local team = teamOf[player.UserId]
 		if not team then
+			TraceService.mark("match.kick", nil, player)
 			player:Kick("This match is not yours.")
 			return
 		end
@@ -87,7 +89,13 @@ end
 
 function MatchSetup.start()
 	if game.PrivateServerId ~= "" then
+		local reading = os.clock()
 		record = readRecord(game.PrivateServerId)
+		TraceService.mark("match.record", {
+			found = record ~= nil,
+			mode = if record then record.mode else nil,
+			took = math.floor((os.clock() - reading) * 100) / 100,
+		})
 	end
 	if record then
 		mode = record.mode

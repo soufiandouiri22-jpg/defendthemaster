@@ -11,6 +11,14 @@ local Ladder = require(script.Ladder)
 local MenuService = require(script.MenuService)
 local ProfileService = require(script.ProfileService)
 local ShowcaseService = require(script.ShowcaseService)
+local TraceService = require(script.TraceService)
+
+-- Nobody ever plays his own avatar: the menu has no characters (the hall is only seen through the menu's camera), and
+-- in a match HeroService gives everyone his hero. Before anything can yield, or a player who comes in while the match
+-- server is still starting up (MatchSetup reads its record) walks in as his avatar.
+game:GetService("Players").CharacterAutoLoads = false
+-- The log first, so it has everything from the start (Tools/trace.py).
+TraceService.start()
 
 ProfileService.start()
 Ladder.start()
@@ -21,8 +29,6 @@ if Places.isLobby() then
 	local LobbyBuilder = require(script.Lobby.LobbyBuilder)
 	local PartyService = require(script.Lobby.PartyService)
 	local QueueService = require(script.Lobby.QueueService)
-	-- The menu has no characters: the hall is only seen through the menu's camera.
-	game:GetService("Players").CharacterAutoLoads = false
 	LobbyBuilder.build()
 	Workspace:SetAttribute("Role", "Lobby")
 	PartyService.start()

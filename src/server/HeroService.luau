@@ -20,6 +20,7 @@ local Actors = require(script.Parent.Actors)
 local HeroLook = require(script.Parent.HeroLook)
 local ProgressService = require(script.Parent.ProgressService)
 local TestGround = require(script.Parent.TestGround)
+local TraceService = require(script.Parent.TraceService)
 
 local HeroService = {}
 
@@ -140,6 +141,12 @@ function HeroService.start(layout: Layout)
 			hero = Config.DefaultHero
 		end
 		local team = player:GetAttribute("Team") or "Blue"
+		local before = player.Character
+		TraceService.mark("hero.spawn", {
+			hero = hero,
+			team = team,
+			avatar = before ~= nil and before:GetAttribute("Hero") == nil,
+		}, player)
 		player:LoadCharacterWithHumanoidDescription(HeroService.description(hero))
 		local character = player.Character
 		if not character then
@@ -162,7 +169,8 @@ function HeroService.start(layout: Layout)
 	Players.PlayerAdded:Connect(spawn)
 	spawnAll = function()
 		for _, player in Players:GetPlayers() do
-			if not player.Character then
+			-- A body that is not his hero (his avatar) is replaced as well.
+			if not (player.Character and player.Character:GetAttribute("Hero")) then
 				task.spawn(spawn, player)
 			end
 		end

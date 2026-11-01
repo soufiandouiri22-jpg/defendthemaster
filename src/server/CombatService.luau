@@ -492,6 +492,8 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		-- Everyone he passes through is struck once, also those who walk into his way while he dashes: the stretch he
 		-- covered since the last look is searched every DASH_STEP seconds, as the client moves him (fast, then slower).
 		local struck: { [Instance]: boolean } = {}
+		-- With a Slash those he passed take the blow only when his weapon strikes, at its time in the motion.
+		local slashed: { Enemy } = {}
 		local covered = 0
 		local steps = math.ceil((kit.Move - kit.Start) / DASH_STEP)
 		for i = 1, steps do
@@ -509,6 +511,26 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 						and HeroKit.segmentDistance(a, b, enemy.position) <= enemy.radius + kit.Width / 2
 					then
 						struck[enemy.instance] = true
+						if kit.Slash then
+							table.insert(slashed, enemy)
+						else
+							damage(player, character, enemy, strength(kit.Damage), magic)
+						end
+					end
+				end
+			end)
+		end
+		local slash = kit.Slash
+		if slash and kit.Damage then
+			later(state, slash.Time / (kit.Speed or 1), function()
+				for _, enemy in enemiesNear(team, landing, slash.Range) do
+					if not struck[enemy.instance] then
+						struck[enemy.instance] = true
+						table.insert(slashed, enemy)
+					end
+				end
+				for _, enemy in slashed do
+					if enemy.instance.Parent then
 						damage(player, character, enemy, strength(kit.Damage), magic)
 					end
 				end

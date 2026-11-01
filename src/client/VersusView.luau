@@ -25,7 +25,9 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Loading = require(ReplicatedFirst:WaitForChild("Loading"))
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
+local Trace = require(ReplicatedFirst:WaitForChild("Trace"))
 local HeroCamera = require(script.Parent.HeroCamera)
+local Music = require(script.Parent.Music)
 local PlayerCard = require(script.Parent.PlayerCard)
 local UiStyle = require(script.Parent.UiStyle)
 local Widgets = require(script.Parent.Widgets)
@@ -656,6 +658,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	-- The cards that came with the teleport (VersusView.travel) are up already; else the screen comes once this client
 	-- has everything in under the black one.
 	local arrived = Loading.arrived()
+	Trace.mark("versus.start", { arrived = arrived ~= nil })
 	if not arrived then
 		waitReady()
 	end
@@ -668,6 +671,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	end
 	local phase = Workspace:GetAttribute("Phase")
 	if phase == "Buy" or phase == "Fight" or phase == "Ended" or over() then
+		Trace.mark("versus.skip", { phase = phase })
 		if arrived then
 			arrived:Destroy()
 		end
@@ -688,6 +692,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 			task.wait(0.1)
 		end
 		placedFinal = lineup()
+		Trace.mark("versus.lineup", { final = placedFinal, waited = math.floor((os.clock() - started) * 100) / 100 })
 		place(cards, if placedFinal then final(state) else provisional())
 		Loading.preload({ gui }, PICTURES)
 		if over() then
@@ -713,6 +718,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		arrived:Destroy()
 	end
 	Loading.unshield()
+	Trace.mark("versus.shown", { after = math.floor((os.clock() - started) * 100) / 100 })
 	local showChat = hideChat()
 	local frame = RunService.RenderStepped:Connect(function()
 		for _, card in cards do
@@ -737,6 +743,10 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		tip.TextColor3 = if line then C.Gold else C.Cream
 		task.wait(0.25)
 	end
+	Trace.mark(
+		"versus.done",
+		{ final = placedFinal, over = over(), shown = math.floor((os.clock() - shownAt) * 100) / 100 }
+	)
 	release()
 	HeroCamera.setEnabled(true)
 	showChat()
@@ -752,8 +762,9 @@ end
 
 -- In the lobby: once a match is found (Net.Queue "Lineup") its cards come over the menu, complete with their pictures
 -- (at most PICTURES seconds), and go along as the teleport's screen, so the player sees them until the fight
--- (Loading.arrived, VersusView.start); then the lobby's server teleports him ("Prepared"). If the match falls through
--- (the queue's state is no longer Found), they go and the black screen goes along on teleports again.
+-- (Loading.arrived, VersusView.start); then the lobby's server teleports him ("Prepared"). The menu's music fades out
+-- as they come, so the cards are quiet (owner, 2026-11-01). If the match falls through (the queue's state is no longer
+-- Found), they go, the music comes back and the black screen goes along on teleports again.
 function VersusView.travel()
 	local queue = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Queue") :: RemoteEvent
 	local current: ScreenGui? = nil
@@ -766,6 +777,7 @@ function VersusView.travel()
 			glinting = nil
 		end
 		if gui then
+			Trace.mark("versus.travel.drop")
 			local group = gui:FindFirstChild("Fade") :: CanvasGroup?
 			if group then
 				Widgets.tween(group, 0.3, { GroupTransparency = 1 })
@@ -774,10 +786,12 @@ function VersusView.travel()
 				gui:Destroy()
 			end)
 			Loading.forTeleport()
+			Music.start()
 		end
 	end
 	queue.OnClientEvent:Connect(function(kind: string, payload: any)
 		if kind == "Lineup" and typeof(payload) == "table" and not current then
+			Trace.mark("versus.travel.lineup")
 			local gui, cards = build()
 			gui.Enabled = false
 			current = gui
@@ -791,6 +805,8 @@ function VersusView.travel()
 			end
 			gui.Enabled = true
 			show(gui, cards)
+			Trace.mark("versus.travel.shown")
+			Music.stop(1)
 			glinting = RunService.RenderStepped:Connect(function()
 				for _, card in cards do
 					update(card)
@@ -802,6 +818,7 @@ function VersusView.travel()
 				return
 			end
 			TeleportService:SetTeleportGui(gui)
+			Trace.mark("versus.travel.prepared")
 			queue:FireServer("Prepared")
 		elseif kind == "State" and typeof(payload) == "table" then
 			if payload.state ~= "Found" and payload.state ~= "Teleporting" then

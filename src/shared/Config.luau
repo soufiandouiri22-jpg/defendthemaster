@@ -815,6 +815,8 @@ Config.Minions = {
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
 -- `Pierce` strikes everyone it passes once. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
+-- With a `Slash` those he passed are struck only when his weapon cuts, `Time` seconds into its motion (after `Move`),
+-- together with everyone within its `Range` of where he lands.
 -- A "Leap"'s `Swings` strike all round him before he lands, at each of their `Hits` (`Damage`, `Ratio`, `Range`).
 -- A "Strike" keeps him where he stands and strikes the spot aimed at (up to `Range` away) at each of its `Strikes`
 -- (seconds from the cast), everyone within `Radius` of it, from the sky (LightningEffects); his motion itself strikes
@@ -1403,9 +1405,10 @@ Config.Heroes = {
 				Land = 2.07,
 				Swings = { Hits = { 0.35, 0.75 }, Damage = 30, Ratio = 0.3, Range = 9 },
 			},
-			-- A leaping cut to where he aims (Shift), striking everyone he passes through once. The pack has no dash,
-			-- so it is the leap of RA-SCW-057, played a little faster; heavier and less often than Shadowren's. It
-			-- leaves a trail of fire (FireEffects.dash).
+			-- A leaping cut to where he aims (Shift), striking everyone he passes through once, and those round where
+			-- he lands, when his scythe cuts as he comes down (owner, 2026-11-01; its fastest stroke, 0.97 s into the
+			-- motion). The pack has no dash, so it is the leap of RA-SCW-057, played a little faster; heavier and less
+			-- often than Shadowren's. It leaves a trail of fire (FireEffects.dash).
 			Dash = {
 				Kind = "Dash",
 				Motion = "RA-SCW-057",
@@ -1418,6 +1421,7 @@ Config.Heroes = {
 				Start = 0.5,
 				Move = 0.8,
 				Stop = 1.05,
+				Slash = { Time = 0.97, Range = 7 },
 			},
 		},
 	},

@@ -21,6 +21,8 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local Trace = require(script.Parent:WaitForChild("Trace"))
+
 local Loading = {}
 
 -- Which screen shows: "Blades", or "Colosseum" for the one before.
@@ -489,7 +491,11 @@ function Loading.pointer(image: string?)
 		local free = UserInputService.MouseEnabled and UserInputService.MouseBehavior ~= Enum.MouseBehavior.LockCenter
 		local at = UserInputService:GetMouseLocation()
 		picture.Position = UDim2.fromOffset(at.X, at.Y)
-		picture.Visible = free and not covering
+		local visible = free and not covering
+		if visible ~= picture.Visible then
+			Trace.mark("pointer", { visible = visible, free = free, covering = covering })
+		end
+		picture.Visible = visible
 		UserInputService.MouseIconEnabled = false
 	end)
 end
@@ -497,11 +503,13 @@ end
 -- Shows the screen that came with a teleport, or a new one, in place of Roblox's own, with its blades turning (or the
 -- colosseum's bar running).
 function Loading.show()
-	local gui = TeleportService:GetArrivingTeleportGui() or Loading.build()
+	local arriving = TeleportService:GetArrivingTeleportGui()
+	local gui = arriving or Loading.build()
 	if gui.Name == CARDS then
 		cards = gui
 	end
 	covering = cards == nil
+	Trace.mark("loading.show", { teleported = arriving ~= nil, cards = cards ~= nil })
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	ReplicatedFirst:RemoveDefaultLoadingScreen()
 	Loading.pointer()
@@ -643,6 +651,7 @@ end
 
 -- The client has what its first look shows: the screen may go.
 function Loading.ready()
+	Trace.mark("loading.ready")
 	readyNow = true
 end
 
@@ -680,6 +689,7 @@ end
 -- Lets clicks through to a screen shown over this one (Versus), and shows the mouse for it: the shield takes them from
 -- every screen, also from those with a higher DisplayOrder.
 function Loading.unshield()
+	Trace.mark("loading.unshield")
 	covering = false
 	local guard = shown and shown:FindFirstChild("Shield", true)
 	if guard and guard:IsA("GuiObject") then
@@ -734,11 +744,15 @@ end
 
 -- How much of what the player will see when the screen goes is not in yet: every picture shown on the screens under
 -- it (Roblox draws a picture only once it is shown, so these load now, under the screen), and every sound needed.
-local function left(): number
+-- With `names` the names of what is not in yet go into it, for the log.
+local function left(names: { string }?): number
 	local count = 0
 	for _, sound in needs do
 		if sound.Parent and sound:IsA("Sound") and not sound.IsLoaded and not failed(sound.SoundId) then
 			count += 1
+			if names then
+				table.insert(names, sound:GetFullName())
+			end
 		end
 	end
 	local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
@@ -760,6 +774,9 @@ local function left(): number
 				and not failed(item.Image)
 			then
 				count += 1
+				if names then
+					table.insert(names, `{item:GetFullName()} {item.Image}`)
+				end
 			end
 		end
 	end
@@ -767,7 +784,7 @@ local function left(): number
 end
 
 local function allIn(): boolean
-	return left() == 0
+	return left(nil) == 0
 end
 
 -- The bar never goes back.
@@ -801,18 +818,29 @@ function Loading.finish()
 	local function late(): boolean
 		return os.clock() - started >= LONGEST
 	end
+	-- Each stage passed into the log, with the seconds since the screen came and whether it gave up waiting.
+	local function passed(name: string, data: { [string]: any }?)
+		local entry = data or {}
+		entry.stage = name
+		entry.after = math.floor((os.clock() - started) * 100) / 100
+		entry.late = late()
+		entry.queue = ContentProvider.RequestQueueSize
+		Trace.mark("loading.stage", entry)
+	end
 	local fetched = downloads()
 	while not game:IsLoaded() do
 		stage(0, LOADED, fetched())
 		task.wait(0.1)
 	end
 	reach(LOADED)
+	passed("loaded")
 	fetched = downloads()
 	while not readyNow and not late() do
 		stage(LOADED, CLIENT, fetched())
 		task.wait(0.1)
 	end
 	reach(CLIENT)
+	passed("client")
 	fetched = downloads()
 	local emptySince = nil
 	while not late() do
@@ -827,6 +855,7 @@ function Loading.finish()
 		task.wait(0.1)
 	end
 	reach(FETCHED)
+	passed("fetched")
 	local frames, since = 0, os.clock()
 	while (frames < SETTLE_FRAMES or os.clock() - since < SETTLE) and not late() do
 		RunService.RenderStepped:Wait()
@@ -834,9 +863,10 @@ function Loading.finish()
 		stage(FETCHED, SETTLED, math.min(frames / SETTLE_FRAMES, (os.clock() - since) / SETTLE))
 	end
 	reach(SETTLED)
+	passed("settled", { frames = frames })
 	local most = 0
 	while not late() do
-		local count = left()
+		local count = left(nil)
 		most = math.max(most, count)
 		if count == 0 then
 			break
@@ -845,6 +875,8 @@ function Loading.finish()
 		task.wait(0.1)
 	end
 	reach(1)
+	local missing = {}
+	passed("pictures", { most = most, left = left(missing), first = missing[1], second = missing[2] })
 	readyAll = true
 	readySignal:Fire()
 	local heldSince = os.clock()
@@ -853,10 +885,13 @@ function Loading.finish()
 		task.wait(0.05)
 	end
 	waiting = false
+	passed("held", { held = math.floor((os.clock() - heldSince) * 100) / 100, holds = holds })
 	local shownSince = os.clock()
 	while not allIn() and os.clock() - shownSince < SHOWN do
 		task.wait(0.05)
 	end
+	missing = {}
+	passed("gone", { left = left(missing), first = missing[1] })
 	local gui = shown
 	shown = nil
 	gone = true

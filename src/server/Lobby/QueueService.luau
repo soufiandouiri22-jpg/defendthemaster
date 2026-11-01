@@ -25,6 +25,7 @@ local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local Places = require(ReplicatedStorage.Shared.Places)
 local ProfileService = require(script.Parent.Parent.ProfileService)
 local Remote = require(script.Parent.Parent.Remote)
+local TraceService = require(script.Parent.Parent.TraceService)
 local PartyService = require(script.Parent.PartyService)
 
 local QueueService = {}
@@ -413,6 +414,7 @@ local function teleport(leader: number, s: Search, assignment: any)
 		local ok, err =
 			pcall(TeleportService.TeleportAsync, TeleportService, Config.Places.Match :: number, members, options)
 		if ok then
+			TraceService.mark("queue.teleport", { mode = assignment.mode, players = #members, attempt = attempt })
 			return
 		end
 		warn("[QueueService] teleport failed:", err)

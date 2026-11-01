@@ -22,7 +22,16 @@ local UiSound = {}
 -- The buy phase's sting swells twice: a plain kill plays its first swell, the bigger kills its second, to its end.
 -- The bigger kills but one play the first roll of the drum sting, up to its loudest beat and that beat's tail; the
 -- biggest the boom, whole and louder.
-type Cue = { asset: string, start: number, length: number?, gain: number?, near: number?, far: number? }
+-- A `steady` effect is never sunk under an announcement (Preferences.STEADY).
+type Cue = {
+	asset: string,
+	start: number,
+	length: number?,
+	gain: number?,
+	near: number?,
+	far: number?,
+	steady: boolean?,
+}
 local BOOM: Cue = { asset = Assets.FightBoom, start = 0, gain = 2 }
 local CUES: { [string]: Cue } = {
 	KillSlain = { asset = Assets.BuySting, start = 0, length = 2.85 },
@@ -62,9 +71,9 @@ local CUES: { [string]: Cue } = {
 	-- The last three seconds of the player's turn in the draft: the buy phase's timpani tick.
 	CountTick = { asset = Assets.CountTick, start = 0, length = 0.8, gain = 0.5 },
 
-	-- A hero coming back on his pad, and a hero's healing there beginning.
+	-- A hero coming back on his pad, and a hero's healing there beginning (never sunk, owner 2026-11-01).
 	Respawn = { asset = Assets.MagicExit, start = 0.15, length = 1.85, gain = 0.55 },
-	PadHeal = { asset = Assets.MagicGlow, start = 0, length = 1.2, gain = 3.75, near = 10, far = 50 },
+	PadHeal = { asset = Assets.MagicGlow, start = 0, length = 1.2, gain = 3.75, near = 10, far = 50, steady = true },
 
 	-- The player's avatar turning into his hero on the podium (Lobby.Showcase): the power gathering and swirling round
 	-- him, the blast that turns him, and the shimmer the hero stands in.
@@ -200,6 +209,9 @@ local function start(name: string, parent: Instance, volume: number?, pitch: num
 	if not cue then
 		sound:Destroy()
 		return nil, nil
+	end
+	if cue.steady and group == "Effects" then
+		sound.SoundGroup = Preferences.group(Preferences.STEADY)
 	end
 	sound.SoundId = cue.asset
 	sound.Volume = (volume or 1) * (cue.gain or 1)

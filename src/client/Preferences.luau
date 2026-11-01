@@ -14,6 +14,9 @@ local ProfileClient = require(script.Parent.ProfileClient)
 local Preferences = {}
 
 local GROUPS = { "Music", "Effects", "Interface" }
+-- The effects an announcement never sinks (healing, owner 2026-11-01): as loud as the effects are set, never ducked.
+local STEADY = "EffectsSteady"
+Preferences.STEADY = STEADY
 
 local current: Profile.Settings = Profile.defaultSettings()
 local changed = Instance.new("BindableEvent")
@@ -39,6 +42,9 @@ local function setVolumes()
 		local volume = current.Master * own
 		if name == "Music" and lobby and not current.MenuMusic then
 			volume = 0
+		end
+		if name == "Effects" then
+			Preferences.group(STEADY).Volume = volume
 		end
 		if name ~= "Interface" then
 			volume *= duck

@@ -25,6 +25,7 @@ local MatchService = require(script.Parent.MatchService)
 local MatchSetup = require(script.Parent.MatchSetup)
 local ProfileService = require(script.Parent.ProfileService)
 local Remote = require(script.Parent.Remote)
+local TraceService = require(script.Parent.TraceService)
 
 local MatchEnd = {}
 
@@ -352,6 +353,7 @@ local function back(players: { Player }, again: boolean)
 		local ok, err =
 			pcall(TeleportService.TeleportAsync, TeleportService, Config.Places.Lobby :: number, players, options)
 		if ok then
+			TraceService.mark("match.teleport", { players = #players, again = again == true, attempt = attempt })
 			return
 		end
 		warn("[MatchEnd] teleport failed:", err)

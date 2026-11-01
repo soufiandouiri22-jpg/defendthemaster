@@ -128,6 +128,9 @@
 			},
 			"LoadingScreen": {
 				"$path": "src/first/LoadingScreen.client.luau"
+			},
+			"Trace": {
+				"$path": "src/first/Trace.luau"
 			}
 		},
 		"StarterPlayer": {
