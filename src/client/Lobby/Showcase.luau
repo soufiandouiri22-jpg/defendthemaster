@@ -407,6 +407,7 @@ local function playEntrance(entry: Entry)
 	local from, to = turnOf(entry.hero, true), turnOf(entry.hero)
 	local left = enter.Step or STEP
 	local right = enter.StepRight or left
+	local held: number? = nil
 	entry.update = function(dt: number)
 		if not stepping then
 			if not motion:reached() then
@@ -416,6 +417,16 @@ local function playEntrance(entry: Entry)
 				motion:breathe()
 				entry.update = nil
 				return
+			end
+			if enter.Hold then
+				if not held then
+					held = 0
+					motion:breathe()
+				end
+				held += dt
+				if held < enter.Hold then
+					return
+				end
 			end
 			motion:stepInto(left, right)
 			stepping = 0

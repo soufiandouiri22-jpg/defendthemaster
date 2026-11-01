@@ -838,8 +838,8 @@ Config.Minions = {
 -- played at `Speed` `From` that many seconds in (its start without) `Until` that many (its end without), short so it
 -- ends soon after the transformation's sound (owner, 2026-11-01), and `Then` either "Breathe" (he keeps that
 -- frame, breathing) or "Pose" (he steps into his pose, the left foot in `Step` seconds and then the right in
--- `StepRight`, as long without, turning to his `Turn` as he steps, with no standing up from a crouch). With `Low` he
--- stands no taller in it than in his pose.
+-- `StepRight`, as long without, turning to his `Turn` as he steps, with no standing up from a crouch; with `Hold` he
+-- first keeps that frame, breathing, that many seconds). With `Low` he stands no taller in it than in his pose.
 Config.Heroes = {
 	Shadowren = {
 		Role = "Assassin",
@@ -1113,7 +1113,7 @@ Config.Heroes = {
 		Showcase = {
 			Motion = "RA-ELM-017",
 			Turn = -28,
-			Enter = { Motion = "RA-ELM-064", Speed = 0.6, Then = "Pose", Step = 0.36, Low = true },
+			Enter = { Motion = "RA-ELM-064", Speed = 0.6, Then = "Pose", Hold = 0.6, Step = 0.36, Low = true },
 			Aura = Color3.fromRGB(150, 70, 230),
 		},
 		Health = 720,
@@ -1553,7 +1553,7 @@ Config.Heroes = {
 				Hits = { 0.5, 0.65, 0.8 },
 				Damage = 35,
 				Ratio = 0.35,
-				Range = 20,
+				Range = 30,
 				Angle = 50,
 				Zap = true,
 				Targets = 3,
