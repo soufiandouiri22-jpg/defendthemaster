@@ -4,8 +4,11 @@
 -- (S+ to D-); the winners' best is the MVP. Every player then earns his coins, account XP and pass XP (twice the XP
 -- while his pass boost runs), and in Ranked his LP (Shared.Ranks, against the enemies' rating) with the ladder told;
 -- it is saved at once and sent to him (Net.MatchEnd "Result"), with every hero's line for the scoreboard. A player who leaves a match from the queue before its
--- end loses it. After the end "PlayAgain" sends the player back to the lobby and into the queue with his party,
--- "Menu" only back, and after Config.MatchEnd.Return seconds everyone still here goes back, each party together.
+-- end loses it. After the end "PlayAgain" queues the player for the next match in this one's mode from here
+-- (QueueService, owner 2026-11-01), with those of his party who pressed it too: once all of it still here did, or
+-- PARTY_WAIT seconds after the first (meanwhile "Again" "Waiting"); "Cancel" takes him out again, and the others search
+-- on. "Menu" sends him back to the lobby, and after Config.MatchEnd.Return seconds everyone still here who is not
+-- searching goes back, each party together.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,12 +27,14 @@ local Ladder = require(script.Parent.Ladder)
 local MatchService = require(script.Parent.MatchService)
 local MatchSetup = require(script.Parent.MatchSetup)
 local ProfileService = require(script.Parent.ProfileService)
+local QueueService = require(script.Parent.QueueService)
 local Remote = require(script.Parent.Remote)
 local TraceService = require(script.Parent.TraceService)
 
 local MatchEnd = {}
 
 local SETTINGS = Config.Rewards
+local PARTY_WAIT = 20
 
 type Line = {
 	actor: Instance,
@@ -49,6 +54,9 @@ local results: { [number]: any } = {}
 local settled: { [number]: boolean } = {}
 local over = false
 local leaving: { [Player]: boolean } = {}
+-- When each player pressed Play Again (till he cancels), and the ids each searches with, its leader first.
+local pressed: { [number]: number } = {}
+local groupOf: { [number]: { number } } = {}
 
 local function count(actor: Instance, key: string): number
 	return tonumber(actor:GetAttribute(key)) or 0
@@ -320,8 +328,8 @@ local function left(player: Player, data: Profile.Data)
 	end
 end
 
--- Sends `players` (one party) back to the lobby together; with `again` the party queues again in `mode`.
-local function back(players: { Player }, again: boolean)
+-- Sends `players` (one party) back to the lobby together.
+local function back(players: { Player })
 	if #players == 0 then
 		return
 	end
@@ -344,16 +352,12 @@ local function back(players: { Player }, again: boolean)
 		table.insert(ids, id)
 	end
 	local options = Instance.new("TeleportOptions")
-	options:SetTeleportData({
-		party = party[1],
-		members = ids,
-		again = if again then MatchSetup.mode() else nil,
-	})
+	options:SetTeleportData({ party = party[1], members = ids })
 	for attempt = 1, 3 do
 		local ok, err =
 			pcall(TeleportService.TeleportAsync, TeleportService, Config.Places.Lobby :: number, players, options)
 		if ok then
-			TraceService.mark("match.teleport", { players = #players, again = again == true, attempt = attempt })
+			TraceService.mark("match.teleport", { players = #players, attempt = attempt })
 			return
 		end
 		warn("[MatchEnd] teleport failed:", err)
@@ -365,18 +369,114 @@ local function back(players: { Player }, again: boolean)
 	end
 end
 
--- Everyone still here back to the lobby, each party in one go.
+-- Where `id`'s search stands: "Idle", "Searching" or "Found".
+local function searchOf(id: number): string
+	local group = groupOf[id]
+	return if group then QueueService.state(group[1]) else "Idle"
+end
+
+-- Whether `player` waits for his party or searches, so is not sent back to the lobby.
+local function busy(player: Player): boolean
+	return pressed[player.UserId] ~= nil or searchOf(player.UserId) ~= "Idle"
+end
+
+local function tellAgain(ids: { number }, payload: any)
+	for _, id in ids do
+		local player = Players:GetPlayerByUserId(id)
+		if player then
+			event:FireClient(player, "Again", payload)
+		end
+	end
+end
+
+local function same(a: { number }, b: { number }): boolean
+	if #a ~= #b then
+		return false
+	end
+	for _, id in a do
+		if not table.find(b, id) then
+			return false
+		end
+	end
+	return true
+end
+
+-- The party `player` searches with (QueueService), as its leader's id and its members here.
+function MatchEnd.partyOf(player: Player): (number, { Player })
+	local ids = groupOf[player.UserId] or { player.UserId }
+	local members = {}
+	for _, id in ids do
+		local member = Players:GetPlayerByUserId(id)
+		if member then
+			table.insert(members, member)
+		end
+	end
+	return ids[1], members
+end
+
+-- Queues those of `party` (its ids from the match's record) still here who pressed Play Again: once all of them did,
+-- or PARTY_WAIT seconds after the first; anew when one of them leaves, cancels, presses later or the search fell through.
+local function regroup(party: { number })
+	local current: { number }? = nil
+	local ready: { number } = {}
+	local others, first = 0, math.huge
+	for _, id in party do
+		local player = Players:GetPlayerByUserId(id)
+		local state = searchOf(id)
+		if not player or leaving[player] or state == "Found" then
+			continue
+		end
+		if state == "Searching" then
+			current = groupOf[id]
+		end
+		if pressed[id] then
+			table.insert(ready, id)
+			first = math.min(first, pressed[id])
+		else
+			others += 1
+		end
+	end
+	if current and same(current, ready) then
+		return
+	end
+	if current then
+		QueueService.cancel(current[1])
+		for _, id in current do
+			groupOf[id] = nil
+		end
+	end
+	if #ready == 0 then
+		return
+	end
+	if not current and others > 0 and os.clock() - first < PARTY_WAIT then
+		tellAgain(ready, { state = "Waiting", ready = #ready, of = #ready + others })
+		return
+	end
+	for _, id in ready do
+		groupOf[id] = ready
+	end
+	QueueService.join(Players:GetPlayerByUserId(ready[1]) :: Player, MatchSetup.mode())
+	if QueueService.state(ready[1]) == "Idle" then
+		for _, id in ready do
+			pressed[id] = nil
+			groupOf[id] = nil
+		end
+		tellAgain(ready, { state = "Idle" })
+	end
+end
+
+-- Everyone still here who does not search back to the lobby, each party in one go.
 local function sendAll()
 	local groups: { [number]: { Player } } = {}
 	for _, player in Players:GetPlayers() do
-		if not leaving[player] then
+		if not leaving[player] and not busy(player) then
 			local key = MatchSetup.partyOf(player.UserId)[1]
 			groups[key] = groups[key] or {}
 			table.insert(groups[key], player)
 		end
 	end
 	for _, group in groups do
-		task.spawn(back, group, false)
+		task.spawn(back, group)
 	end
 end
 
@@ -386,12 +486,38 @@ function MatchEnd.start()
 			if results[player.UserId] then
 				event:FireClient(player, "Result", results[player.UserId])
 			end
-		elseif over and not leaving[player] and (action == "PlayAgain" or action == "Menu") then
-			back({ player }, action == "PlayAgain")
+		elseif not over or leaving[player] or searchOf(player.UserId) == "Found" then
+			return
+		elseif action == "PlayAgain" then
+			pressed[player.UserId] = pressed[player.UserId] or os.clock()
+			regroup(MatchSetup.partyOf(player.UserId))
+		elseif action == "Cancel" then
+			pressed[player.UserId] = nil
+			regroup(MatchSetup.partyOf(player.UserId))
+			event:FireClient(player, "Again", { state = "Idle" })
+		elseif action == "Menu" then
+			if busy(player) then
+				pressed[player.UserId] = nil
+				regroup(MatchSetup.partyOf(player.UserId))
+			end
+			back({ player })
 		end
 	end)
 	MatchService.onFinished(function(winner)
 		finish(winner)
+		task.spawn(function()
+			while true do
+				task.wait(1)
+				local seen: { [number]: boolean } = {}
+				for id in pressed do
+					local party = MatchSetup.partyOf(id)
+					if not seen[party[1]] then
+						seen[party[1]] = true
+						regroup(party)
+					end
+				end
+			end
+		end)
 		task.wait(Config.MatchEnd.Return)
 		sendAll()
 	end)
@@ -404,6 +530,8 @@ function MatchEnd.start()
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		leaving[player] = nil
+		pressed[player.UserId] = nil
+		groupOf[player.UserId] = nil
 	end)
 end
 

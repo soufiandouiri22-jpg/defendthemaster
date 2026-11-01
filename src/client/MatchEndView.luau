@@ -5,9 +5,10 @@
 -- grade, the MVP marked, the player's own row in gold) with the player's rewards in a band under it (his LP in
 -- Ranked, his hero's mastery, the coins, the pass XP and the account XP; every player's mastery crest beside his
 -- name), the match's MVP in a gold card on its left and the losing
--- team's best player in a card of his team's colour on its right, so everyone sees who stood out. PLAY AGAIN goes back to the lobby
--- and into the queue with his party, BACK TO MENU only back; until the server sends everyone back a clock counts
--- down. Clicking a player opens his profile (PlayerCard): a star card turns round to it, a row opens it large. The rest
+-- team's best player in a card of his team's colour on its right, so everyone sees who stood out. PLAY AGAIN searches
+-- for the next match from here with his party, showing how long, and its cards come over the screen and go along to
+-- it (VersusView.travel), BACK TO MENU cancelling meanwhile; BACK TO MENU goes back to the lobby, and until the server
+-- sends everyone not searching back a clock counts down. Clicking a player opens his profile (PlayerCard): a star card turns round to it, a row opens it large. The rest
 -- of the HUD hides meanwhile.
 
 local Players = game:GetService("Players")
@@ -67,6 +68,8 @@ local TAG_MIDDLE = AVATAR_BOTTOM - 7
 -- under the results, on every screen.
 local HEAD_TOP = 82
 local NEXT_H = 122
+-- The buttons and their clock a little higher than that middle (owner, 2026-11-01).
+local NEXT_RAISE = 8
 
 local player = Players.LocalPlayer
 
@@ -703,7 +706,8 @@ local function results(gui: ScreenGui, titleImage: CanvasGroup, event: RemoteEve
 	end)
 
 	-- What next.
-	local after = UiStyle.frame(canvas, UDim2.new(1, 0, 0, NEXT_H), UDim2.new(0, 0, 2 / 3, total / 3 - NEXT_H))
+	local after =
+		UiStyle.frame(canvas, UDim2.new(1, 0, 0, NEXT_H), UDim2.new(0, 0, 2 / 3, total / 3 - NEXT_H - NEXT_RAISE))
 	after.BackgroundTransparency = 1
 	after.Name = "Next"
 	-- PLAY AGAIN on the right in gold, as PLAY on the menu; BACK TO MENU beside it in blue.
@@ -732,36 +736,90 @@ local function results(gui: ScreenGui, titleImage: CanvasGroup, event: RemoteEve
 	clock.Size = UDim2.new(1, 0, 0, 28)
 	clock.Position = UDim2.new(0, 0, 1, 4)
 	clock.AnchorPoint = Vector2.new(0, 1)
+
+	-- PLAY AGAIN searches from here (server MatchEnd, QueueService): "Asked" till the server answers, "Waiting" for the
+	-- rest of the party, "Searching" with the time on the button and BACK TO MENU as CANCEL, "Found" while the next
+	-- match's cards come over the screen (VersusView.travel); "Going" back to the lobby.
+	local search = "Idle"
+	local since = 0
+	local function set(state: string, party: any?)
+		search = state
+		local idle = state == "Idle"
+		local cancels = state == "Waiting" or state == "Searching"
+		againText.Text = if state == "Asked"
+			then "PLAY AGAIN..."
+			elseif state == "Waiting" then `PARTY {party and party.ready or 1}/{party and party.of or 1}`
+			elseif state == "Searching" then "SEARCHING " .. UiStyle.clock(Workspace:GetServerTimeNow() - since)
+			elseif state == "Found" then "MATCH FOUND!"
+			else "PLAY AGAIN"
+		menuText.Text = if cancels then "CANCEL" elseif state == "Going" then "GOING BACK..." else "BACK TO MENU"
+		Widgets.enable(again, idle, "Gold")
+		Widgets.enable(menu, idle or cancels, "Blue")
+	end
+	Widgets.every(againText, 0.5, function()
+		if search == "Searching" then
+			againText.Text = "SEARCHING " .. UiStyle.clock(Workspace:GetServerTimeNow() - since)
+		end
+	end)
+	-- While it searches the clock's line says how many of a match's players the queue has found (QueueService "Filled").
+	local filled: any = nil
 	Widgets.every(clock, 0.5, function()
 		local left = (result.returnAt or 0) - Workspace:GetServerTimeNow()
-		clock.Text = if left > 0 then "BACK TO THE LOBBY IN " .. UiStyle.clock(left) else "GOING BACK..."
+		clock.Text = if search == "Searching"
+			then (if filled then `{filled.found}/{filled.of} PLAYERS FOUND` else "FINDING PLAYERS...")
+			elseif search ~= "Idle" and search ~= "Going" then ""
+			elseif left > 0 then "BACK TO THE LOBBY IN " .. UiStyle.clock(left)
+			else "GOING BACK..."
 	end)
-
-	local chosen = false
-	local function choose(action: string, label: TextLabel)
-		if chosen then
-			return
-		end
-		chosen = true
-		label.Text = "GOING BACK..."
-		Widgets.enable(again, false, "Gold")
-		Widgets.enable(menu, false, "Blue")
-		event:FireServer(action)
-		task.delay(12, function()
-			-- Still here: the teleport failed, so the buttons work again.
-			if gui.Parent then
-				chosen = false
-				againText.Text, menuText.Text = "PLAY AGAIN", "BACK TO MENU"
-				Widgets.enable(again, true, "Gold")
-				Widgets.enable(menu, true, "Blue")
+	-- With no answer the buttons work again: the server is gone or the teleport failed.
+	local function fallback(state: string, seconds: number)
+		task.delay(seconds, function()
+			if gui.Parent and search == state then
+				set("Idle")
 			end
 		end)
 	end
+	event.OnClientEvent:Connect(function(kind: string, payload: any)
+		if kind == "Again" and typeof(payload) == "table" and search ~= "Going" then
+			set(if payload.state == "Waiting" then "Waiting" else "Idle", payload)
+		end
+	end)
+	local queue = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Queue") :: RemoteEvent
+	queue.OnClientEvent:Connect(function(kind: string, payload: any)
+		if kind == "Filled" and typeof(payload) == "table" then
+			filled = payload
+			return
+		end
+		if kind ~= "State" or typeof(payload) ~= "table" or search == "Going" then
+			return
+		end
+		if payload.state == "Searching" then
+			if search ~= "Searching" then
+				filled = nil
+			end
+			since = tonumber(payload.since) or Workspace:GetServerTimeNow()
+			set("Searching")
+		elseif payload.state == "Found" then
+			set("Found")
+		elseif search ~= "Waiting" then
+			set("Idle")
+		end
+	end)
 	again.Activated:Connect(function()
-		choose("PlayAgain", againText)
+		if search == "Idle" then
+			set("Asked")
+			event:FireServer("PlayAgain")
+			fallback("Asked", 8)
+		end
 	end)
 	menu.Activated:Connect(function()
-		choose("Menu", menuText)
+		if search == "Waiting" or search == "Searching" then
+			event:FireServer("Cancel")
+		elseif search == "Idle" then
+			set("Going")
+			event:FireServer("Menu")
+			fallback("Going", 12)
+		end
 	end)
 end
 
@@ -812,23 +870,37 @@ function MatchEndView.start()
 		end)
 	end
 
+	local function notify(text: any)
+		local screen = gui
+		if not screen or typeof(text) ~= "string" then
+			return
+		end
+		local note = screen:FindFirstChild("Notice", true) :: TextLabel?
+		if not note then
+			-- Just over the buttons once they are there.
+			local buttons = screen:FindFirstChild("Next", true)
+			local made = Widgets.label(buttons or screen, "", 24, C.Xp, nil, C.Edge)
+			made.Name = "Notice"
+			made.Size = UDim2.new(1, 0, 0, 28)
+			made.Position = if buttons then UDim2.fromOffset(0, -6) else UDim2.new(0, 0, 1, -132)
+			made.AnchorPoint = Vector2.new(0, 1)
+			note = made
+		end
+		(note :: TextLabel).Text = text
+	end
 	event.OnClientEvent:Connect(function(kind: string, payload: any)
 		if kind == "Result" then
 			result = payload
 			showResults()
-		elseif kind == "Notice" and gui then
-			local note = gui:FindFirstChild("Notice") :: TextLabel?
-			if not note then
-				-- Just over the buttons once they are there.
-				local buttons = gui:FindFirstChild("Next", true)
-				local made = Widgets.label(buttons or gui, "", 24, C.Xp, nil, C.Edge)
-				made.Name = "Notice"
-				made.Size = UDim2.new(1, 0, 0, 28)
-				made.Position = if buttons then UDim2.fromOffset(0, -6) else UDim2.new(0, 0, 1, -132)
-				made.AnchorPoint = Vector2.new(0, 1)
-				note = made
-			end
-			(note :: TextLabel).Text = payload
+		elseif kind == "Notice" then
+			notify(payload)
+		end
+	end)
+	-- What the queue says from here after Play Again (the party changed, the match could not be joined).
+	local queue = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Queue") :: RemoteEvent
+	queue.OnClientEvent:Connect(function(kind: string, payload: any)
+		if kind == "Notice" then
+			notify(payload)
 		end
 	end)
 	Workspace:GetAttributeChangedSignal("Winner"):Connect(onWinner)

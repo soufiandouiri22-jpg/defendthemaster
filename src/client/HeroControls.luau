@@ -475,6 +475,8 @@ end
 
 local STAR_GAP, CARD_GAP, CARD_LIFE = 1.5, 2.5, 0.55
 local STAR_SIZE, CARD_SIZE = 1, 1.7
+-- A touch brighter than white (owner, 2026-11-01: 2.2 too bright).
+local CARD_BRIGHTNESS = 1.3
 
 -- One kind of the twinkles or card suits of his beams (Assets.CardStar, CardSuits; `texture`, `size` studs) on `part`,
 -- in `colour`, let out only by Emit. Unlit, so where they overlap they do not grow brighter.
@@ -484,6 +486,7 @@ local function cardEmitter(part: BasePart, texture: string, size: number, colour
 	e.Color = ColorSequence.new(colour)
 	e.LightEmission = 0
 	e.LightInfluence = 0
+	e.Brightness = CARD_BRIGHTNESS
 	e.Size = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, size),
 		NumberSequenceKeypoint.new(0.7, size * 0.8),

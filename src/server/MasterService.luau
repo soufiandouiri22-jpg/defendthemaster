@@ -90,7 +90,8 @@ local function setState(m: Master, state: string)
 	m.model:SetAttribute("State", state)
 end
 
--- The enemies of `team` within `reach` studs of `centre` (flat): heroes and minions.
+-- The enemies of `team` within `reach` studs of `centre` (flat): heroes and minions; a vanished hero ("Hidden") is not
+-- there for him, neither to go for nor to strike.
 local function foes(team: string, centre: Vector3, reach: number): { Foe }
 	local found = {}
 	local minions = Workspace:FindFirstChild("Minions")
@@ -112,7 +113,12 @@ local function foes(team: string, centre: Vector3, reach: number): { Foe }
 		end
 	end
 	for _, model in CollectionService:GetTagged("Combatant") do
-		if model:IsA("Model") and model:GetAttribute("Hero") and model:GetAttribute("Team") ~= team then
+		if
+			model:IsA("Model")
+			and model:GetAttribute("Hero")
+			and model:GetAttribute("Team") ~= team
+			and not model:GetAttribute("Hidden")
+		then
 			local humanoid = model:FindFirstChildOfClass("Humanoid")
 			local position = model:GetPivot().Position
 			local radius = model:GetAttribute("Radius") or 1.5

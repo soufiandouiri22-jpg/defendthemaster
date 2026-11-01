@@ -105,12 +105,16 @@ end
 -- How far below and above its pivot each Combatant reaches, measured once.
 local reaches: { [Model]: { number } } = setmetatable({}, { __mode = "k" }) :: any
 
--- The enemies of `team` within `reach` studs of `centre`.
+-- The enemies of `team` within `reach` studs of `centre`. A vanished hero ("Hidden") is not among them: nothing
+-- strikes him, and shots fly through him (owner, 2026-11-01).
 local function enemiesNear(team: string, centre: Vector3, reach: number): { Enemy }
 	local found = {}
 	for _, foe in HeroKit.foes(team, reaches) do
 		local body = foe.body
-		if HeroKit.flat(body.position - centre).Magnitude <= reach + body.radius then
+		if
+			not foe.instance:GetAttribute("Hidden")
+			and HeroKit.flat(body.position - centre).Magnitude <= reach + body.radius
+		then
 			table.insert(found, {
 				instance = foe.instance,
 				position = body.position,

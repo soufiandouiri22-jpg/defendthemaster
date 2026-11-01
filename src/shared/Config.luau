@@ -840,7 +840,7 @@ Config.Minions = {
 -- `To` seconds every `Every` strikes everyone within `Radius` of the spot aimed at as he cast it (up to `Range` away),
 -- under falling laser beams (HeroControls).
 -- A "Vanish" makes him unseen by his enemies for `Duration` seconds (his "Hidden" attribute, the client's Vanish), and
--- faint to his own team, till he attacks again; he can be struck meanwhile. He stands still for its first `Cast`
+-- faint to his own team, till he attacks again; no hero's attack strikes him meanwhile. He stands still for its first `Cast`
 -- seconds, its motion cut off at `Stop`, and then runs `Haste` times as fast while he stays unseen.
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first.
 --

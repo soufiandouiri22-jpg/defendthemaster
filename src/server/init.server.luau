@@ -1,7 +1,7 @@
 -- Server entry point of Defend The Master. The lobby (Shared.Places) builds the menu's hall and runs the menu, the
 -- party and the queue; a match builds the colosseum, waits for its players (MatchSetup), gives everyone his hero
 -- (DraftService: the one chosen in the lobby, or a draft when Config.Draft.Enabled) and plays the match to its end
--- (MatchEnd).
+-- (MatchEnd), from where Play Again queues for the next one (QueueService, its parties MatchEnd's).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -10,6 +10,7 @@ local Places = require(ReplicatedStorage.Shared.Places)
 local Ladder = require(script.Ladder)
 local MenuService = require(script.MenuService)
 local ProfileService = require(script.ProfileService)
+local QueueService = require(script.QueueService)
 local ShowcaseService = require(script.ShowcaseService)
 local TraceService = require(script.TraceService)
 
@@ -28,11 +29,10 @@ task.spawn(ShowcaseService.start)
 if Places.isLobby() then
 	local LobbyBuilder = require(script.Lobby.LobbyBuilder)
 	local PartyService = require(script.Lobby.PartyService)
-	local QueueService = require(script.Lobby.QueueService)
 	LobbyBuilder.build()
 	Workspace:SetAttribute("Role", "Lobby")
 	PartyService.start()
-	QueueService.start()
+	QueueService.start(PartyService)
 	print("[DefendTheMaster] lobby started")
 	return
 end
@@ -74,6 +74,7 @@ PadService.start(layout)
 ShopService.start(layout)
 CrownService.start(layout)
 MatchEnd.start()
+QueueService.start({ partyOf = MatchEnd.partyOf })
 print(if testing then "[DefendTheMaster] server started on the test ground" else "[DefendTheMaster] server started")
 
 -- The test ground starts at once with the player's own hero; a match first gives everyone his.

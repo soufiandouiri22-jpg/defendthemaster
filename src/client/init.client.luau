@@ -1,6 +1,6 @@
 -- Client entry point of Defend The Master. The server says what this place is (the Workspace attribute "Role"): in the
 -- lobby the menu runs (Lobby.Menu), in a match the arena's views and the HUD, with the draft before the fight and the
--- end screen after it. The loading screen (ReplicatedFirst.Loading) stays up until the place's world, pictures, music
+-- end screen after it, from where Play Again goes to the next match. The loading screen (ReplicatedFirst.Loading) stays up until the place's world, pictures, music
 -- and, in a match, the draft are there, and goes along on every teleport from here. The mouse is the game's gold gauntlet everywhere (Pointer).
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
@@ -116,6 +116,8 @@ else
 	task.spawn(VersusView.start, draftShown, Loading.waitReady)
 end
 task.spawn(MatchEndView.start)
+-- Play Again queues from the end screen: the next match's cards come over it and go along to that match.
+task.spawn(VersusView.travel)
 task.spawn(function()
 	-- How far this client's loading screen is, for everyone's cards, until it has everything in.
 	local report = ReplicatedStorage:WaitForChild("Net"):WaitForChild("LoadProgress", 10) :: RemoteEvent?

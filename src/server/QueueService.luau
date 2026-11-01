@@ -8,9 +8,11 @@
 -- takes the parties out of the queue. Each lobby sends its own players to their match as soon as it sees their
 -- assignment, after their clients have shown the match's cards ("Lineup", from the cards every party brought into the
 -- queue) and sent them along as their teleport's screen (VersusView.travel). In Studio (no teleports) the queue runs in
--- this server alone and only shows the cards and says a match was found. A party
--- back from a match with Play Again (its TeleportData's "again", MatchEnd) goes into the queue in that mode once all of
--- it is here with its data, or after AGAIN_WAIT seconds with whoever came.
+-- this server alone and only shows the cards and says a match was found.
+-- It runs in a match as well (owner, 2026-11-01): Play Again on the end screen queues the party from there (MatchEnd),
+-- its cards come over the end screen and it goes straight to the next match, without the lobby in between. Who is in
+-- a party comes from the lobby's PartyService there, from MatchEnd here; a match server only matchmakes while some
+-- of its players search, a lobby always.
 
 local HttpService = game:GetService("HttpService")
 local MemoryStoreService = game:GetService("MemoryStoreService")
@@ -24,12 +26,19 @@ local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local Places = require(ReplicatedStorage.Shared.Places)
 local Profile = require(ReplicatedStorage.Shared.Profile)
-local ProfileService = require(script.Parent.Parent.ProfileService)
-local Remote = require(script.Parent.Parent.Remote)
-local TraceService = require(script.Parent.Parent.TraceService)
-local PartyService = require(script.Parent.PartyService)
+local ProfileService = require(script.Parent.ProfileService)
+local Remote = require(script.Parent.Remote)
+local TraceService = require(script.Parent.TraceService)
 
 local QueueService = {}
+
+-- Who searches together: the party `player` is in, as its leader's id (the one who queues it) and its members in this
+-- server; and, where parties can change while they search, a way to hear of it.
+export type Parties = {
+	partyOf: (player: Player) -> (number, { Player }),
+	onChanged: ((callback: (leader: number) -> ()) -> ())?,
+}
+local partyInfo: Parties
 
 local SETTINGS = Config.Queue
 local TEAM = Config.HeroesPerTeam
@@ -39,7 +48,6 @@ local MATCH_LIFE = 3600
 local LOCK_LIFE = 12
 local MATCHMAKE_EVERY, ASSIGNMENT_EVERY = 3, 1.5
 local TELEPORT_TRIES = 3
-local AGAIN_WAIT = 20
 -- How long a found match waits for its players' clients to show its cards and send them along as their teleport's
 -- screen (VersusView.travel, "Prepared") before it teleports them anyway.
 local PREPARE = 5
@@ -53,8 +61,6 @@ type Search = { mode: string, since: number, ids: { number }, renewed: number, f
 local searching: { [number]: Search } = {}
 local localQueue: { [string]: { [string]: Entry } } = { QuickPlay = {}, Ranked = {} }
 local rng = Random.new()
--- Parties back from a match with Play Again, by their key (TeleportData's "party").
-local again: { [number]: { mode: string, ids: { number }, at: number } } = {}
 -- The players whose client has shown the found match's cards and sent them along ("Prepared").
 local prepared: { [number]: boolean } = {}
 local event: RemoteEvent
@@ -70,7 +76,7 @@ local function send(leader: number, kind: string, payload: any, bad: boolean?)
 	if not player then
 		return
 	end
-	local _, members = PartyService.partyOf(player)
+	local _, members = partyInfo.partyOf(player)
 	for _, member in members do
 		event:FireClient(member, kind, payload, bad)
 	end
@@ -82,6 +88,11 @@ local function stateOf(leader: number): any
 		return { state = "Idle" }
 	end
 	return { state = if s.found then "Found" else "Searching", mode = s.mode, since = s.since }
+end
+
+-- Whether the party `leader` queued is "Idle", "Searching" or "Found" (being sent to its match).
+function QueueService.state(leader: number): string
+	return stateOf(leader).state
 end
 
 local function tell(leader: number)
@@ -154,11 +165,12 @@ function QueueService.cancel(leader: number, why: string?)
 	end
 end
 
-local function join(player: Player, mode: any)
+-- Puts `player`'s party in the queue for `mode`, when he leads it.
+function QueueService.join(player: Player, mode: any)
 	if typeof(mode) ~= "string" or not table.find(SETTINGS.Modes, mode) then
 		return
 	end
-	local leader, members = PartyService.partyOf(player)
+	local leader, members = partyInfo.partyOf(player)
 	if leader ~= player.UserId then
 		event:FireClient(player, "Notice", "Only the party's leader can start the queue.", true)
 		return
@@ -355,6 +367,59 @@ local function matchmakeOnline(mode: string)
 	end
 end
 
+-- How far each of this server's parties searching for `mode` is, told to its players ("Filled": found of a match's
+-- players, for the end screen's line, owner 2026-11-01): the players of the queue (`entries`, its own among them) within
+-- its window of rating as makeMatch's grows with how long it waited, at most a match's.
+local function report(mode: string)
+	local mine = false
+	for _, s in searching do
+		mine = mine or (not s.found and s.mode == mode)
+	end
+	if not mine then
+		return
+	end
+	local entries: { { key: string, value: Entry } } = {}
+	if online then
+		local map = queueMap(mode)
+		local ok, items = pcall(map.GetRangeAsync, map, Enum.SortDirection.Ascending, 100)
+		if not ok or not items then
+			return
+		end
+		for _, item in items do
+			table.insert(entries, { key = item.key, value = item.value })
+		end
+	else
+		for key, value in localQueue[mode] do
+			table.insert(entries, { key = key, value = value })
+		end
+	end
+	local now = Workspace:GetServerTimeNow()
+	for leader, s in searching do
+		if not s.found and s.mode == mode then
+			local own: Entry? = nil
+			for _, entry in entries do
+				if entry.key == tostring(leader) then
+					own = entry.value
+				end
+			end
+			local found = #s.ids
+			if own then
+				local window = SETTINGS.Window + SETTINGS.Grow * (now - own.at)
+				if mode == "QuickPlay" then
+					window *= 3
+				end
+				found = 0
+				for _, entry in entries do
+					if math.abs(entry.value.rating - own.rating) <= window then
+						found += #entry.value.ids
+					end
+				end
+			end
+			send(leader, "Filled", { found = math.min(found, 2 * TEAM), of = 2 * TEAM })
+		end
+	end
+end
+
 -- In Studio: the match is only announced, since a reserved server cannot be reached from here.
 local function matchmakeLocal(mode: string)
 	local entries = {}
@@ -398,7 +463,7 @@ local function teleport(leader: number, s: Search, assignment: any)
 	end
 	s.found = true
 	tell(leader)
-	local _, members = PartyService.partyOf(player)
+	local _, members = partyInfo.partyOf(player)
 	local assignments = MemoryStoreService:GetHashMap("Assignments")
 	for _, id in s.ids do
 		pcall(assignments.RemoveAsync, assignments, tostring(id))
@@ -456,66 +521,35 @@ local function checkAssignments()
 	end
 end
 
-local function returned(player: Player)
-	local data = player:GetJoinData()
-	local came = data and data.TeleportData
-	if typeof(came) ~= "table" or typeof(came.party) ~= "number" or not table.find(SETTINGS.Modes, came.again) then
-		return
-	end
-	local ids = {}
-	for _, id in if typeof(came.members) == "table" then came.members else { player.UserId } do
-		if typeof(id) == "number" then
-			table.insert(ids, id)
-		end
-	end
-	again[came.party] = again[came.party] or { mode = came.again, ids = ids, at = os.clock() }
-end
-
--- Puts every party back from Play Again in the queue once it is complete, or has waited long enough.
-local function queueReturned()
-	for key, entry in again do
-		local here: { Player } = {}
-		local ready = true
-		for _, id in entry.ids do
-			local member = playerOf(id)
-			if member and ProfileService.get(member) then
-				table.insert(here, member)
-			else
-				ready = false
-			end
-		end
-		if ready or os.clock() - entry.at > AGAIN_WAIT then
-			again[key] = nil
-			local leader = here[1] and playerOf((PartyService.partyOf(here[1])))
-			if leader and not searching[leader.UserId] then
-				join(leader, entry.mode)
-			end
-		end
-	end
-end
-
-function QueueService.start()
+function QueueService.start(given: Parties)
+	partyInfo = given
+	local lobby = Places.isLobby()
 	event = Remote.event("Queue", 4, function(player, action, mode)
 		if action == "Hello" then
-			local leader = PartyService.partyOf(player)
+			local leader = partyInfo.partyOf(player)
 			event:FireClient(player, "State", stateOf(leader))
-		elseif action == "Join" then
-			join(player, mode)
 		elseif action == "Prepared" then
 			prepared[player.UserId] = true
+		elseif not lobby then
+			-- In a match the end screen's buttons queue and cancel, through MatchEnd.
+			return
+		elseif action == "Join" then
+			QueueService.join(player, mode)
 		elseif action == "Cancel" then
-			local leader = PartyService.partyOf(player)
+			local leader = partyInfo.partyOf(player)
 			if leader == player.UserId then
 				QueueService.cancel(leader)
 			end
 		end
 	end)
-	PartyService.onChanged(function(leader)
-		QueueService.cancel(leader, "The party changed: the search stopped.")
-	end)
+	if partyInfo.onChanged then
+		partyInfo.onChanged(function(leader)
+			QueueService.cancel(leader, "The party changed: the search stopped.")
+		end)
+	end
 	-- A member who switches to a hero another member plays while they search stops the search.
 	ProfileService.onChanged(function(player)
-		local leader, members = PartyService.partyOf(player)
+		local leader, members = partyInfo.partyOf(player)
 		if not searching[leader] then
 			return
 		end
@@ -536,7 +570,7 @@ function QueueService.start()
 		QueueService.cancel(player.UserId)
 	end)
 	TeleportService.TeleportInitFailed:Connect(function(player)
-		local leader = PartyService.partyOf(player)
+		local leader = partyInfo.partyOf(player)
 		local s = searching[leader]
 		if s and s.found then
 			searching[leader] = nil
@@ -544,20 +578,24 @@ function QueueService.start()
 			event:FireClient(player, "Notice", "Could not join the match. Try again.", true)
 		end
 	end)
-	Players.PlayerAdded:Connect(returned)
-	task.spawn(function()
-		while true do
-			task.wait(1)
-			queueReturned()
+	local function anySearching(): boolean
+		for _, s in searching do
+			if not s.found then
+				return true
+			end
 		end
-	end)
+		return false
+	end
 	task.spawn(function()
 		while true do
-			for _, mode in SETTINGS.Modes do
-				if online then
-					matchmakeOnline(mode)
-				else
-					matchmakeLocal(mode)
+			if lobby or anySearching() then
+				for _, mode in SETTINGS.Modes do
+					if online then
+						matchmakeOnline(mode)
+					else
+						matchmakeLocal(mode)
+					end
+					report(mode)
 				end
 			end
 			task.wait(MATCHMAKE_EVERY)

@@ -778,11 +778,12 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	end)
 end
 
--- In the lobby: once a match is found (Net.Queue "Lineup") its cards come over the menu, complete with their pictures
--- (at most PICTURES seconds), and go along as the teleport's screen, so the player sees them until the fight
--- (Loading.arrived, VersusView.start); then the lobby's server teleports him ("Prepared"). The menu's music fades out
--- as they come, so the cards are quiet (owner, 2026-11-01). If the match falls through (the queue's state is no longer
--- Found), they go, the music comes back and the black screen goes along on teleports again.
+-- In the lobby, and on a match's end screen after Play Again: once a match is found (Net.Queue "Lineup") its cards come
+-- over the menu or the end screen, complete with their pictures (at most PICTURES seconds), and go along as the
+-- teleport's screen, so the player sees them until the fight (Loading.arrived, VersusView.start); then the server
+-- teleports him ("Prepared"). The menu's music fades out as they come, so the cards are quiet (owner, 2026-11-01). If
+-- the match falls through (the queue's state is no longer Found), they go, the menu's music comes back and the black
+-- screen goes along on teleports again.
 function VersusView.travel()
 	local queue = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Queue") :: RemoteEvent
 	local current: ScreenGui? = nil
@@ -805,7 +806,9 @@ function VersusView.travel()
 				gui:Destroy()
 			end)
 			Loading.forTeleport()
-			Music.start()
+			if Workspace:GetAttribute("Role") == "Lobby" then
+				Music.start()
+			end
 		end
 	end
 	queue.OnClientEvent:Connect(function(kind: string, payload: any)
