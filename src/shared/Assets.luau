@@ -61,6 +61,16 @@ return {
 	OrbVortex = "rbxassetid://88154175742294",
 	OrbWisps = "rbxassetid://118394014691190",
 	OrbGlow = "rbxassetid://113973773269405",
+	-- The four card suits Jestrel's beams shed, cut from the owner's sheet by Tools/card_textures.py (Art/VFX/cards),
+	-- white to be tinted: heart, diamond, club, spade.
+	CardSuits = {
+		"rbxassetid://128439793580448",
+		"rbxassetid://116515231786380",
+		"rbxassetid://121924066385951",
+		"rbxassetid://78103116029703",
+	},
+	-- The four-pointed twinkle they shed with them (the same tool's star).
+	CardStar = "rbxassetid://103517245836916",
 	-- The spawn pads' rune circle and the ring that sweeps out at a respawn (Tools/pad_textures.py), white to be tinted.
 	PadRunes = "rbxassetid://96305253371811",
 	PadRing = "rbxassetid://88093541402245",

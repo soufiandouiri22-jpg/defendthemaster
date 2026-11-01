@@ -23,6 +23,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local Places = require(ReplicatedStorage.Shared.Places)
+local Profile = require(ReplicatedStorage.Shared.Profile)
 local ProfileService = require(script.Parent.Parent.ProfileService)
 local Remote = require(script.Parent.Parent.Remote)
 local TraceService = require(script.Parent.Parent.TraceService)
@@ -51,6 +52,7 @@ type Search = { mode: string, since: number, ids: { number }, renewed: number, f
 -- The parties of this server that wait, by their leader's id.
 local searching: { [number]: Search } = {}
 local localQueue: { [string]: { [string]: Entry } } = { QuickPlay = {}, Ranked = {} }
+local rng = Random.new()
 -- Parties back from a match with Play Again, by their key (TeleportData's "party").
 local again: { [number]: { mode: string, ids: { number }, at: number } } = {}
 -- The players whose client has shown the found match's cards and sent them along ("Prepared").
@@ -165,12 +167,14 @@ local function join(player: Player, mode: any)
 		return
 	end
 	local ids = {}
+	local heroes = {}
 	for _, member in members do
 		local data = ProfileService.get(member)
 		if not data then
 			event:FireClient(player, "Notice", member.DisplayName .. "'s data is still loading.", true)
 			return
 		end
+		table.insert(heroes, Profile.showcase(data))
 		if mode == "Ranked" then
 			local open, why = Ranks.unlocked(data)
 			if not open then
@@ -180,6 +184,11 @@ local function join(player: Player, mode: any)
 			end
 		end
 		table.insert(ids, member.UserId)
+	end
+	local clash = Lineup.clash(heroes)
+	if clash then
+		send(leader, "Notice", clash .. " twice in the party: pick different heroes.", true)
+		return
 	end
 	local s: Search = { mode = mode, since = Workspace:GetServerTimeNow(), ids = ids, renewed = 0, found = false }
 	searching[leader] = s
@@ -249,9 +258,14 @@ local function cardsOf(entries: { { key: string, value: Entry } }, keys: { strin
 	return cards
 end
 
--- The lineup the match's players see before their teleport (VersusView.travel).
-local function lineupOf(mode: string, teams: { [string]: { number } }, cards: { [string]: Lineup.Card }): any
-	return { mode = mode, teams = teams, cards = cards }
+-- The lineup the match's players see before their teleport (VersusView.travel), with the `seed` of its bots' heroes.
+local function lineupOf(
+	mode: string,
+	teams: { [string]: { number } },
+	cards: { [string]: Lineup.Card },
+	seed: number
+): any
+	return { mode = mode, teams = teams, cards = cards, seed = seed }
 end
 
 -- Reserves the match's server and hands out the assignments, with the lineup.
@@ -267,7 +281,8 @@ local function startMatch(
 		warn("[QueueService] ReserveServer failed:", code)
 		return
 	end
-	local record = { mode = mode, teams = teams, parties = parties }
+	local seed = rng:NextInteger(1, 2 ^ 30)
+	local record = { mode = mode, teams = teams, parties = parties, seed = seed }
 	local matches = MemoryStoreService:GetHashMap("Matches")
 	local written = retry(function()
 		matches:SetAsync(privateId, record, MATCH_LIFE)
@@ -281,7 +296,7 @@ local function startMatch(
 		mode = mode,
 		id = HttpService:GenerateGUID(false),
 		at = Workspace:GetServerTimeNow(),
-		lineup = lineupOf(mode, teams, cards),
+		lineup = lineupOf(mode, teams, cards, seed),
 	}
 	for _, ids in teams do
 		for _, id in ids do
@@ -350,7 +365,9 @@ local function matchmakeLocal(mode: string)
 		return a.value.at < b.value.at
 	end)
 	local keys, teams = makeMatch(mode, entries, Workspace:GetServerTimeNow())
-	local lineup = if keys and teams then lineupOf(mode, teams, cardsOf(entries, keys)) else nil
+	local lineup = if keys and teams
+		then lineupOf(mode, teams, cardsOf(entries, keys), rng:NextInteger(1, 2 ^ 30))
+		else nil
 	for _, key in keys or {} do
 		local leader = tonumber(key) :: number
 		localQueue[mode][key] = nil
@@ -495,6 +512,24 @@ function QueueService.start()
 	end)
 	PartyService.onChanged(function(leader)
 		QueueService.cancel(leader, "The party changed: the search stopped.")
+	end)
+	-- A member who switches to a hero another member plays while they search stops the search.
+	ProfileService.onChanged(function(player)
+		local leader, members = PartyService.partyOf(player)
+		if not searching[leader] then
+			return
+		end
+		local heroes = {}
+		for _, member in members do
+			local data = ProfileService.get(member)
+			if data then
+				table.insert(heroes, Profile.showcase(data))
+			end
+		end
+		local clash = Lineup.clash(heroes)
+		if clash then
+			QueueService.cancel(leader, clash .. " twice in the party: the search stopped.")
+		end
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		prepared[player.UserId] = nil

@@ -3,7 +3,7 @@
 Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack rig's joints in its Configuration, its
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
-    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight
+    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
@@ -40,6 +40,17 @@ PACKS = {
             "parent": "RightHand",
             "c0": [0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, -1],
             "c1": [0, -2.49969, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+    },
+    # The Trickster Caster's clips with its cane are its weapon tracks; the cane hangs from the right hand ("Attach
+    # Equipment.lua", Equipment.json).
+    "TricksterCaster": {
+        "clips": "Individual Animations/weapon-tracks",
+        "weapon": {
+            "name": "Cane",
+            "parent": "RightHand",
+            "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            "c1": [0, 0.3191, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
         },
     },
 }

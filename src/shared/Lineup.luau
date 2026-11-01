@@ -36,10 +36,33 @@ function Lineup.card(player: Player): Card
 	}
 end
 
--- The heroes of a team's `count` bots, after its players' `taken` heroes: each the first of Config.Bots.Lineup the
--- team does not play yet, else Config.Bots.Hero (as DraftService gives them).
-function Lineup.botHeroes(taken: { string }, count: number): { string }
-	local left = table.clone(Config.Bots.Lineup)
+-- What stops a party with a hero twice from queueing, since a team plays every hero at most once (owner, 2026-11-01):
+-- the first hero two of `heroes` (the members' heroes) share, else nil.
+function Lineup.clash(heroes: { string }): string?
+	for index, hero in heroes do
+		if table.find(heroes, hero, index + 1) then
+			return hero
+		end
+	end
+	return nil
+end
+
+-- The order in which `team`'s bots take their heroes: Config.Bots.Lineup shuffled by the match's `seed`, which the
+-- lobby draws for the match and gives both its lineup and the match's record, so the cards and the match agree.
+function Lineup.botOrder(seed: number, team: string): { string }
+	local order = table.clone(Config.Bots.Lineup)
+	local random = Random.new(seed + (table.find(Config.TeamOrder, team) or 0))
+	for index = #order, 2, -1 do
+		local other = random:NextInteger(1, index)
+		order[index], order[other] = order[other], order[index]
+	end
+	return order
+end
+
+-- The heroes of a team's `count` bots, after its players' `taken` heroes: each the first of the team's `order`
+-- (Lineup.botOrder) the team does not play yet, else Config.Bots.Hero (as DraftService gives them).
+function Lineup.botHeroes(order: { string }, taken: { string }, count: number): { string }
+	local left = table.clone(order)
 	for _, hero in taken do
 		local at = table.find(left, hero)
 		if at then

@@ -419,6 +419,8 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 	end
 	state.aim = nil
 	state.motion += 1
+	-- Attacking shows a vanished hero again.
+	character:SetAttribute("Hidden", nil)
 
 	if kit.Kind == "Combo" then
 		local step = if now <= state.comboUntil then state.combo % #kit.Hits + 1 else 1
@@ -583,6 +585,47 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				end
 			end)
 		end
+	elseif kit.Kind == "Rain" then
+		-- He hangs in the air (his client lifts him, a bot BotService) while beams rain on the spot aimed at as he cast
+		-- it, striking everyone within Radius of it at every Every from From to To.
+		local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
+		local spot = HeroKit.leapLanding(
+			root.Position,
+			aim,
+			kit.Range,
+			humanoid.HipHeight + root.Size.Y / 2,
+			HeroKit.leapIgnore()
+		)
+		state.busyUntil = now + kit.Land + RECOVER
+		motionEvent:FireAllClients(character, key, 0, spot)
+		slow(state, kit.Land + RECOVER, 0)
+		for at = kit.From, kit.To + 1e-3, kit.Every do
+			later(state, at, function()
+				for _, enemy in enemiesNear(team, spot, kit.Radius) do
+					if HeroKit.landingStrikes(spot, kit.Radius, enemy) then
+						damage(player, character, enemy, strength(kit.Damage), magic)
+					end
+				end
+			end)
+		end
+		return true, nil
+	elseif kit.Kind == "Vanish" then
+		state.busyUntil = now + kit.Cast + RECOVER
+		motionEvent:FireAllClients(character, key, 0)
+		character:SetAttribute("Hidden", true)
+		local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
+		humanoid.WalkSpeed = 0
+		later(state, kit.Cast, function()
+			humanoid.WalkSpeed = Items.walkSpeed(player) * (kit.Haste or 1)
+		end)
+		-- His next attack slows him as it plays and gives him his own speed back.
+		local motion = state.motion
+		task.delay(kit.Duration, function()
+			if state.motion == motion then
+				character:SetAttribute("Hidden", nil)
+				humanoid.WalkSpeed = Items.walkSpeed(player)
+			end
+		end)
 	elseif kit.Kind == "Ascend" then
 		-- He hangs in the air (his client lifts him, a bot BotService) and cannot walk till he stands again.
 		state.busyUntil = now + kit.Land + RECOVER
@@ -622,6 +665,20 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				if target then
 					damage(player, character, reached[target], amount, magic)
 				end
+			end)
+		end
+		for _, time in kit.Pulses or {} do
+			later(state, time, function()
+				strikeCone(
+					player,
+					state,
+					team,
+					aimedNow(),
+					kit.SlamRadius,
+					360,
+					strength(kit.PulseDamage, kit.PulseRatio),
+					magic
+				)
 			end)
 		end
 	end

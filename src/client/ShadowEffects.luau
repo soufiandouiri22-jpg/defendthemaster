@@ -14,7 +14,19 @@ local SHADOW = Color3.fromRGB(120, 60, 200)
 local DEEP = Color3.fromRGB(16, 8, 30)
 local BRIGHT = Color3.fromRGB(196, 140, 255)
 local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
+
+-- The colours of a slam: its outer ring and smoke, the shade it leaves and the smoke's end, its inner ring, sparks and
+-- flash, and the `sparks` it throws up (their textures, taken in turn). Shadow by default; Light is Jestrel's white
+-- magic (Config's Effects "Light"), throwing up the twinkles and card suits his beams shed (owner, 2026-11-01).
+export type Palette = { main: Color3, deep: Color3, bright: Color3, sparks: { string }? }
+local SHADOWS: Palette = { main = SHADOW, deep = DEEP, bright = BRIGHT }
 local SPARK = "rbxasset://textures/particles/sparkles_main.dds"
+ShadowEffects.Light = {
+	main = Color3.fromRGB(235, 235, 245),
+	deep = Color3.fromRGB(205, 205, 215),
+	bright = Color3.fromRGB(255, 255, 255),
+	sparks = { Assets.CardStar, table.unpack(Assets.CardSuits) },
+} :: Palette
 
 local function effects(): Folder
 	local folder = Workspace:FindFirstChild("Effects") :: Folder?
@@ -24,6 +36,35 @@ local function effects(): Folder
 		folder.Parent = Workspace
 	end
 	return folder :: Folder
+end
+
+-- Throws `count` sparks `size` studs up from `parent` in `colours` (its `sparks` textures shared out between them, or
+-- the plain spark), each emitter `setup` first. A palette's own sparks are unlit, so thrown together they do not run
+-- into one white blot.
+local function throwSparks(
+	parent: Instance,
+	colours: Palette,
+	size: number,
+	count: number,
+	setup: (ParticleEmitter) -> ()
+)
+	local textures = colours.sparks or { SPARK }
+	for i, texture in textures do
+		local sparks = Instance.new("ParticleEmitter")
+		sparks.Texture = texture
+		sparks.Color = ColorSequence.new(colours.bright, colours.main)
+		sparks.LightEmission = if colours.sparks then 0 else 1
+		sparks.LightInfluence = if colours.sparks then 0 else 1
+		sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, size), NumberSequenceKeypoint.new(1, 0) })
+		sparks.EmissionDirection = Enum.NormalId.Top
+		if colours.sparks then
+			sparks.Rotation = NumberRange.new(-25, 25)
+		end
+		sparks.Enabled = false
+		setup(sparks)
+		sparks.Parent = parent
+		sparks:Emit(count // #textures + (if i <= count % #textures then 1 else 0))
+	end
 end
 
 local function holder(at: Vector3, size: Vector3): Part
@@ -39,10 +80,18 @@ local function holder(at: Vector3, size: Vector3): Part
 	return part
 end
 
-local function smoke(parent: Instance, count: number, speed: NumberRange, size: NumberSequence, life: NumberRange)
+local function smoke(
+	parent: Instance,
+	count: number,
+	speed: NumberRange,
+	size: NumberSequence,
+	life: NumberRange,
+	palette: Palette?
+)
+	local colours = palette or SHADOWS
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Texture = SMOKE
-	emitter.Color = ColorSequence.new(SHADOW, DEEP)
+	emitter.Color = ColorSequence.new(colours.main, colours.deep)
 	emitter.LightEmission = 0.3
 	emitter.Size = size
 	emitter.Transparency = NumberSequence.new(0.15, 1)
@@ -157,13 +206,16 @@ function ShadowEffects.shockwave(ground: Vector3, radius: number)
 end
 
 -- The ultimate's slam on the ground at `ground`, reaching `radius` studs: two shockwaves racing out one after the
--- other, a deep shadow left behind, a cloud of smoke, violet sparks thrown up and a bright flash.
-function ShadowEffects.slam(ground: Vector3, radius: number)
+-- other, a deep shadow left behind, a cloud of smoke, violet sparks thrown up and a bright flash; in the colours of
+-- `palette` when given.
+function ShadowEffects.slam(ground: Vector3, radius: number, palette: Palette?)
+	local colours = palette or SHADOWS
 	local quick = TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 	for i, delay in { 0, 0.12 } do
 		task.delay(delay, function()
 			local size = radius * (if i == 1 then 2.6 else 1.8)
-			local ring, label = decal(ground, Assets.IndicatorRing, if i == 1 then SHADOW else BRIGHT, 0, 2)
+			local ring, label =
+				decal(ground, Assets.IndicatorRing, if i == 1 then colours.main else colours.bright, 0, 2)
 			TweenService:Create(ring, quick, { Size = Vector3.new(size, 0.05, size) }):Play()
 			TweenService:Create(label, TweenInfo.new(0.6), { ImageTransparency = 1 }):Play()
 			task.delay(0.7, function()
@@ -172,7 +224,7 @@ function ShadowEffects.slam(ground: Vector3, radius: number)
 		end)
 	end
 
-	local shade, shadeLabel = decal(ground, Assets.IndicatorDisc, DEEP, 0, radius * 2)
+	local shade, shadeLabel = decal(ground, Assets.IndicatorDisc, colours.deep, if palette then 0.5 else 0, radius * 2)
 	shade.Size = Vector3.new(radius * 0.6, 0.05, radius * 0.6)
 	TweenService:Create(shade, quick, { Size = Vector3.new(radius * 2.2, 0.05, radius * 2.2) }):Play()
 	TweenService:Create(shadeLabel, TweenInfo.new(1.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
@@ -186,25 +238,19 @@ function ShadowEffects.slam(ground: Vector3, radius: number)
 		60,
 		NumberRange.new(18, 34),
 		NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 6) }),
-		NumberRange.new(0.6, 1.1)
+		NumberRange.new(0.6, 1.1),
+		colours
 	)
-	local sparks = Instance.new("ParticleEmitter")
-	sparks.Texture = SPARK
-	sparks.Color = ColorSequence.new(BRIGHT, SHADOW)
-	sparks.LightEmission = 1
-	sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0) })
-	sparks.Transparency = NumberSequence.new(0, 0.3)
-	sparks.Lifetime = NumberRange.new(0.5, 0.9)
-	sparks.Speed = NumberRange.new(20, 38)
-	sparks.SpreadAngle = Vector2.new(35, 35)
-	sparks.EmissionDirection = Enum.NormalId.Top
-	sparks.Acceleration = Vector3.new(0, -40, 0)
-	sparks.Enabled = false
-	sparks.Parent = centre
-	sparks:Emit(45)
+	throwSparks(centre, colours, 0.6, 45, function(sparks)
+		sparks.Transparency = NumberSequence.new(0, 0.3)
+		sparks.Lifetime = NumberRange.new(0.5, 0.9)
+		sparks.Speed = NumberRange.new(20, 38)
+		sparks.SpreadAngle = Vector2.new(35, 35)
+		sparks.Acceleration = Vector3.new(0, -40, 0)
+	end)
 
 	local light = Instance.new("PointLight")
-	light.Color = BRIGHT
+	light.Color = colours.bright
 	light.Range = radius * 2
 	light.Brightness = 3
 	light.Parent = centre
@@ -212,6 +258,31 @@ function ShadowEffects.slam(ground: Vector3, radius: number)
 
 	task.delay(2, function()
 		shade:Destroy()
+		centre:Destroy()
+	end)
+end
+
+-- A small wave through the ground at `ground` after a slam, reaching `radius` studs: one thin ring racing out to it and
+-- a few sparks, no smoke or flash; in the colours of `palette` when given.
+function ShadowEffects.pulse(ground: Vector3, radius: number, palette: Palette?)
+	local colours = palette or SHADOWS
+	local ring, label = decal(ground, Assets.IndicatorRing, colours.bright, 0.2, 2)
+	TweenService:Create(ring, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = Vector3.new(radius * 2, 0.05, radius * 2),
+	}):Play()
+	TweenService:Create(label, TweenInfo.new(0.45), { ImageTransparency = 1 }):Play()
+
+	local centre = holder(ground + Vector3.new(0, 0.5, 0), Vector3.new(1, 0.5, 1))
+	centre.Parent = effects()
+	throwSparks(centre, colours, 0.4, 12, function(sparks)
+		sparks.Lifetime = NumberRange.new(0.3, 0.5)
+		sparks.Speed = NumberRange.new(8, 14)
+		sparks.SpreadAngle = Vector2.new(60, 60)
+		sparks.Acceleration = Vector3.new(0, -30, 0)
+	end)
+
+	task.delay(0.6, function()
+		ring:Destroy()
 		centre:Destroy()
 	end)
 end

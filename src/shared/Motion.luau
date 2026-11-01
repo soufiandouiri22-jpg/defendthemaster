@@ -54,6 +54,8 @@ type Clip = {
 	fresh: boolean,
 	-- Played without the clip carrying the body over the ground (the game moves the hero itself).
 	inPlace: boolean,
+	-- In place without its rise into the air either (the game lifts him itself).
+	grounded: boolean,
 	-- Kept at its last pose once it ends (a fall), instead of fading back to the base.
 	hold: boolean,
 	-- Where it stands still, short of its end (Motion.stopAt).
@@ -251,7 +253,8 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 	local root = self.rootPart and body[self.rootPart]
 	if clip.inPlace and root then
 		body = table.clone(body)
-		body[self.rootPart :: string] = CFrame.new(0, root.Position.Y, 0) * root.Rotation
+		local rise = if clip.grounded then math.min(root.Position.Y, 0) else root.Position.Y
+		body[self.rootPart :: string] = CFrame.new(0, rise, 0) * root.Rotation
 		-- The weapons hang from the root part, not the body, so their bones lose the same travel over the ground.
 		local travel = self.rootTurn * Vector3.new(-root.Position.X, 0, -root.Position.Z)
 		bones = table.clone(bones)
@@ -339,7 +342,16 @@ end
 
 local function newClip(self: Motion, id: string, speed: number, time: number?): Clip
 	local _, meta = self.player.Sample(nil, id, 0)
-	return { id = id, time = time or 0, speed = speed, meta = meta, fresh = true, inPlace = false, hold = false }
+	return {
+		id = id,
+		time = time or 0,
+		speed = speed,
+		meta = meta,
+		fresh = true,
+		inPlace = false,
+		grounded = false,
+		hold = false,
+	}
 end
 
 -- Moves `clip`'s clock on by `delta` seconds and hands over the cues it passes.
@@ -400,18 +412,20 @@ function Motion.baseDone(self: Motion): boolean
 	return base ~= nil and not base.meta.loop and base.time >= base.meta.duration
 end
 
--- Plays `id` once over the base, from `startTime` seconds in, `inPlace` without the clip's travel over the ground,
--- `hold` keeping its last pose when it ends; returns how long it lasts at `speed`.
+-- Plays `id` once over the base, from `startTime` seconds in, `inPlace` without the clip's travel over the ground (with
+-- "Grounded" without its rise into the air either, for a jump the game lifts him in itself), `hold` keeping its last
+-- pose when it ends; returns how long it lasts at `speed`.
 function Motion.play(
 	self: Motion,
 	id: string,
 	speed: number,
 	startTime: number?,
-	inPlace: boolean?,
+	inPlace: (boolean | string)?,
 	hold: boolean?
 ): number
 	self.action = newClip(self, id, speed, startTime)
-	self.action.inPlace = inPlace == true
+	self.action.inPlace = inPlace == true or inPlace == "Grounded"
+	self.action.grounded = inPlace == "Grounded"
 	self.action.hold = hold == true
 	self.actionWeight = if startTime and startTime > 0 then 1 else self.actionWeight
 	return self.action.meta.duration / speed

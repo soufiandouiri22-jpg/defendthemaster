@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Profile = require(ReplicatedStorage.Shared.Profile)
 local MatchSetup = require(script.Parent.MatchSetup)
 local ProfileService = require(script.Parent.ProfileService)
@@ -30,9 +31,9 @@ local phase = "Waiting"
 local event: RemoteEvent
 local rng = Random.new()
 
--- A bot's hero: the first of Config.Bots.Lineup his team has not picked yet, else Config.Bots.Hero.
+-- A bot's hero: the first of his team's Lineup.botOrder his team has not picked yet, else Config.Bots.Hero.
 local function botHero(pick: Pick): string
-	local left = table.clone(Config.Bots.Lineup)
+	local left = Lineup.botOrder(MatchSetup.seed(), pick.team)
 	for _, other in picks do
 		if other ~= pick and other.locked and other.team == pick.team then
 			local at = table.find(left, other.hero)

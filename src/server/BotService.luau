@@ -136,7 +136,8 @@ end
 local function enemiesNear(team: string, from: Vector3, reach: number): ({ Target }, { Target })
 	local heroes, others = {}, {}
 	for _, model in CollectionService:GetTagged("Combatant") do
-		if not model:IsA("Model") or model:GetAttribute("Team") == team then
+		-- A vanished hero (CombatService's Vanish) is unseen.
+		if not model:IsA("Model") or model:GetAttribute("Team") == team or model:GetAttribute("Hidden") then
 			continue
 		end
 		local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -289,7 +290,7 @@ local function use(b: Bot, key: string, aim: Vector3): boolean
 		local shot = if kit.Kind == "Combo" then kit.Hits[1] else kit.Shot or kit
 		b.aiming = { target = b.aimFor, speed = shot.ProjectileSpeed, side = math.random() * 2 - 1 }
 	end
-	if ok and kit.Kind == "Ascend" then
+	if ok and (kit.Kind == "Ascend" or kit.Kind == "Rain") then
 		b.move = { started = os.clock(), from = root.Position, to = root.Position, takeoff = 0, land = 0, lift = kit }
 		b.path = {}
 	elseif ok and landing then
@@ -367,7 +368,10 @@ local function targetOf(instance: Instance): Target?
 	end
 	local model = instance :: Model
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if not (if humanoid then humanoid.Health > 0 else (model:GetAttribute("Health") or 0) > 0) then
+	if
+		model:GetAttribute("Hidden")
+		or not (if humanoid then humanoid.Health > 0 else (model:GetAttribute("Health") or 0) > 0)
+	then
 		return nil
 	end
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -408,33 +412,65 @@ local function follow(b: Bot)
 	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
 end
 
--- A fighter up close (Shadowren): leap and flurry on heroes, the dagger at range, the dash to close in, the combo in
--- reach.
+-- Whether `key` of the kit flies at its target: a throw, or a flurry whose lightning does.
+local function ranged(ability: any): boolean
+	return ability.Kind == "Throw" or (ability.Kind == "Flurry" and ability.Zap == true)
+end
+
+-- Uses `key` of a close fighter's kit on `target` `gap` studs away when it reaches him, after its kind: a throw or a
+-- flurry's lightning flies at him (leading him) when no wall is between, a leap lands by him, a flurry sweeps where he
+-- stands and a strike falls there.
+local function strike(b: Bot, key: string, target: Target, gap: number, now: number): boolean
+	local root = b.root :: BasePart
+	local ability = Config.Heroes[b.hero].Kit[key]
+	if not ability then
+		return false
+	end
+	if ranged(ability) then
+		if gap > ability.Range - 4 or not clear(root.Position, target.position) then
+			return false
+		end
+		local aim = if ability.ProjectileSpeed
+			then aimAt(root.Position, target, gap, ability.ProjectileSpeed)
+			else target.position
+		return maybe(b, key, aim, now)
+	elseif ability.Kind == "Leap" then
+		return gap >= 5 and gap <= ability.Range - 2 and maybe(b, key, stray(target.position), now)
+	elseif ability.Kind == "Flurry" then
+		return gap <= ability.Range - 1 and maybe(b, key, target.position, now)
+	elseif ability.Kind == "Strike" or ability.Kind == "Rain" then
+		return gap <= ability.Range - 2 and maybe(b, key, target.position, now)
+	end
+	return false
+end
+
+-- A fighter up close (Shadowren, Mortael, Brontar): his abilities on heroes as each reaches (strike), the dash to
+-- close in, the combo in reach; on minions his ultimate into a crowd and what flies at them from afar.
 local function brawl(b: Bot, target: Target, others: { Target }, now: number)
 	local root = b.root :: BasePart
 	local kit = Config.Heroes[b.hero].Kit
 	local gap = gapTo(root, target)
 	local used = false
 	if target.hero then
-		local lead = target.position + HeroKit.flat(target.velocity) * (gap / kit.E.ProjectileSpeed * SETTINGS.Lead)
-		used = (gap <= kit.R.Range - 1 and maybe(b, "R", stray(target.position), now))
-			or (gap >= 5 and gap <= kit.M2.Range - 2 and maybe(b, "M2", stray(target.position), now))
-			or (gap <= kit.E.Range - 4 and clear(root.Position, target.position) and maybe(
-				b,
-				"E",
-				miss(root.Position, lead),
-				now
-			))
-			or (gap >= 7 and gap <= kit.Dash.Range - 2 and maybe(b, "Dash", stray(target.position), now))
+		used = strike(b, "R", target, gap, now)
+			or strike(b, "M2", target, gap, now)
+			or strike(b, "E", target, gap, now)
+			or (
+				kit.Dash.Range
+				and gap >= 7
+				and gap <= kit.Dash.Range - 2
+				and maybe(b, "Dash", stray(target.position), now)
+			)
 	else
+		local reach = kit.R.Radius or kit.R.Range
 		local crowd = 0
 		for _, other in others do
-			if HeroKit.flat(other.position - root.Position).Magnitude <= kit.R.Range then
+			if HeroKit.flat(other.position - target.position).Magnitude <= reach then
 				crowd += 1
 			end
 		end
-		used = (crowd >= 3 and maybe(b, "R", target.position, now))
-			or (gap > 6 and gap <= 30 and clear(root.Position, target.position) and maybe(b, "E", target.position, now))
+		used = (crowd >= 3 and strike(b, "R", target, gap, now))
+			or (gap > 6 and ranged(kit.E) and strike(b, "E", target, gap, now))
 	end
 	if not used and gap <= kit.M1.Hits[1].Range - 0.5 and now >= b.swingAt and use(b, "M1", target.position) then
 		b.swingAt = now + math.random() * SETTINGS.Rest
@@ -460,11 +496,15 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 	local away = if offset.Magnitude > 0.1 then -offset.Unit else -root.CFrame.LookVector
 	local used = false
 	if target.hero then
-		used = (gap <= SETTINGS.Flee and maybe(b, "Dash", root.Position + away * kit.Dash.Range, now))
+		-- A vanishing trick (Kind "Vanish") goes nowhere: it only hides him from the hero who came too close.
+		used = (gap <= SETTINGS.Flee and maybe(b, "Dash", root.Position + away * (kit.Dash.Range or 0), now))
+			-- A rain of beams (Kind "Rain") falls where he stands, no shot that needs leading.
 			or (open and gap <= kit.R.Range * SETTINGS.Fan and maybe(
 				b,
 				"R",
-				aimAt(root.Position, target, gap, kit.R.ProjectileSpeed),
+				if kit.R.ProjectileSpeed
+					then aimAt(root.Position, target, gap, kit.R.ProjectileSpeed)
+					else target.position,
 				now
 			))
 			or (kit.M2.Slam and gap <= kit.M2.SlamRadius - 2 and maybe(b, "M2", target.position, now))
@@ -474,10 +514,18 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 				aimAt(root.Position, target, gap, kit.M2.ProjectileSpeed),
 				now
 			))
+			-- A laser beam (a Flurry's Beam) is held on him, no shot that needs leading.
 			or (
 				open
 				and gap <= kit.E.Range - 4
-				and maybe(b, "E", aimAt(root.Position, target, gap, kit.E.ProjectileSpeed), now)
+				and maybe(
+					b,
+					"E",
+					if kit.E.ProjectileSpeed
+						then aimAt(root.Position, target, gap, kit.E.ProjectileSpeed)
+						else target.position,
+					now
+				)
 			)
 	else
 		local crowd = 0

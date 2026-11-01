@@ -217,7 +217,8 @@ local function travelling(lineup: any): { Entry }
 				empty = false,
 			})
 		end
-		for offset, hero in Lineup.botHeroes(taken, Config.HeroesPerTeam - count) do
+		local order = Lineup.botOrder(lineup.seed or 0, team)
+		for offset, hero in Lineup.botHeroes(order, taken, Config.HeroesPerTeam - count) do
 			table.insert(list, {
 				team = team,
 				index = count + offset,

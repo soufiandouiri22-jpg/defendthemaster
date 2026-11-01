@@ -196,8 +196,14 @@ local function locomote(hero: Hero, dt: number, now: number)
 end
 
 -- Plays the clip `id` once on `character`'s hero at `speed`, from `startTime` seconds in, `inPlace` without the clip's
--- own travel; returns how long it lasts.
-function HeroAnimator.play(character: Model, id: string, speed: number, startTime: number?, inPlace: boolean?): number
+-- own travel ("Grounded" without its rise into the air either); returns how long it lasts.
+function HeroAnimator.play(
+	character: Model,
+	id: string,
+	speed: number,
+	startTime: number?,
+	inPlace: (boolean | string)?
+): number
 	local hero = heroes[character]
 	if not hero or hero.dead then
 		return 0

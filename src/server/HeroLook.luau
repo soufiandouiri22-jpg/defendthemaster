@@ -23,6 +23,8 @@ function HeroLook.description(name: string): HumanoidDescription
 	description.HatAccessory = look.HatAccessory or ""
 	description.BackAccessory = look.BackAccessory or ""
 	description.ShouldersAccessory = look.ShouldersAccessory or ""
+	description.NeckAccessory = look.NeckAccessory or ""
+	description.WaistAccessory = look.WaistAccessory or ""
 	-- Layered clothing (a 3D jacket or armour that wraps round the body), worn in the order listed.
 	if look.Layered then
 		local layered = {}

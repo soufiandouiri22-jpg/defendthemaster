@@ -156,6 +156,12 @@ local function strike(foe: Foe, amount: number)
 	humanoid:TakeDamage(amount)
 end
 
+-- How much harder he strikes for the health he lost (Config.Master.Rage).
+local function rage(m: Master): number
+	local lost = 1 - math.clamp(m.humanoid.Health / math.max(m.humanoid.MaxHealth, 1), 0, 1)
+	return 1 + SETTINGS.Rage * lost
+end
+
 -- Where his feet stand.
 local function ground(m: Master): Vector3
 	return m.root.Position - Vector3.new(0, m.humanoid.HipHeight + m.root.Size.Y / 2, 0)
@@ -180,7 +186,7 @@ local function swing(m: Master, now: number)
 		local facing = HeroKit.flat(m.root.CFrame.LookVector).Unit
 		for _, foe in foes(m.team, origin, SETTINGS.Reach) do
 			if HeroKit.inCone(origin, facing, SETTINGS.Reach, settings.Angle, foe.position, foe.radius) then
-				strike(foe, settings.Damage)
+				strike(foe, settings.Damage * rage(m))
 			end
 		end
 	end)
@@ -199,7 +205,7 @@ local function slam(m: Master, now: number, centre: Vector3)
 			return
 		end
 		for _, foe in foes(m.team, centre, settings.Radius) do
-			strike(foe, settings.Damage)
+			strike(foe, settings.Damage * rage(m))
 		end
 	end)
 end

@@ -24,6 +24,7 @@ export type Record = {
 	mode: string,
 	teams: { [string]: { number } },
 	parties: { { number } }?,
+	seed: number?,
 }
 
 export type Slot = {
@@ -38,6 +39,7 @@ export type Slot = {
 local record: Record? = nil
 local teamOf: { [number]: string } = {}
 local mode = "QuickPlay"
+local ownSeed = Random.new():NextInteger(1, 2 ^ 30)
 
 local function readRecord(id: string): Record?
 	local map = MemoryStoreService:GetHashMap("Matches")
@@ -70,6 +72,11 @@ end
 -- "QuickPlay" or "Ranked".
 function MatchSetup.mode(): string
 	return mode
+end
+
+-- What shuffles the bots' heroes (Shared.Lineup.botOrder): the lobby's from the record, else this server's own.
+function MatchSetup.seed(): number
+	return record and record.seed or ownSeed
 end
 
 -- Whether this match came from the queue.

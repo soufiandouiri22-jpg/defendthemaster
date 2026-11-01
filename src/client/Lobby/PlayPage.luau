@@ -3,7 +3,8 @@
 -- three places to invite into), the season pass's card at the top right (its level and the last reward), and at the
 -- bottom right the mode (Quick Play or Ranked, which opens as Ranks.unlocked says) over the PLAY button, which puts
 -- the party in the queue (Net.Queue, server QueueService) and while it searches shows the time and cancels. Until the
--- player has chosen his hero it reads CHOOSE HERO and opens the welcome screen (Lobby.Welcome).
+-- player has chosen his hero it reads CHOOSE HERO and opens the welcome screen (Lobby.Welcome); while two of the party
+-- play the same hero it reads SAME HERO and cannot be pressed, the line above it saying which.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,6 +12,7 @@ local Workspace = game:GetService("Workspace")
 
 local Account = require(ReplicatedStorage.Shared.Account)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Pass = require(ReplicatedStorage.Shared.Pass)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local ProfileClient = require(script.Parent.Parent.ProfileClient)
@@ -123,6 +125,10 @@ local function playArea(page: Frame, api: any)
 	local status = Widgets.label(area, "", 26, C.Cream, nil, C.Edge)
 	status.Size = UDim2.fromOffset(470, 30)
 	status.Position = UDim2.fromOffset(0, -38)
+	status.TextScaled = true
+	local fit = Instance.new("UITextSizeConstraint")
+	fit.MaxTextSize = 26
+	fit.Parent = status
 	local arrows = {}
 	for _, side in { -1, 1 } do
 		local arrow = Instance.new("TextButton")
@@ -168,6 +174,19 @@ local function playArea(page: Frame, api: any)
 		return data ~= nil and (data.Favourite or "") == ""
 	end
 
+	-- The hero two of the party play, which keeps it out of the queue (Lineup.clash).
+	local function clash(): string?
+		local heroes = {}
+		for _, member in Party.state().members do
+			local other = Players:GetPlayerByUserId(member.userId)
+			local hero = other and other:GetAttribute("Showcase")
+			if hero then
+				table.insert(heroes, hero)
+			end
+		end
+		return Lineup.clash(heroes)
+	end
+
 	local function refresh()
 		local searching = state.state == "Searching" or state.state == "Found" or state.state == "Teleporting"
 		local leader = Party.isLeader()
@@ -178,6 +197,9 @@ local function playArea(page: Frame, api: any)
 		if not searching and heroless() then
 			playText.Text = "CHOOSE HERO"
 			Widgets.enable(play, true, "Gold")
+		elseif not searching and clash() then
+			playText.Text = "SAME HERO"
+			Widgets.enable(play, false, "Gold")
 		elseif state.state == "Searching" then
 			playText.Text = "CANCEL"
 			Widgets.enable(play, leader, "Blue")
@@ -239,6 +261,13 @@ local function playArea(page: Frame, api: any)
 	end)
 	queue:FireServer("Hello")
 	Party.onChanged(refresh)
+	local function watchHero(other: Player)
+		other:GetAttributeChangedSignal("Showcase"):Connect(refresh)
+	end
+	Players.PlayerAdded:Connect(watchHero)
+	for _, other in Players:GetPlayers() do
+		watchHero(other)
+	end
 	ProfileClient.watch(function()
 		if mode == "Ranked" and not (rankedOpen()) then
 			mode = "QuickPlay"
@@ -253,7 +282,8 @@ local function playArea(page: Frame, api: any)
 		elseif state.state == "Found" or state.state == "Teleporting" then
 			status.Text = "JOINING THE MATCH..."
 		else
-			status.Text = ""
+			local hero = clash()
+			status.Text = if hero then string.upper(hero) .. " TWICE: PICK DIFFERENT HEROES" else ""
 		end
 	end)
 	refresh()

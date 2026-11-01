@@ -36,7 +36,7 @@ end
 -- does. A leap lands on, and a strike from the sky falls on, the spot chosen at its cast and a dash keeps its path;
 -- only a dash's shot follows.
 function HeroKit.follows(kit: any): boolean
-	if kit.Kind == "Leap" or kit.Kind == "Strike" then
+	if kit.Kind == "Leap" or kit.Kind == "Strike" or kit.Kind == "Rain" then
 		return false
 	elseif kit.Kind == "Dash" then
 		return kit.Shot ~= nil
@@ -306,7 +306,7 @@ function HeroKit.aimed(
 	height: number,
 	exclude: { Instance }
 ): (Vector3?, { Shot }?)
-	if kit.Kind == "Leap" or kit.Kind == "Strike" then
+	if kit.Kind == "Leap" or kit.Kind == "Strike" or kit.Kind == "Rain" then
 		return HeroKit.leapLanding(root, aim, kit.Range, height, exclude), nil
 	elseif kit.Kind == "Throw" or kit.Kind == "Ascend" then
 		local params = RaycastParams.new()
@@ -337,7 +337,7 @@ function HeroKit.abilityStrikes(
 	shots: { Shot }?,
 	body: Body
 ): boolean
-	if kit.Kind == "Leap" or kit.Kind == "Strike" then
+	if kit.Kind == "Leap" or kit.Kind == "Strike" or kit.Kind == "Rain" then
 		return landing ~= nil and HeroKit.landingStrikes(landing, kit.Radius, body)
 	elseif kit.Kind == "Throw" or kit.Kind == "Ascend" then
 		for _, shot in shots or {} do

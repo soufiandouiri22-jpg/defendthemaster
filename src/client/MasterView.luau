@@ -1,6 +1,6 @@
 -- The Masters on the client (MasterService): their motions after their "State" attribute (sitting on the throne,
 -- standing, walking, falling when they die), their swings, and their ground slam (Net.MasterAction): working himself
--- up and swinging down while the red circle that warns where it lands grows, then a ring of dust racing out, gold
+-- up and swinging down while the red circle that warns where it lands grows (the enemy Master's only), then a ring of dust racing out, gold
 -- sparks and a shake of the camera for heroes near it. The attacks and the fall are the clips of his animation pack
 -- (Config.Master.Pack), played over Roblox's own R15 sitting and standing, his steps those of a second pack
 -- (Config.Master.Walk). Once he stands up he reaches over his shoulder and draws his sword from his back into his guard
@@ -840,7 +840,10 @@ local function action(model: Model, kind: string, delay: number, detail: any, ra
 		end
 	elseif kind == "Slam" and typeof(detail) == "Vector3" and radius then
 		local ground = groundAt(detail)
-		warn(ground, radius, delay)
+		-- Only the enemy Master's circle shows (owner, 2026-11-01): one's own Master's slam never strikes him.
+		if model:GetAttribute("Team") ~= Players.LocalPlayer:GetAttribute("Team") then
+			warn(ground, radius, delay)
+		end
 		if view then
 			act(view, SETTINGS.Slam.Frenzy)
 			local serial = view.serial

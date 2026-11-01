@@ -28,6 +28,10 @@ Config.Master = {
 	Zone = 50,
 	Leash = 62,
 	Calm = 3,
+	-- The weaker he gets, the harder he strikes, so his attacks stay feared late in the match when heroes have health
+	-- and armour (owner, 2026-11-01): his swing's and slam's damage times 1 + Rage times the share of his health he
+	-- lost (at half health 1.5 times, near death twice).
+	Rage = 1,
 	WalkSpeed = 10,
 	Rise = 1.2,
 	Reach = 14,
@@ -67,7 +71,8 @@ Config.Master = {
 		Length = 2.67,
 		Radius = 18,
 		Ahead = 5,
-		Damage = 260,
+		-- Stronger (owner, 2026-11-01; was 260): over half the health of an archer or mage, over a third of a tank's.
+		Damage = 420,
 		Crowd = 2,
 		Alone = 6,
 	},
@@ -813,7 +818,8 @@ Config.Minions = {
 -- round the hero and the spot aimed at), "Cone", "Ring" (what a slam round him reaches). A combo hit with a `ProjectileSpeed` is a shot instead of a swing;
 -- a combo hit's `Recover` is the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
--- `Pierce` strikes everyone it passes once. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
+-- `Pierce` strikes everyone it passes once; with `ShotsFrom = "Hand"` they are seen leaving the hand that holds his weapon
+-- rather than where his shots leave him (HeroControls). A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
 -- With a `Slash` those he passed are struck only when his weapon cuts, `Time` seconds into its motion (after `Move`),
 -- together with everyone within its `Range` of where he lands.
@@ -823,9 +829,19 @@ Config.Minions = {
 -- no one. A `Hold` plays its motion at `Speed` from `From` to `To` seconds into the clip, a moment drawn out.
 -- A "Flurry" with `Zap` shoots lightning from the point of his weapon at each of its `Hits` (LightningEffects.zap),
 -- each at one enemy the sweep reaches, the nearest `Targets` taking them in turn (HeroKit.zapTarget), or straight
--- ahead to its `Range` when it reaches no one.
+-- ahead to its `Range` when it reaches no one. A Flurry's `Beam` is a laser beam `Width` studs thick from his upper
+-- body along its sweep, from `From` to `To` seconds into its motion (HeroControls). Every one of a Flurry's `Hits` from
+-- its `Slam` on strikes the ground: SlamDamage all round him, SlamRadius studs, with a shockwave. Its `Pulses` (seconds
+-- into its motion) are smaller waves through the ground after, each striking everyone within SlamRadius for
+-- PulseDamage (with PulseRatio).
 -- An "Ascend" plays its `Motion` and then its `Then`, lifting him off the ground meanwhile (HeroKit.lift), and lets
 -- one projectile go at `Release`, `OrbScale` times his usual orb, which bursts over `Blast` studs where it stops.
+-- A "Rain" lifts him as an Ascend does, its `Motion` played Grounded and its `Then` from `ThenAt`, and from `From` to
+-- `To` seconds every `Every` strikes everyone within `Radius` of the spot aimed at as he cast it (up to `Range` away),
+-- under falling laser beams (HeroControls).
+-- A "Vanish" makes him unseen by his enemies for `Duration` seconds (his "Hidden" attribute, the client's Vanish), and
+-- faint to his own team, till he attacks again; he can be struck meanwhile. He stands still for its first `Cast`
+-- seconds, its motion cut off at `Stop`, and then runs `Haste` times as fast while he stays unseen.
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first.
 --
 -- In the armory his class's build is recommended (Config.ClassBuilds), or his own `Build` when he has one.
@@ -1596,6 +1612,189 @@ Config.Heroes = {
 			},
 		},
 	},
+	-- Jestrel, a black-and-white jester with a cane (owner, 2026-11-01; the RobloxAnimations Trickster Caster pack). His
+	-- keys are a first choice from the pack, to be changed once the owner has seen every clip in the showroom
+	-- (Workspace attribute "TestShowroom"); the times are where the cane moves fastest (Tools/clip_hits.py).
+	Jestrel = {
+		Role = "Mage",
+		Description = "Plays tricks of white magic with his cane.",
+		Starter = true,
+		-- After the transformation he takes his alternate battle stance and keeps its last frame (owner, 2026-11-01; his
+		-- battle idle and drawing his cane before, which ended with his arm before his face).
+		Showcase = {
+			Motion = "RA-TRC-014",
+			Enter = { Motion = "RA-TRC-017", Then = "Breathe" },
+			Aura = Color3.fromRGB(255, 255, 255),
+		},
+		Health = 720,
+		Scales = "Magic",
+		Look = {
+			-- Nexus Exchange's Black and White jester (owner, 2026-11-01): the suit, its hat with the mask over the
+			-- face, its capelet and the sickle and dagger at his waist, on white skin.
+			Layered = { { Id = 79454159435378, Type = Enum.AccessoryType.Sweater } },
+			HatAccessory = "100259652125268",
+			NeckAccessory = "72940892303084",
+			WaistAccessory = "104074162334362",
+			Skin = Color3.fromRGB(242, 242, 242),
+		},
+		-- A wider square than the others' 620, as his head is painted larger: it shows as big as theirs.
+		Portrait = { Image = "rbxassetid://96048186817047", Face = { 124, 0, 900 } },
+		-- The ability bar's icons per key (Art/Icons/Jestrel, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Jestrel, keyed by Tools/key_icons.py --glow and made grey all over, as he is black and white).
+		Icons = {
+			M1 = "rbxassetid://76217395631624",
+			M2 = "rbxassetid://132763788659992",
+			E = "rbxassetid://131531613248744",
+			R = "rbxassetid://99179165077080",
+			Dash = "rbxassetid://124302067480481",
+		},
+		Pack = "TricksterCaster",
+		-- His slams strike the ground in white light, instead of shadow (ShadowEffects.Light; owner, 2026-11-01).
+		Effects = "Light",
+		-- The cane hangs from his right hand (Tools/keyframe_pack.py).
+		Weapons = { "Cane" },
+		-- Short white laser beams, all white as his aura (owner, 2026-11-01), seen leaving the point of his cane
+		-- (FromWeapon: his client draws each from there onto the way the server sends it along).
+		Projectile = {
+			FromWeapon = true,
+			Laser = { Length = 3.2, Width = 0.22, Color = Color3.fromRGB(255, 255, 255) },
+			Trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(215, 215, 225) },
+			TrailHalf = 0.12,
+			Glow = Color3.fromRGB(255, 255, 255),
+			-- Each beam sheds sparkles and little card suits that linger in the air behind it (owner, 2026-11-01).
+			Cards = true,
+		},
+		Motions = {
+			Idle = "RA-TRC-015",
+			Run = "RA-TRC-005",
+			RunLeft = "RA-TRC-006",
+			RunRight = "RA-TRC-007",
+			Back = "RA-TRC-002",
+			Takeoff = "RA-TRC-011",
+			Air = "RA-TRC-012",
+			Land = "RA-TRC-013",
+			Death = "RA-TRC-031",
+		},
+		Kit = {
+			-- Three laser beams in turn, each at the first enemy in its way (owner, 2026-11-01): a cane swing, a flick
+			-- and a great thrust (RA-TRC-053), the last the hardest. Faster than Mavorak's orbs, as a laser is. All three
+			-- go equally fast (owner): each hit's own Speed brings its beam 0.3 s after the click and the next click
+			-- 0.25 s later.
+			M1 = {
+				Kind = "Combo",
+				Speed = 1.2,
+				Ratio = 0.35,
+				Reset = 1.5,
+				Hits = {
+					{
+						Motion = "RA-TRC-023",
+						Speed = 0.78,
+						Hit = 0.28,
+						Recover = 0.234,
+						Damage = 26,
+						Range = 30,
+						ProjectileSpeed = 150,
+						Width = 1.5,
+					},
+					{
+						Motion = "RA-TRC-034",
+						Speed = 0.89,
+						Hit = 0.32,
+						Recover = 0.267,
+						Damage = 30,
+						Range = 30,
+						ProjectileSpeed = 150,
+						Width = 1.5,
+					},
+					{
+						Motion = "RA-TRC-053",
+						Speed = 1.333,
+						Hit = 0.48,
+						Recover = 0.4,
+						Damage = 40,
+						Range = 30,
+						ProjectileSpeed = 150,
+						Width = 1.5,
+					},
+				},
+			},
+			-- He strikes his cane down into the ground twice, as RA-TRC-041 does (owner, 2026-11-01): everyone round him
+			-- is struck at both. While it stays planted after (till the clip ends, 3.33 s) small waves go out through the
+			-- ground and strike everyone round him again (owner): 2 x 45 and 5 x 8, 130 in all, a little over Mavorak's
+			-- 120 for one who stays in them all along.
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-TRC-041",
+				Indicator = "Ring",
+				Cooldown = 9,
+				Hits = { 0.38, 1.05 },
+				Slam = 0.38,
+				SlamRadius = 12,
+				SlamDamage = 45,
+				SlamRatio = 0.3,
+				Damage = 45,
+				Ratio = 0.3,
+				Range = 12,
+				Angle = 360,
+				Pulses = { 1.5, 1.95, 2.4, 2.85, 3.3 },
+				PulseDamage = 8,
+				PulseRatio = 0.05,
+			},
+			-- He raises his cane over his head (RA-TRC-046) and shoots laser beams as a bow shoots arrows (owner,
+			-- 2026-11-01), from the fist that holds the cane (ShotsFrom), each where he aims as it goes: one at the
+			-- cane's first jolt, then one at each of its five quick thrusts. A little more in all than Rowan's arrows
+			-- (144 against 130), as they come from closer; half his Ratio, as Magic comes twice as fast (owner,
+			-- 2026-11-01), so they stay as strong as his with full items.
+			E = {
+				Kind = "Throw",
+				Motion = "RA-TRC-046",
+				ShotsFrom = "Hand",
+				Indicator = "Arrow",
+				Cooldown = 11,
+				Releases = { 0.9, 1.3, 1.5, 1.67, 1.83, 2.0 },
+				ProjectileSpeed = 150,
+				Range = 30,
+				Width = 1.5,
+				Damage = 24,
+				Ratio = 0.1,
+			},
+			-- He leaps high up (RA-TRC-045 without its own 33-stud rise, Grounded: the game lifts him Rise studs), hangs
+			-- there in his flourish (Then, RA-TRC-042 from ThenAt) leaning over to look down on it, and rains small laser
+			-- beams on a wide circle round the spot aimed at (owner, 2026-11-01): from From to To seconds every Every
+			-- seconds it strikes everyone in it, as much as Mavorak's great orb to one who stays in it all along (7 of 45).
+			R = {
+				Kind = "Rain",
+				Motion = "RA-TRC-045",
+				Then = "RA-TRC-042",
+				ThenAt = 0.3,
+				Indicator = "Zone",
+				Cooldown = 40,
+				Rise = 24,
+				RiseStart = 0.07,
+				RiseEnd = 0.3,
+				Fall = 4.6,
+				Land = 5.0,
+				Range = 30,
+				Radius = 14,
+				From = 1.0,
+				To = 4.0,
+				Every = 0.5,
+				Damage = 45,
+				Ratio = 0.15,
+			},
+			-- No dash but a vanishing trick (owner, 2026-11-01): with a flick of his hand he is gone for his enemies for
+			-- four seconds, and faint to himself and his team, running a quarter faster meanwhile.
+			Dash = {
+				Kind = "Vanish",
+				Motion = "RA-TRC-040",
+				Cooldown = 14,
+				Duration = 4,
+				Haste = 1.25,
+				Cast = 0.25,
+				Stop = 0.6,
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -1639,9 +1838,9 @@ Config.Respawn = {
 Config.Bots = {
 	TeamSize = 4,
 	Hero = "Shadowren",
-	-- Two Shadowren, a Rowan and a Mavorak a team, whichever of them a player picks (owner, 2026-10-30); Mavorak last,
-	-- so a bot picking before the player leaves him free.
-	Lineup = { "Shadowren", "Rowan", "Shadowren", "Mavorak" },
+	-- Every hero at most once a team, the bots' at random (owner, 2026-11-01): each bot takes the first of these, shuffled
+	-- per match and team (Shared.Lineup.botOrder), that its team does not play yet.
+	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel" },
 	Sight = 25,
 	Taken = 20,
 	Reaction = { Min = 1.3, Max = 2.6 },

@@ -162,6 +162,42 @@ PACKS = {
         },
         "events": {},
     },
+    "TricksterCaster": {
+        "folder": ROOT / "Vendor/TricksterCaster/Sounds",
+        "clips": [
+            # Jestrel's attacks (Config.Heroes.Jestrel.Kit) and the clips under them.
+            "RA-TRC-023", "RA-TRC-034", "RA-TRC-053", "RA-TRC-041", "RA-TRC-046", "RA-TRC-045", "RA-TRC-042",
+            "RA-TRC-040", "RA-TRC-005", "RA-TRC-006", "RA-TRC-007", "RA-TRC-002", "RA-TRC-011", "RA-TRC-013",
+            "RA-TRC-031",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # The combo's flick (034) lays 17 long spells over each other, too much on every basic attack: it swings as
+        # the first hit (023's swish, loudest 0.12 s in) as its laser goes at 0.32 s.
+        # The combo's last hit (053) sounds as the first two (owner, 2026-11-01): the same swish as its laser goes
+        # at 0.48 s.
+        # His rain (042) drops its 9 s swell, which sounded like a storm (owner, 2026-11-01): it keeps its leap's
+        # spell, and every laser of the rain zaps as his other beams do (HeroControls).
+        "mute": ["RA-TRC-034", "RA-TRC-053", "RA-TRC-042"],
+        "extra": {
+            "RA-TRC-034": [(0.20, ["A6c428b2ea4fa", "Ac37241325b76", "Ac8b73b92c836"], 0.5)],
+            "RA-TRC-053": [(0.40, ["A6c428b2ea4fa", "Ac37241325b76", "Ac8b73b92c836"], 0.5)],
+            # The leap's second spell (045's at 0.667 s) as well, which 042 cut off taking over at ThenAt (0.27 s).
+            "RA-TRC-042": [(0.0, ["A84c4477603c4"], 0.25), (0.40, ["Af919c19de755"], 0.76)],
+            # His vanishing trick (040, only footsteps in the pack; owner, 2026-11-01): the casting gestures' spell,
+            # loudest 0.25 s in as he is gone (Config's Cast).
+            "RA-TRC-040": [(0.0, ["Aa8fb53ce845a"], 0.6)],
+        },
+        "keep": ["A65e2cc9594ed", "Ad72586826982", "A2ec6057db100"],
+        # Every laser beam he shoots (his combo's, his E's): a short bright spell of 033 (Sound 19, loudest 0.13 s in).
+        "events": {
+            "Release": (["A86d1985907b6"], 0.6),
+        },
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no

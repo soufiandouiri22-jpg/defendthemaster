@@ -11,6 +11,7 @@
 -- once any enemy stands where it would strike (its indicator's ring, line, cone or slam), and blue on an ally.
 
 local CollectionService = game:GetService("CollectionService")
+local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -75,6 +76,10 @@ local following, aimSentAt = false, 0
 type Flying = {
 	dagger: BasePart,
 	origin: Vector3,
+	-- Where on him it is seen leaving (weaponFrom: his weapon's "Point" or the "Hand" holding it), coming onto the
+	-- server's way over its first WEAPON_BLEND studs; and whether it has been drawn yet.
+	from: string?,
+	seen: boolean?,
 	direction: Vector3,
 	speed: number,
 	range: number,
@@ -174,7 +179,8 @@ local function landLater(character: Model, landing: Vector3, kit: any)
 	end)
 end
 
--- The ultimate's slam where the hero stands when he comes down, `kit.Slam` seconds from now.
+-- A flurry's slams where the hero stands, at each of its `Hits` from `kit.Slam` seconds from now on, and the smaller
+-- waves of its `Pulses` after.
 local function slamLater(character: Model, kit: any)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -182,17 +188,32 @@ local function slamLater(character: Model, kit: any)
 		return
 	end
 	local height = heightOf(root, humanoid)
-	task.delay(kit.Slam, function()
-		if humanoid.Health <= 0 or not root.Parent then
-			return
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	local palette = if settings and settings.Effects == "Light" then ShadowEffects.Light else nil
+	local function at(time: number, strike: (ground: Vector3) -> ())
+		task.delay(time, function()
+			if humanoid.Health <= 0 or not root.Parent then
+				return
+			end
+			groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
+			local below = Workspace:Raycast(root.Position, Vector3.new(0, -(height + 2), 0), groundRay)
+			strike(if below then below.Position else root.Position - Vector3.new(0, height, 0))
+		end)
+	end
+	for _, time in kit.Hits do
+		if time >= kit.Slam then
+			at(time, function(ground)
+				ShadowEffects.slam(ground, kit.Range, palette)
+				shakeNear(ground, 0.9)
+				slamSound(character)
+			end)
 		end
-		groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
-		local below = Workspace:Raycast(root.Position, Vector3.new(0, -(height + 2), 0), groundRay)
-		local ground = if below then below.Position else root.Position - Vector3.new(0, height, 0)
-		ShadowEffects.slam(ground, kit.Range)
-		shakeNear(ground, 0.9)
-		slamSound(character)
-	end)
+	end
+	for _, time in kit.Pulses or {} do
+		at(time, function(ground)
+			ShadowEffects.pulse(ground, kit.SlamRadius, palette)
+		end)
+	end
 end
 
 -- A strike from the sky (`kit`, Kind "Strike") on the spot `spot` (at a hero's root height, HeroKit.leapLanding):
@@ -241,6 +262,21 @@ local function weaponPoint(character: Model, root: BasePart): Vector3
 	return (longest.CFrame * CFrame.new(0, longest.Size.Y / 2, 0)).Position
 end
 
+-- Where on `character` a shot is seen leaving: his weapon's `Point` (weaponPoint), or the `Hand` holding it (what his
+-- weapon is bound to), his chest without one.
+local function weaponFrom(character: Model, root: BasePart, from: string): Vector3
+	if from == "Hand" then
+		local weapons = character:FindFirstChild("Weapons")
+		for _, d in if weapons then weapons:GetDescendants() else {} do
+			if d:IsA("Motor6D") and d.Name == "ComponentBinding" and d.Part0 then
+				return d.Part0.Position
+			end
+		end
+		return HeroKit.muzzle(root.Position)
+	end
+	return weaponPoint(character, root)
+end
+
 -- `kit.Zap`'s lightning at each of the flurry's hits: from his weapon's point to the enemy that shock strikes
 -- (HeroKit.zapTarget among those the sweep reaches, as the server measures it), or straight ahead to its reach when
 -- it reaches no one; each with a crack from his weapon's point (UiSound's Zap).
@@ -280,6 +316,86 @@ local function zapLater(character: Model, kit: any)
 	end
 end
 
+-- How far in front of the middle of his upper body a beam starts.
+local BEAM_CHEST = 0.8
+
+-- `kit.Beam`'s laser beam: from the middle of his upper body as his motion moves it, along where he aims (another
+-- hero's where he faces) to the flurry's Range or the first wall, from its From to its To unless his motion is cut short, a glowing shell round a bright core
+-- in his projectiles' colours with a glow where it strikes, and a crack as it starts.
+local function beamLater(character: Model, kit: any)
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	if not root or not settings then
+		return
+	end
+	local look = settings.Projectile or {}
+	local core = if look.Laser then look.Laser.Color else Color3.new(1, 1, 1)
+	local glow = look.Glow or core
+	local beam = kit.Beam
+	task.delay(beam.From, function()
+		if not root.Parent or HeroAnimator.playing(character) ~= kit.Motion then
+			return
+		end
+		local function piece(shape: Enum.PartType, colour: Color3, transparency: number): Part
+			local part = Instance.new("Part")
+			part.Shape = shape
+			part.Material = Enum.Material.Neon
+			part.Color = colour
+			part.Transparency = transparency
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Parent = effects()
+			return part
+		end
+		local shell = piece(Enum.PartType.Cylinder, glow, 0.45)
+		local inner = piece(Enum.PartType.Cylinder, core, 0)
+		local spark = piece(Enum.PartType.Ball, glow, 0.3)
+		local light = Instance.new("PointLight")
+		light.Color = glow
+		light.Range = 10
+		light.Brightness = 2
+		light.Parent = spark
+		local walls = RaycastParams.new()
+		walls.FilterType = Enum.RaycastFilterType.Exclude
+		walls.FilterDescendantsInstances = HeroKit.leapIgnore()
+		local torso = character:FindFirstChild("UpperTorso") :: BasePart?
+		UiSound.at("Zap", root.Position)
+		local started = os.clock()
+		local connection
+		connection = RunService.RenderStepped:Connect(function()
+			local t = os.clock() - started
+			if t > beam.To - beam.From or not root.Parent or HeroAnimator.playing(character) ~= kit.Motion then
+				connection:Disconnect()
+				shell:Destroy()
+				inner:Destroy()
+				spark:Destroy()
+				return
+			end
+			local chest = if torso and torso.Parent then torso.Position else HeroKit.muzzle(root.Position)
+			local facing = root.CFrame.LookVector
+			local direction = if character == player.Character
+				then HeroKit.aimDirection(chest, HeroCamera.aim(), facing)
+				else facing
+			local from = chest + direction * BEAM_CHEST
+			local wall = Workspace:Raycast(from, direction * kit.Range, walls)
+			local to = if wall then wall.Position else from + direction * kit.Range
+			local length = math.max((to - from).Magnitude, 0.1)
+			local along = CFrame.lookAt(from, to) * CFrame.new(0, 0, -length / 2) * CFrame.Angles(0, math.pi / 2, 0)
+			-- It flickers a little, as a beam of raw power would.
+			local width = beam.Width * (0.9 + 0.2 * math.sin(t * 40))
+			shell.Size = Vector3.new(length, width, width)
+			shell.CFrame = along
+			inner.Size = Vector3.new(length, width * 0.4, width * 0.4)
+			inner.CFrame = along
+			spark.Size = Vector3.one * width * 1.8
+			spark.CFrame = CFrame.new(to)
+		end)
+	end)
+end
+
 -- A moment of `kit`'s motion drawn out (`kit.Hold`): from `From` to `To` seconds into the clip it plays at `Speed`,
 -- unless something else plays by then.
 local function holdLater(character: Model, kit: any)
@@ -299,13 +415,249 @@ local function holdLater(character: Model, kit: any)
 	end)
 end
 
--- An Ascend's second motion (`kit.Then`), as its first (`length` seconds) ends, unless that was cut short.
+-- An Ascend's or a Rain's second motion (`kit.Then`), as its first (`length` seconds) ends or at its `ThenAt`, unless
+-- that was cut short; a Rain's in place, as he hangs where he is.
 local function thenLater(character: Model, kit: any, length: number)
-	task.delay(math.max(0, length - 0.03), function()
+	task.delay(math.max(0, (kit.ThenAt or length) - 0.03), function()
 		if HeroAnimator.playing(character) == kit.Motion then
-			HeroAnimator.play(character, kit.Then, 1)
+			HeroAnimator.play(character, kit.Then, 1, nil, kit.Kind == "Rain")
 		end
 	end)
+end
+
+-- Seconds between a Rain's beams, how much higher than he hangs they fall from, how long each takes to come down, and
+-- how far towards where he faces they lean.
+local BEAM_GAP, BEAM_ABOVE, BEAM_FALL, BEAM_LEAN = 0.04, 8, 0.18, 6
+-- How far over a Rain's hero leans at most and at least to look down on its spot, and how long he takes to lean over.
+local LEAN_MOST, LEAN_LEAST, LEAN_TIME = math.rad(70), math.rad(30), 0.3
+
+-- He leans over from his root as a Rain (`kit`) holds him up, to look down on its `spot` from above, and comes upright
+-- again as he falls: his root joint turned by up to the angle he sees it at, at its frame on the root part (an
+-- AnimationConstraint's first attachment or a Motor6D's C0, which his motions leave alone).
+local function leanLater(character: Model, root: BasePart, spot: Vector3, kit: any)
+	local joint: Instance? = nil
+	for _, d in character:GetDescendants() do
+		if d:IsA("AnimationConstraint") then
+			local a0, a1 = d.Attachment0, d.Attachment1
+			if a0 and a1 and a0.Parent == root and a1.Parent and a1.Parent.Name == "LowerTorso" then
+				joint = a0
+				break
+			end
+		elseif d:IsA("Motor6D") and d.Part0 == root and d.Part1 and d.Part1.Name == "LowerTorso" then
+			joint = d
+			break
+		end
+	end
+	if not joint then
+		return
+	end
+	local frame = joint :: Instance
+	local field = if frame:IsA("Motor6D") then "C0" else "CFrame"
+	local rest: CFrame = (frame :: any)[field]
+	local angle = math.clamp(math.atan2(kit.Rise, HeroKit.flat(spot - root.Position).Magnitude), LEAN_LEAST, LEAN_MOST)
+	local started = os.clock()
+	local connection
+	connection = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - started
+		if t >= kit.Land or not frame.Parent then
+			connection:Disconnect();
+			(frame :: any)[field] = rest
+			return
+		end
+		local lean = if t < kit.RiseEnd
+			then 0
+			elseif t < kit.Fall then math.min((t - kit.RiseEnd) / LEAN_TIME, 1)
+			else 1 - (t - kit.Fall) / (kit.Land - kit.Fall)
+		lean = lean * lean * (3 - 2 * lean);
+		(frame :: any)[field] = CFrame.Angles(-angle * lean, 0, 0) * rest
+	end)
+end
+
+local STAR_GAP, CARD_GAP, CARD_LIFE = 1.5, 2.5, 0.55
+local STAR_SIZE, CARD_SIZE = 1, 1.7
+
+-- One kind of the twinkles or card suits of his beams (Assets.CardStar, CardSuits; `texture`, `size` studs) on `part`,
+-- in `colour`, let out only by Emit. Unlit, so where they overlap they do not grow brighter.
+local function cardEmitter(part: BasePart, texture: string, size: number, colour: Color3): ParticleEmitter
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = texture
+	e.Color = ColorSequence.new(colour)
+	e.LightEmission = 0
+	e.LightInfluence = 0
+	e.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size),
+		NumberSequenceKeypoint.new(0.7, size * 0.8),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	e.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.07),
+		NumberSequenceKeypoint.new(0.6, 0.22),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	e.Lifetime = NumberRange.new(CARD_LIFE * 0.8, CARD_LIFE)
+	e.Rate = 0
+	e.Speed = NumberRange.new(1, 2.5)
+	e.SpreadAngle = Vector2.new(180, 180)
+	e.Acceleration = Vector3.new(0, 1.5, 0)
+	e.Drag = 2
+	e.Rotation = NumberRange.new(-25, 25)
+	e.RotSpeed = NumberRange.new(-60, 60)
+	e.Parent = part
+	return e
+end
+
+-- Twinkles and card suits shed by a flying beam (Config's Projectile.Cards), left in the air behind it to fade, in
+-- `colour`. Every beam leaves the same (owner, 2026-11-01): shed by the way it goes rather than by time (a twinkle every
+-- STAR_GAP studs, a suit every CARD_GAP), so they lie evenly along it from its first stud on and do not heap up where
+-- it stands still, till retire stops them; gone within CARD_LIFE, before the next beams along the same line add theirs.
+local function shedCards(part: BasePart, colour: Color3)
+	local star = cardEmitter(part, Assets.CardStar, STAR_SIZE, colour)
+	local suits = {}
+	for _, suit in Assets.CardSuits do
+		table.insert(suits, cardEmitter(part, suit, CARD_SIZE, colour))
+	end
+	local last: Vector3? = nil
+	local toStar, toCard = 0, 0
+	local step
+	step = RunService.Heartbeat:Connect(function()
+		if not part.Parent or not star.Enabled then
+			step:Disconnect()
+			return
+		end
+		local here = part.Position
+		local moved = if last then (here - last).Magnitude else 0
+		last = here
+		-- A jump (the beam set on its way) sheds nothing.
+		if moved > 20 then
+			return
+		end
+		toStar += moved
+		toCard += moved
+		while toStar >= STAR_GAP do
+			toStar -= STAR_GAP
+			star:Emit(1)
+		end
+		while toCard >= CARD_GAP do
+			toCard -= CARD_GAP
+			suits[math.random(#suits)]:Emit(1)
+		end
+	end)
+end
+
+-- Takes a flown beam away: one shedding sparkles and cards (shedCards) is hidden at once and goes once they have
+-- faded, so they do not vanish with it.
+local function retire(part: BasePart)
+	local sheds = false
+	for _, d in part:GetChildren() do
+		if d:IsA("ParticleEmitter") then
+			d.Enabled = false
+			sheds = true
+		elseif d:IsA("PointLight") or d:IsA("Trail") or d:IsA("BillboardGui") then
+			d.Enabled = false
+		end
+	end
+	if not sheds then
+		part:Destroy()
+		return
+	end
+	part.Transparency = 1
+	task.delay(CARD_LIFE, part.Destroy, part)
+end
+
+-- A Rain's beams (`kit`, Kind "Rain") on the spot `spot` (at a hero's root height, HeroKit.leapLanding): its circle
+-- shining faintly on the ground from now till the last, and from its `From` to its `To` small laser beams of his
+-- projectiles' colours falling anywhere in it, each flashing where it strikes, with a crack at every one of its hits
+-- (his pack's Release, the sound of his other beams, or else UiSound's Zap).
+local function rainLater(character: Model, spot: Vector3, kit: any)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not humanoid or not root then
+		return
+	end
+	local height = heightOf(root, humanoid)
+	groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
+	local below = Workspace:Raycast(spot, Vector3.new(0, -(height + 2), 0), groundRay)
+	local ground = if below then below.Position else spot - Vector3.new(0, height, 0)
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	local look = settings and settings.Projectile or {}
+	local core = if look.Laser then look.Laser.Color else Color3.new(1, 1, 1)
+	local glow = look.Glow or core
+	local lean = HeroKit.flat(root.CFrame.LookVector) * BEAM_LEAN
+	local fallFrom = kit.Rise + BEAM_ABOVE
+	leanLater(character, root, spot, kit)
+
+	local disc = Instance.new("Part")
+	disc.Shape = Enum.PartType.Cylinder
+	disc.Size = Vector3.new(0.1, kit.Radius * 2, kit.Radius * 2)
+	disc.CFrame = CFrame.new(ground + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+	disc.Material = Enum.Material.Neon
+	disc.Color = glow
+	disc.Transparency = 0.85
+	disc.Anchored = true
+	disc.CanCollide = false
+	disc.CanQuery = false
+	disc.CanTouch = false
+	disc.CastShadow = false
+	disc.Parent = effects()
+	task.delay(kit.To + BEAM_FALL + 0.3, disc.Destroy, disc)
+
+	local function beam()
+		local angle, out = math.random() * math.pi * 2, kit.Radius * math.sqrt(math.random())
+		local landing = ground + Vector3.new(math.cos(angle) * out, 0, math.sin(angle) * out)
+		local top = landing + Vector3.new(0, fallFrom, 0) - lean
+		local part = Instance.new("Part")
+		part.Size = Vector3.new(0.22, 0.22, 4)
+		part.Material = Enum.Material.Neon
+		part.Color = core
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.CastShadow = false
+		part.CFrame = CFrame.lookAt(top, landing)
+		local light = Instance.new("PointLight")
+		light.Color = glow
+		light.Range = 5
+		light.Brightness = 1.5
+		light.Parent = part
+		if look.Cards then
+			shedCards(part, glow)
+		end
+		part.Parent = effects()
+		TweenService:Create(part, TweenInfo.new(BEAM_FALL, Enum.EasingStyle.Linear), {
+			CFrame = CFrame.lookAt(landing + (top - landing).Unit * 2, landing - (top - landing).Unit),
+		}):Play()
+		task.delay(BEAM_FALL, function()
+			retire(part)
+			local flash = Instance.new("Part")
+			flash.Shape = Enum.PartType.Ball
+			flash.Size = Vector3.one * 0.6
+			flash.CFrame = CFrame.new(landing + Vector3.new(0, 0.3, 0))
+			flash.Material = Enum.Material.Neon
+			flash.Color = glow
+			flash.Transparency = 0.2
+			flash.Anchored = true
+			flash.CanCollide = false
+			flash.CanQuery = false
+			flash.CanTouch = false
+			flash.CastShadow = false
+			flash.Parent = effects()
+			TweenService:Create(flash, TweenInfo.new(0.25), { Size = Vector3.one * 2.6, Transparency = 1 }):Play()
+			task.delay(0.25, flash.Destroy, flash)
+		end)
+	end
+	for at = kit.From - BEAM_FALL, kit.To - BEAM_FALL, BEAM_GAP do
+		task.delay(math.max(0, at), beam)
+	end
+	for at = kit.From, kit.To + 1e-3, kit.Every do
+		task.delay(at, function()
+			if settings and settings.Pack then
+				HeroSounds.event(character, settings.Pack, "Release")
+			else
+				UiSound.at("Zap", ground, 0.8)
+			end
+		end)
+	end
 end
 
 -- The dash's lunge in place while the hero is carried from `from` to `to`, its trail, and the lunge cut off at its end.
@@ -325,6 +677,16 @@ local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any
 			trail(from - drop, to - drop, kit.Move - kit.Start)
 		end)
 	end
+	task.delay(kit.Stop, function()
+		if HeroAnimator.playing(character) == kit.Motion then
+			HeroAnimator.stop(character)
+		end
+	end)
+end
+
+-- A vanishing trick's flick of the hand (`kit`, Kind "Vanish"), cut off at its `Stop`; hiding him is the server's.
+local function vanishMotion(character: Model, kit: any)
+	HeroAnimator.play(character, kit.Motion, 1)
 	task.delay(kit.Stop, function()
 		if HeroAnimator.playing(character) == kit.Motion then
 			HeroAnimator.stop(character)
@@ -393,6 +755,41 @@ local function cast(key: string)
 		slow(humanoid, kit.Move, 0)
 		dashMotion(character, from, to, kit)
 		return
+	elseif kit.Kind == "Vanish" then
+		busyUntil = now + kit.Cast + RECOVER
+		-- He stands still for the flick, then runs faster while unseen, till it ends or another attack slows him.
+		motionToken += 1
+		local token = motionToken
+		humanoid.WalkSpeed = 0
+		task.delay(kit.Cast, function()
+			if motionToken == token and humanoid.Parent then
+				humanoid.WalkSpeed = Items.walkSpeed(player) * (kit.Haste or 1)
+			end
+		end)
+		task.delay(kit.Duration, function()
+			if motionToken == token and humanoid.Parent then
+				humanoid.WalkSpeed = Items.walkSpeed(player)
+			end
+		end)
+		vanishMotion(character, kit)
+		return
+	elseif kit.Kind == "Rain" then
+		local length = HeroAnimator.play(character, kit.Motion, 1, nil, "Grounded")
+		busyUntil = now + kit.Land + RECOVER
+		local spot = HeroKit.leapLanding(root.Position, aim, kit.Range, heightOf(root, humanoid), HeroKit.leapIgnore())
+		leap = {
+			started = now,
+			from = root.Position,
+			to = root.Position,
+			takeoff = 0,
+			land = kit.Land,
+			sharp = false,
+			lift = kit,
+		}
+		slow(humanoid, kit.Land + RECOVER, 0)
+		thenLater(character, kit, length)
+		rainLater(character, spot, kit)
+		return
 	end
 	local length = HeroAnimator.play(character, kit.Motion, 1)
 	if kit.Kind == "Leap" then
@@ -433,6 +830,9 @@ local function cast(key: string)
 		end
 		if kit.Zap then
 			zapLater(character, kit)
+		end
+		if kit.Beam then
+			beamLater(character, kit)
 		end
 	end
 end
@@ -555,6 +955,15 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 			dashMotion(character, root.Position, landing, kit)
 		end
 		return
+	elseif kit.Kind == "Vanish" then
+		vanishMotion(character, kit)
+		return
+	elseif kit.Kind == "Rain" then
+		thenLater(character, kit, HeroAnimator.play(character, kit.Motion, 1, nil, "Grounded"))
+		if landing then
+			rainLater(character, landing, kit)
+		end
+		return
 	else
 		local length = HeroAnimator.play(character, kit.Motion, 1)
 		if kit.Kind == "Ascend" then
@@ -571,6 +980,9 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	end
 	if kit.Zap then
 		zapLater(character, kit)
+	end
+	if kit.Beam then
+		beamLater(character, kit)
 	end
 end
 
@@ -655,6 +1067,16 @@ local function projectileModel(settings: any, scale: number): BasePart
 		if look.Orb.Swirl then
 			dressOrb(part, look.Orb.Size * scale)
 		end
+	elseif look.Laser then
+		-- A short bolt of light, lying along its flight.
+		part = Instance.new("Part")
+		part.Size = Vector3.new(look.Laser.Width, look.Laser.Width, look.Laser.Length) * scale
+		part.Material = Enum.Material.Neon
+		part.Color = look.Laser.Color
+		part.CastShadow = false
+		if look.Cards then
+			shedCards(part, look.Glow or look.Laser.Color)
+		end
 	else
 		local template =
 			ReplicatedStorage[settings.Pack].Rig.Components[look.Component]:FindFirstChildWhichIsA("MeshPart", true)
@@ -714,9 +1136,18 @@ local function onProjectile(
 	if not settings.Projectile then
 		return
 	end
+	-- The ability he shoots it with may have it leave him elsewhere than his shots do (its `ShotsFrom`).
+	local playing = HeroAnimator.playing(character)
+	local from = if settings.Projectile.FromWeapon then "Point" else nil
+	for _, kit in settings.Kit do
+		if kit.Motion and kit.Motion == playing and kit.ShotsFrom then
+			from = kit.ShotsFrom
+		end
+	end
 	flying[id] = {
 		dagger = projectileModel(settings, scale or 1),
 		origin = origin,
+		from = from,
 		direction = direction,
 		speed = speed,
 		range = range,
@@ -727,6 +1158,11 @@ local function onProjectile(
 		blast = blast,
 		character = character,
 	}
+	-- Where it is first drawn, should this frame be drawn before it moves.
+	local f = flying[id]
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local start = if f.from and root then weaponFrom(character, root, f.from) else origin
+	f.dagger.CFrame = CFrame.lookAt(start, start + direction) * f.turn
 	HeroSounds.event(character, settings.Pack, "Release")
 end
 
@@ -749,7 +1185,7 @@ end
 local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
 	local f = flying[id]
 	if f then
-		f.dagger:Destroy()
+		retire(f.dagger)
 		flying[id] = nil
 		if f.blast then
 			blastAt(f.character, at, f.blast)
@@ -759,18 +1195,36 @@ local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
 	end
 end
 
+-- Over how many studs of its way a projectile `FromWeapon` comes from his weapon's point onto the way the server sends
+-- it along.
+local WEAPON_BLEND = 12
+
 local function updateFlying()
 	local now = os.clock()
 	for id, f in flying do
+		-- One from his weapon is first seen right at its point, however long the frame.
+		if f.from and not f.seen then
+			f.seen = true
+			f.started = now
+		end
 		local travelled = (now - f.started) * f.speed
 		if travelled > f.range + 10 then
-			f.dagger:Destroy()
+			retire(f.dagger)
 			flying[id] = nil
 			continue
 		end
-		local position = f.origin + f.direction * math.min(travelled, f.range)
+		local fade = if f.from then math.max(1 - travelled / WEAPON_BLEND, 0) else 0
+		-- Where it leaves him as he moves now, not where that was as the shot left the server.
+		local root = f.character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local shift = if fade > 0 and root
+			then weaponFrom(f.character, root, f.from :: string) - f.origin
+			else Vector3.zero
+		local position = f.origin + f.direction * math.min(travelled, f.range) + shift * fade
+		-- Coming onto the server's way it points where it moves, not sideways along it.
+		local moving = f.direction - shift / WEAPON_BLEND
+		local heading = if fade > 0 and moving.Magnitude > 0.1 then moving.Unit else f.direction
 		local spin = CFrame.Angles(-(now - f.started) * f.spin, 0, 0)
-		f.dagger.CFrame = CFrame.lookAt(position, position + f.direction) * spin * f.turn
+		f.dagger.CFrame = CFrame.lookAt(position, position + heading) * spin * f.turn
 	end
 end
 
@@ -857,6 +1311,9 @@ local function abilityStrikes(key: string): boolean
 end
 
 function HeroControls.start()
+	-- Loaded now: a beam is gone before a picture first asked for by its sparkles arrives, so the first beam of a game
+	-- would shed none.
+	task.spawn(ContentProvider.PreloadAsync, ContentProvider, { Assets.CardStar, table.unpack(Assets.CardSuits) })
 	local net = ReplicatedStorage:WaitForChild("Net")
 	actionEvent = net:WaitForChild("HeroAction") :: RemoteEvent
 	(net:WaitForChild("HeroMotion") :: RemoteEvent).OnClientEvent:Connect(onMotion);

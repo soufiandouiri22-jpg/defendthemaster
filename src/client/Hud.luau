@@ -18,6 +18,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
+local Vanish = require(script.Parent.Vanish)
 
 local Hud = {}
 
@@ -536,7 +537,13 @@ local function buildMap(gui: ScreenGui): () -> ()
 		local own = player.Character
 		for _, model in CollectionService:GetTagged("Combatant") do
 			local team = model:GetAttribute("Team")
-			if model:IsA("Model") and model:GetAttribute("Hero") and team and model ~= own then
+			if
+				model:IsA("Model")
+				and model:GetAttribute("Hero")
+				and team
+				and model ~= own
+				and not Vanish.unseen(model)
+			then
 				dot(16, C[team], C.Edge, 4).Position = at(model:GetPivot().Position)
 			end
 		end
