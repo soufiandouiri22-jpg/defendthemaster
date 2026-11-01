@@ -847,10 +847,11 @@ Config.Heroes = {
 		Role = "Assassin",
 		Description = "Strikes from the shadows and vanishes.",
 		Starter = true,
-		-- His entrance is only his looks at his daggers, both and then one.
+		-- His entrance goes into the pose he keeps (owner, 2026-11-01); before, it was his looks at his daggers, both
+		-- and then one: { Motion = "RA-SHD-072", From = 1.3, Until = 3.8, Then = "Pose", Step = 0.38, StepRight = 0.24 }.
 		Showcase = {
 			Motion = "RA-SHD-076",
-			Enter = { Motion = "RA-SHD-072", From = 1.3, Until = 3.8, Then = "Pose", Step = 0.38, StepRight = 0.24 },
+			Enter = { Motion = "RA-SHD-075", Then = "Breathe" },
 			Aura = Color3.fromRGB(146, 64, 236),
 		},
 		Health = 900,
@@ -983,7 +984,8 @@ Config.Heroes = {
 		Starter = true,
 		Showcase = {
 			Motion = "RA-RNG-014",
-			Enter = { Motion = "RA-RNG-064", Speed = 1.4, Then = "Breathe" },
+			-- Drawing his bow (owner, 2026-11-01: shorter than the flourish he had).
+			Enter = { Motion = "RA-RNG-016", Then = "Breathe" },
 			Aura = Color3.fromRGB(110, 200, 120),
 		},
 		Health = 760,
@@ -1110,12 +1112,13 @@ Config.Heroes = {
 		Role = "Mage",
 		Description = "Hurls dark magic from his staff.",
 		Starter = true,
-		-- His ready stance looks aside, so he stands turned until his face nearly meets the camera, with his raised hand
-		-- still clear of it. His entrance is slowed, then he steps into that stance.
+		-- His entrance draws his staff and he keeps its last frame, facing the camera (owner, 2026-11-01). Before, he
+		-- stepped after it into his ready stance, which looks aside, turned (Turn) until his face nearly met the camera:
+		-- { Motion = "RA-ELM-064", Speed = 0.6, Then = "Pose", Hold = 0.6, Step = 0.36, Low = true }.
 		Showcase = {
 			Motion = "RA-ELM-017",
 			Turn = -28,
-			Enter = { Motion = "RA-ELM-064", Speed = 0.6, Then = "Pose", Hold = 0.6, Step = 0.36, Low = true },
+			Enter = { Motion = "RA-ELM-014", Then = "Breathe" },
 			Aura = Color3.fromRGB(150, 70, 230),
 		},
 		Health = 720,
