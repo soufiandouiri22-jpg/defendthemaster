@@ -5,7 +5,8 @@
 -- them, or one of their heroes or their Master nearby (MinionService.heroAttacked), then for any enemy hero near, then
 -- the enemy Master; the nearest of those, and they turn from the Master as soon as a hero comes near. A minion that has
 -- come to the end of its path with nobody in reach hunts: it walks to the nearest enemy hero or Master left anywhere in
--- the arena, and with none left stands on its own spot there. Only the last hit by a player earns the bounty.
+-- the arena, and with none left stands on its own spot there. A vanished hero ("Hidden", a kit of Kind "Vanish") is
+-- not there for them: they let go of him and pick another. Only the last hit by a player earns the bounty.
 --
 -- The server moves one invisible root part per minion, ten times a second, in Workspace.Minions, with the attributes
 -- Team, Kind, Health, MaxHealth and Dead; each client shows the rock minion on it (MinionView). Attacks are sent to the
@@ -341,7 +342,7 @@ end
 
 local function think(m: Minion, combatants: { Model }, now: number)
 	local target = m.target
-	if target and not alive(target) then
+	if target and (not alive(target) or target:GetAttribute("Hidden")) then
 		target = nil
 	end
 	if target and m.chaseFrom and (m.position - m.chaseFrom).Magnitude > SETTINGS.Leash then
@@ -414,7 +415,7 @@ end
 local function tick(now: number)
 	local combatants = {}
 	for _, tagged in CollectionService:GetTagged("Combatant") do
-		if tagged:IsA("Model") then
+		if tagged:IsA("Model") and not tagged:GetAttribute("Hidden") then
 			table.insert(combatants, tagged)
 		end
 	end

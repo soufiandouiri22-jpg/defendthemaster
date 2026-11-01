@@ -108,11 +108,11 @@ type Card = {
 	status: TextLabel?,
 	glint: UIGradient?,
 	turned: boolean?,
-	-- In the lobby (VersusView.travel) the cards do not turn: the backs need what the match's server publishes.
-	still: boolean?,
 }
 
 local player = Players.LocalPlayer
+-- The lobby's cards sent along with the teleport (VersusView.travel), sent again as a card turns so it arrives so.
+local sentAlong: ScreenGui? = nil
 
 -- What `other` carries of his rank and level (ProfileService), on `entry`.
 local function standing(entry: Entry, other: Player?): Entry
@@ -311,6 +311,7 @@ local function draw(card: Card, entry: Entry)
 	card.inner.Visible = true
 	local wasTurned = card.turned
 	card.turned = false
+	card.frame:SetAttribute("Turned", nil)
 	card.entry = entry
 	card.bar, card.status = nil, nil
 	local fill = TEAM_FILL[entry.team] or TEAM_FILL.Blue
@@ -404,7 +405,9 @@ local function draw(card: Card, entry: Entry)
 		end
 	end
 	-- A player's card turns round on a click to his profile on its back (a bot's has none); drawn again, it stays turned.
-	if entry.userId > 0 and not card.still then
+	-- In the lobby too, from the first moment (owner, 2026-11-01): its back shows "-" for what only the match's server
+	-- knows of a player from another lobby. The "Turned" attribute goes along with the teleport (VersusView.start).
+	if entry.userId > 0 then
 		local turn = PlayerCard.flippable(
 			{ card.frame },
 			card.frame,
@@ -419,6 +422,11 @@ local function draw(card: Card, entry: Entry)
 			CARD_CORNER,
 			function(back)
 				card.turned = back
+				card.frame:SetAttribute("Turned", back)
+				local sent = sentAlong
+				if sent and card.frame:IsDescendantOf(sent) then
+					TeleportService:SetTeleportGui(sent)
+				end
 			end
 		)
 		if wasTurned then
@@ -525,6 +533,8 @@ local function build(): (ScreenGui, { [string]: Card })
 				Vector2.new(0.5, 0.5)
 			)
 			frame.Name = team .. index
+			-- How the loading screen knows a card that came with the teleport (Loading.show turns it on a click).
+			frame:SetAttribute("Card", true)
 			frame.BackgroundTransparency = 1
 			UiStyle.corner(frame, 14)
 			UiStyle.stroke(frame, TEAM_FILL[team][1], 4)
@@ -683,6 +693,13 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	-- The mouse stays free for the cards, also once the hero stands under the screen, and while it waits for them.
 	HeroCamera.setEnabled(false)
 	local gui, cards = build()
+	-- A card turned in the lobby, or clicked since it came (Loading.show), is turned here as it is drawn.
+	if arrived then
+		for key, card in cards do
+			local came = arrived:FindFirstChild(key, true)
+			card.turned = came ~= nil and came:GetAttribute("Turned") == true
+		end
+	end
 	local placedFinal = false
 	local started = os.clock()
 	if EARLY then
@@ -773,6 +790,7 @@ function VersusView.travel()
 	local function drop()
 		local gui = current
 		current = nil
+		sentAlong = nil
 		if glinting then
 			glinting:Disconnect()
 			glinting = nil
@@ -796,9 +814,6 @@ function VersusView.travel()
 			local gui, cards = build()
 			gui.Enabled = false
 			current = gui
-			for _, card in cards do
-				card.still = true
-			end
 			place(cards, travelling(payload))
 			Loading.preload({ gui }, PICTURES)
 			if current ~= gui then
@@ -819,6 +834,7 @@ function VersusView.travel()
 				return
 			end
 			TeleportService:SetTeleportGui(gui)
+			sentAlong = gui
 			Trace.mark("versus.travel.prepared")
 			queue:FireServer("Prepared")
 		elseif kind == "State" and typeof(payload) == "table" then

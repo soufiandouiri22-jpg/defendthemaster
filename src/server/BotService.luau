@@ -276,14 +276,67 @@ local function circle(b: Bot, target: Target, now: number)
 	walkTo(b, root.Position + side * 10, now)
 end
 
+-- What turns a bot to its aim and holds an ascending one up: constraints, as the server's own CFrame set on the bot
+-- reached the players in steps (owner, 2026-11-01: Rowan and Jestrel moved laggy, turned to every shot ten times a
+-- second), a constraint's motion as smoothly as any physics.
+local function constraint(root: BasePart, name: string, class: string): any
+	local found = root:FindFirstChild(name)
+	if found then
+		return found
+	end
+	local at = Instance.new("Attachment")
+	at.Name = name .. "At"
+	at.Parent = root
+	local align = Instance.new(class) :: any
+	align.Name = name
+	align.Mode = if class == "AlignPosition"
+		then Enum.PositionAlignmentMode.OneAttachment
+		else Enum.OrientationAlignmentMode.OneAttachment
+	align.Attachment0 = at
+	align.RigidityEnabled = true
+	align.Enabled = false
+	align.Parent = root
+	return align
+end
+
+local function holder(root: BasePart): AlignPosition
+	return constraint(root, "BotLift", "AlignPosition")
+end
+
+local function letGo(root: BasePart?)
+	local align = root and root:FindFirstChild("BotLift") :: AlignPosition?
+	if align then
+		align.Enabled = false
+	end
+end
+
+-- Turns the bot to `aim` and keeps it so (its humanoid no longer turning it the way it walks) till `unface`.
+local function face(b: Bot, aim: Vector3)
+	local root, humanoid = b.root :: BasePart, b.humanoid :: Humanoid
+	local turn = constraint(root, "BotTurn", "AlignOrientation") :: AlignOrientation
+	turn.CFrame = CFrame.lookAt(Vector3.zero, HeroKit.direction(root.Position, aim, root.CFrame.LookVector))
+	turn.Enabled = true
+	humanoid.AutoRotate = false
+end
+
+local function unface(b: Bot)
+	local root, humanoid = b.root, b.humanoid
+	local turn = root and root:FindFirstChild("BotTurn") :: AlignOrientation?
+	if turn and turn.Enabled then
+		turn.Enabled = false
+	end
+	if humanoid then
+		humanoid.AutoRotate = true
+	end
+end
+
 -- Uses `key` towards `aim`, facing it; for a leap or dash the server then carries the bot to where it lands.
 local function use(b: Bot, key: string, aim: Vector3): boolean
-	local root = b.root :: BasePart
 	if not CombatService.ready(b.actor, key) then
 		return false
 	end
-	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
-	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
+	local root = b.root :: BasePart
+	face(b, aim)
 	local ok, landing = CombatService.act(b.actor, key, aim)
 	local kit = Config.Heroes[b.hero].Kit[key]
 	if ok and b.aimFor then
@@ -391,6 +444,7 @@ local function follow(b: Bot)
 	local aiming, root, humanoid = b.aiming, b.root, b.humanoid
 	if not aiming or not root or not humanoid or not alive(b) then
 		b.aiming = nil
+		unface(b)
 		return
 	end
 	local target = targetOf(aiming.target)
@@ -401,15 +455,13 @@ local function follow(b: Bot)
 		else nil
 	if not aim or not CombatService.aim(b.actor, aim) then
 		b.aiming = nil
-		humanoid.AutoRotate = true
+		unface(b)
 		return
 	end
 	if b.move and not b.move.lift then
 		return
 	end
-	humanoid.AutoRotate = false
-	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
-	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
+	face(b, aim)
 end
 
 -- Whether `key` of the kit flies at its target: a throw, or a flurry whose lightning does.
@@ -768,18 +820,22 @@ local function carry(b: Bot, now: number)
 	end
 	local root = b.root
 	if not alive(b) or not root then
+		letGo(root)
 		b.move = nil
 		return
 	end
 	local t = now - m.started
 	if m.lift then
-		root.CFrame = CFrame.new(m.from + Vector3.new(0, HeroKit.lift(m.lift, t), 0)) * root.CFrame.Rotation
-		root.AssemblyLinearVelocity = Vector3.zero
+		local align = holder(root)
+		align.Position = m.from + Vector3.new(0, HeroKit.lift(m.lift, t), 0)
+		align.Enabled = true
 		if t >= m.lift.Land then
+			align.Enabled = false
 			b.move = nil
 		end
 		return
 	end
+	letGo(root)
 	if t < m.takeoff then
 		return
 	end

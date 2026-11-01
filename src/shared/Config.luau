@@ -1638,7 +1638,7 @@ Config.Heroes = {
 			Skin = Color3.fromRGB(242, 242, 242),
 		},
 		-- A wider square than the others' 620, as his head is painted larger: it shows as big as theirs.
-		Portrait = { Image = "rbxassetid://96048186817047", Face = { 124, 0, 900 } },
+		Portrait = { Image = "rbxassetid://71704831216780", Face = { 124, 0, 900 } },
 		-- The ability bar's icons per key (Art/Icons/Jestrel, each a GenerateImage drawing on green in
 		-- Art/Icons/keyed/Jestrel, keyed by Tools/key_icons.py --glow and made grey all over, as he is black and white).
 		Icons = {
@@ -2034,13 +2034,14 @@ Config.Season = {
 -- A player's account (Shared.Account): what he starts with, and the account XP each level asks, `First` for the first
 -- and `PerLevel` more for every one after it up to level `Plateau`, the same after it; there is no top level. The
 -- accounts of `AlwaysWelcome` (by UserId) have their hero cleared every time they come into the lobby, so they always
--- see the welcome screen (Lobby.Welcome): the owner's DraivoGames, to try it (owner, 2026-10-30).
+-- see the welcome screen (Lobby.Welcome); none now: the owner's DraivoGames (11859499496) sees it once, as a player
+-- does (owner, 2026-11-01).
 Config.Account = {
 	StartCoins = 500,
 	First = 300,
 	PerLevel = 50,
 	Plateau = 30,
-	AlwaysWelcome = { 11859499496 },
+	AlwaysWelcome = {},
 }
 
 -- Ranked (Shared.Ranks), as League of Legends (Docs/League_Reference.md): the tiers in order, the first `Divided` with

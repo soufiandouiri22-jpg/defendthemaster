@@ -13,6 +13,7 @@
 -- comes with a screen over it that takes the mouse (the cards while a match loads, Loading.unshield), else as it goes.
 
 local ContentProvider = game:GetService("ContentProvider")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local RunService = game:GetService("RunService")
@@ -515,6 +516,32 @@ function Loading.show()
 	Loading.pointer()
 	if gui == cards then
 		shown = gui
+		-- A click on a card till the match's own cards take its place (VersusView.start, which turns it then): these
+		-- came as a picture, without their buttons (owner, 2026-11-01: the first clicks did nothing).
+		local clicks = UserInputService.InputBegan:Connect(function(input)
+			if
+				input.UserInputType ~= Enum.UserInputType.MouseButton1
+				and input.UserInputType ~= Enum.UserInputType.Touch
+			then
+				return
+			end
+			local at = UserInputService:GetMouseLocation()
+			local inset = GuiService:GetGuiInset()
+			local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui") :: PlayerGui?
+			for _, item in if playerGui then playerGui:GetGuiObjectsAtPosition(at.X - inset.X, at.Y - inset.Y) else {} do
+				local card: Instance? = item
+				while card and card ~= gui and not card:GetAttribute("Card") do
+					card = card.Parent
+				end
+				if card and card ~= gui and card:IsDescendantOf(gui) then
+					card:SetAttribute("Turned", not card:GetAttribute("Turned"))
+					return
+				end
+			end
+		end)
+		gui.Destroying:Connect(function()
+			clicks:Disconnect()
+		end)
 		return
 	end
 	-- Everything on it comes in together once its pictures have loaded (at once when they came along with a
