@@ -2,6 +2,7 @@
 -- the server's attributes on the Player: "Level", "Xp" (into the current level), "Points" (unspent) and "Rank" .. key
 -- for every key of Config.Progress.Upgrades.
 
+local Boosts = require(script.Parent.Boosts)
 local Config = require(script.Parent.Config)
 local Items = require(script.Parent.Items)
 
@@ -44,11 +45,16 @@ function Leveling.power(player: Player, key: string): number
 	return (1 + SETTINGS.Damage * (Leveling.level(player) - 1)) * (1 + SETTINGS.RankDamage * (rank - 1))
 end
 
--- The cooldown of the hero's `key` ability, with his items' Haste.
+-- The cooldown of the hero's `key` ability, with his items' Haste and the Star Hourglass while his team carries it
+-- (Boosts).
 function Leveling.cooldown(player: Player, key: string, base: number): number
 	local rank = if table.find(SETTINGS.Upgrades, key) then math.max(1, Leveling.rank(player, key)) else 1
 	local haste = Items.stats(player).Haste
-	return base * (1 - SETTINGS.RankCooldown * (rank - 1)) * 100 / (100 + haste)
+	return base
+		* (1 - SETTINGS.RankCooldown * (rank - 1))
+		* 100
+		/ (100 + haste)
+		* (1 - Boosts.bonus(player, "Cooldown"))
 end
 
 -- Whether the player can raise `key` a rank now.

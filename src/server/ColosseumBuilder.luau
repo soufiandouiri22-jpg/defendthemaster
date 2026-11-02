@@ -402,12 +402,104 @@ local function buildCover(map: Folder)
 	end
 end
 
+-- A flat kit piece `width` studs wide on `at`, sunk into the sand so its top stands `top` studs above it.
+local function sunk(parent: Instance, name: string, at: CFrame, width: number, top: number): Model?
+	local scale = byWidth(name, width)
+	return kit(parent, name, at * CFrame.new(0, top - kitSize(name).Y * scale, 0), scale)
+end
+
+-- The spike tile's holes, as shares of its width and depth from its middle, and how high its top and its spikes'
+-- tips stand above the sand at rest (in the sand, just under it).
+local SPIKE_HOLES = 0.32
+local SPIKE_TOP, SPIKE_REST = 0.25, -0.05
+-- How wide a spike is.
+local SPIKE_WIDTH = 1.1
+
+-- The arena's traps and ways (Config.Spikes, FireGrates, NetStatues, RuneGates, JumpPads) in Map.Features, one folder
+-- per kind, which their services and views find by name: a spike tile's spikes (its "Spikes" model) wait in the sand
+-- under its holes; a gate carries its name ("Gate"); a statue faces the spot it aims at, and a pad carries its number
+-- in Config.JumpPads.Spots ("Index") and where it throws ("To"), its arrows pointing there.
+local function buildFeatures(map: Folder)
+	local features = folder(map, "Features")
+	if Config.Spikes.Enabled then
+		local tiles = folder(features, "Spikes")
+		local width, height = Config.Spikes.Width, Config.Spikes.Height
+		for _, spot in Config.Spikes.Spots do
+			local tile = Instance.new("Model")
+			tile.Name = "SpikeTile"
+			local frame = CFrame.new(spot.At) * CFrame.Angles(0, math.rad(spot.Turn), 0)
+			local piece = sunk(tile, "spike_tile", frame, width, SPIKE_TOP)
+			local spikes = Instance.new("Model")
+			spikes.Name = "Spikes"
+			local size = if piece then (piece.PrimaryPart :: BasePart).Size else Vector3.new(width, 0, width)
+			for _, x in { -1, 0, 1 } do
+				for _, z in { -1, 0, 1 } do
+					local foot = frame
+						* Vector3.new(x * size.X * SPIKE_HOLES, SPIKE_REST - height, z * size.Z * SPIKE_HOLES)
+					local spike = stretched(
+						spikes,
+						"spike",
+						CFrame.new(foot) * CFrame.Angles(0, rng:NextNumber(0, 6.3), 0),
+						Vector3.new(SPIKE_WIDTH, height, SPIKE_WIDTH)
+					)
+					if spike then
+						for _, d in spike:GetDescendants() do
+							if d:IsA("BasePart") then
+								d.CanCollide = false
+								d.CanQuery = false
+								d.CanTouch = false
+							end
+						end
+					end
+				end
+			end
+			spikes.Parent = tile
+			tile.Parent = tiles
+		end
+	end
+	if Config.FireGrates.Enabled then
+		local grates = folder(features, "FireGrates")
+		for _, at in Config.FireGrates.Spots do
+			local turn = CFrame.Angles(0, rng:NextNumber(0, 6.3), 0)
+			sunk(grates, "fire_grate", CFrame.new(at) * turn, Config.FireGrates.Width, 0.35)
+		end
+	end
+	if Config.NetStatues.Enabled then
+		local statues = folder(features, "NetStatues")
+		for _, spot in Config.NetStatues.Spots do
+			local front = CFrame.lookAt(spot.At, spot.Faces)
+			kit(statues, "net_statue", front, byHeight("net_statue", Config.NetStatues.Height))
+		end
+	end
+	if Config.RuneGates.Enabled then
+		local gates = folder(features, "RuneGates")
+		for name, spot in Config.RuneGates.Spots do
+			local gate = sunk(gates, "rune_gate", CFrame.new(spot.At), Config.RuneGates.Width, 0.12)
+			if gate then
+				gate:SetAttribute("Gate", name)
+			end
+		end
+	end
+	if Config.JumpPads.Enabled then
+		local pads = folder(features, "JumpPads")
+		for i, spot in Config.JumpPads.Spots do
+			-- The kit's jump_pad has its arrows along its -X: turned a quarter so they point where it throws.
+			local facing = CFrame.lookAt(spot.At, spot.To) * CFrame.Angles(0, math.rad(-90), 0)
+			local pad = sunk(pads, "jump_pad", facing, Config.JumpPads.Width, 1.2)
+			if pad then
+				pad:SetAttribute("Index", i)
+				pad:SetAttribute("To", spot.To)
+			end
+		end
+	end
+end
+
 -- Rubble strewn over the sand, a few studs clear of everything else placed on it.
 local function scatterRubble(map: Folder)
 	local taken: { { at: Vector3, radius: number } } = {}
-	for _, name in { "Centre", "Cover", "BlueBase", "RedBase" } do
-		for _, m in (map:FindFirstChild(name) :: Folder):GetChildren() do
-			if m:IsA("Model") then
+	for _, name in { "Centre", "Cover", "BlueBase", "RedBase", "Features" } do
+		for _, m in (map:FindFirstChild(name) :: Folder):GetDescendants() do
+			if m:IsA("Model") and m.Parent and m.Parent:IsA("Folder") then
 				local cf, size = m:GetBoundingBox()
 				table.insert(taken, { at = cf.Position * Vector3.new(1, 0, 1), radius = math.max(size.X, size.Z) / 2 })
 			end
@@ -694,6 +786,7 @@ function ColosseumBuilder.build(): Layout
 		layout.daisFront[team] = base.front
 		layout.shops[team] = base.shops
 	end
+	buildFeatures(map)
 	scatterRubble(map)
 	map.Parent = Workspace
 	print("[ColosseumBuilder] overlapping pieces:", checkOverlaps(map))
@@ -738,6 +831,8 @@ function ColosseumBuilder.buildTestGround(): Layout
 	local shop = CFrame.lookAt(spot, facing)
 	layout.shops.Blue = { shop }
 	kit(folder(map, "TestArmory"), "armory_stall_blue", shop * CFrame.new(0, 0, 6), byHeight("armory_stall_blue", 12))
+	-- Where they stand in the colosseum, to be tried out.
+	buildFeatures(map)
 
 	map.Parent = Workspace
 	setupLighting()

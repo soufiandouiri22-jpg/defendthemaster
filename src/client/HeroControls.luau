@@ -4,7 +4,8 @@
 -- (Net.HeroAction), which decides the hits; a refused attack is undone. The leap moves the hero itself, from takeoff
 -- to landing, to the spot the server works out the same way (HeroKit.leapLanding), and lands in a shockwave of shadow
 -- (ShadowEffects), or of fire for a hero whose `Effects` are "Fire" (FireEffects), as does every other hero's leap; an Ascend holds him up in the air till it ends (HeroKit.lift),
--- and its great orb bursts where it stops. Other heroes' motions and every thrown dagger and shot arrow come
+-- and its great orb bursts where it stops. A jump pad's throw (HeroControls.launch) carries him the same way, every
+-- attack his to use in the air. Other heroes' motions and every thrown dagger and shot arrow come
 -- from the server; while an attack plays, the client keeps telling the server where the crosshair points, as every
 -- hit but a leap's landing and a dash's path goes there (HeroKit.follows). The crosshair (design 09) turns red on an
 -- enemy the next left click would hit (owner, 2026-10-31: out of reach it stays as it is), while an ability is aimed
@@ -49,6 +50,8 @@ local player = Players.LocalPlayer
 local actionEvent: RemoteEvent
 local groundRay = RaycastParams.new()
 groundRay.FilterType = Enum.RaycastFilterType.Exclude
+-- How far down a hero in the air looks for the ground under him.
+local AIR_DEPTH = 200
 
 type Leap = {
 	started: number,
@@ -60,6 +63,19 @@ type Leap = {
 	sharp: boolean,
 	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift).
 	lift: any?,
+	-- Whether he cast that in the air (a jump pad's flight): known once it lets him down.
+	aloft: boolean?,
+}
+
+-- A jump pad's throw (HeroControls.launch): from where to where his root goes, how high over the higher of the two,
+-- for how long, and what to run when he comes down or an attack takes over.
+type Flight = {
+	started: number,
+	from: Vector3,
+	to: Vector3,
+	height: number,
+	length: number,
+	ended: () -> (),
 }
 
 local busyUntil = 0
@@ -71,6 +87,7 @@ local holdingM1 = false
 local aiming: string? = nil
 local indicator: Indicators.Indicator? = nil
 local leap: Leap? = nil
+local flight: Flight? = nil
 local following, aimSentAt = false, 0
 
 type Flying = {
@@ -454,7 +471,8 @@ local function leanLater(character: Model, root: BasePart, spot: Vector3, kit: a
 	local frame = joint :: Instance
 	local field = if frame:IsA("Motor6D") then "C0" else "CFrame"
 	local rest: CFrame = (frame :: any)[field]
-	local angle = math.clamp(math.atan2(kit.Rise, HeroKit.flat(spot - root.Position).Magnitude), LEAN_LEAST, LEAN_MOST)
+	local above = kit.Rise + math.max(0, root.Position.Y - spot.Y)
+	local angle = math.clamp(math.atan2(above, HeroKit.flat(spot - root.Position).Magnitude), LEAN_LEAST, LEAN_MOST)
 	local started = os.clock()
 	local connection
 	connection = RunService.RenderStepped:Connect(function()
@@ -586,7 +604,8 @@ local function rainLater(character: Model, spot: Vector3, kit: any)
 	local core = if look.Laser then look.Laser.Color else Color3.new(1, 1, 1)
 	local glow = look.Glow or core
 	local lean = HeroKit.flat(root.CFrame.LookVector) * BEAM_LEAN
-	local fallFrom = kit.Rise + BEAM_ABOVE
+	-- Over where he hangs, also when he cast it in the air (a jump pad's flight) high over the spot.
+	local fallFrom = kit.Rise + BEAM_ABOVE + math.max(0, root.Position.Y - height - ground.Y)
 	leanLater(character, root, spot, kit)
 
 	local disc = Instance.new("Part")
@@ -874,9 +893,20 @@ local function updateIndicator()
 	local height = heightOf(root, humanoid)
 	groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
 	local below = Workspace:Raycast(root.Position, Vector3.new(0, -(height + 2), 0), groundRay)
-	local feet = if below then below.Position else root.Position - Vector3.new(0, height, 0)
+	-- In the air (a jump pad's flight) every indicator lies on the ground under him (owner, 2026-11-02), the arrow as
+	-- far over it as his shot towards the crosshair flies before it ends or meets the ground.
+	local floor = below or Workspace:Raycast(root.Position, Vector3.new(0, -AIR_DEPTH, 0), groundRay)
+	local feet = if floor then floor.Position else root.Position - Vector3.new(0, height, 0)
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
-	if indicator.kind == "Arrow" then
+	if indicator.kind == "Arrow" and not below then
+		local muzzle = HeroKit.muzzle(root.Position)
+		local aimed = HeroKit.aimDirection(muzzle, aim, direction)
+		local from = HeroKit.shotOrigin(muzzle, aimed)
+		local ground = Workspace:Raycast(from, aimed * kit.Range, groundRay)
+		local ends = if ground then ground.Position else from + aimed * kit.Range
+		local length = HeroKit.flat(ends - root.Position).Magnitude
+		Indicators.placeArrow(indicator, feet, direction, math.max(length, 1), kit.Width)
+	elseif indicator.kind == "Arrow" then
 		Indicators.placeArrow(indicator, feet + direction * 1.2, direction, kit.Range, kit.Width)
 	elseif indicator.kind == "Zone" then
 		local to = HeroKit.leapLanding(root.Position, aim, kit.Range, height, HeroKit.leapIgnore())
@@ -890,18 +920,84 @@ local function updateIndicator()
 	end
 end
 
+local function endFlight()
+	local f = flight
+	flight = nil
+	if f then
+		f.ended()
+	end
+end
+
+-- The flight's root at share `s` of it, and how fast it moves there: straight on over the ground, and up to its
+-- peak halfway and down from it, slowing into the peak and speeding out of it as a thrown body does.
+local function flightAt(f: Flight, s: number): (Vector3, Vector3)
+	local peak = math.max(f.from.Y, f.to.Y) + f.height
+	local flat = f.from:Lerp(f.to, s)
+	local y, rate
+	if s < 0.5 then
+		local u = 1 - 2 * s
+		y = f.from.Y + (peak - f.from.Y) * (1 - u * u)
+		rate = (peak - f.from.Y) * 4 * u
+	else
+		local u = 2 * s - 1
+		y = f.to.Y + (peak - f.to.Y) * (1 - u * u)
+		rate = -(peak - f.to.Y) * 4 * u
+	end
+	local across = (f.to - f.from) * Vector3.new(1, 0, 1)
+	return Vector3.new(flat.X, y, flat.Z), (across + Vector3.new(0, rate, 0)) / f.length
+end
+
+local function updateFlight(root: BasePart)
+	local f = flight :: Flight
+	local s = math.min(1, (os.clock() - f.started) / f.length)
+	local position, velocity = flightAt(f, s)
+	-- Only where he is: his attacks turn him to their aim, and he turns with his keys as he would in any jump.
+	root.CFrame = CFrame.new(position) * root.CFrame.Rotation
+	root.AssemblyLinearVelocity = if s >= 1 then Vector3.zero else velocity
+	if s >= 1 then
+		endFlight()
+	end
+end
+
 local function updateLeap()
 	local l = leap
-	local character, root = hero()
-	if not l then
-		return
-	end
+	local character, root, humanoid = hero()
 	if not character or not root then
 		leap = nil
+		endFlight()
+		return
+	end
+	-- An attack that moves him takes over from a jump pad's flight once it moves him, from where he is then, and he
+	-- falls from where it leaves him; until then the flight carries him through its windup.
+	if l and flight and (l.lift or os.clock() - l.started >= l.takeoff) then
+		local shift = root.Position - l.from
+		l.from = root.Position
+		if l.sharp then
+			l.to += shift
+		end
+		endFlight()
+	end
+	if flight then
+		updateFlight(root)
+		return
+	end
+	if not l then
 		return
 	end
 	local t = os.clock() - l.started
 	if l.lift then
+		-- Cast in the air, it would ease him down to a stop where he cast it, in the air, and only then would he fall:
+		-- he falls straight from his hang instead, all the way down.
+		if t >= l.lift.Fall and l.aloft == nil then
+			groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
+			local height = heightOf(root, humanoid :: Humanoid)
+			l.aloft = not Workspace:Raycast(l.from, Vector3.new(0, -(height + 2), 0), groundRay)
+		end
+		if l.aloft then
+			root.AssemblyLinearVelocity = Vector3.zero
+			leap = nil
+			return
+		end
 		root.CFrame = CFrame.new(l.from + Vector3.new(0, HeroKit.lift(l.lift, t), 0)) * root.CFrame.Rotation
 		root.AssemblyLinearVelocity = Vector3.zero
 		if t >= l.lift.Land then
@@ -1313,6 +1409,28 @@ local function abilityStrikes(key: string): boolean
 	return false
 end
 
+-- Throws the player's hero from where he stands so his root comes down on `to`, in an arc `height` studs over the
+-- higher of its ends, in `length` seconds, turned the way he flies (a jump pad, JumpPadView). He may attack all the
+-- way, turning to his aim; an attack that moves him (a dash, a leap, an Ascend, a Rain) takes over from it. `ended`
+-- runs once he is down or taken over. Whether he went: not while an attack moves him, or he is already flying.
+function HeroControls.launch(to: Vector3, height: number, length: number, ended: () -> ()): boolean
+	local character, root, humanoid = hero()
+	if not character or not root or not humanoid or flight then
+		return false
+	end
+	local l = leap
+	if l and (l.lift or os.clock() - l.started >= l.takeoff) then
+		return false
+	end
+	local heading = (to - root.Position) * Vector3.new(1, 0, 1)
+	if heading.Magnitude > 0.01 then
+		root.CFrame = CFrame.lookAt(root.Position, root.Position + heading)
+	end
+	flight = { started = os.clock(), from = root.Position, to = to, height = height, length = length, ended = ended }
+	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	return true
+end
+
 function HeroControls.start()
 	-- Loaded now: a beam is gone before a picture first asked for by its sparkles arrives, so the first beam of a game
 	-- would shed none.
@@ -1356,6 +1474,7 @@ function HeroControls.start()
 
 	player.CharacterAdded:Connect(function()
 		stopAiming()
+		endFlight()
 		busyUntil, combo, comboUntil, leap = 0, 0, 0, nil
 		table.clear(cooldowns)
 		for _, key in { "M1", "M2", "E", "R", "Dash" } do

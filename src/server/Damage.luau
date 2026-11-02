@@ -5,13 +5,14 @@
 -- and Sunderer through Armor, Crown Bulwark near the hero's own Master, Ironroot once he is low, Spellward's shield
 -- against magic, and Bloodthorn's lifesteal while he is low. Wound and Thorns wound heroes, who then heal less from
 -- lifesteal, potions (ShopService) and pads (PadService); Thornwall sends part of an M1 back (CombatService). And the
--- Sun Crown's extra damage for its carrier and his team (CrownService).
+-- boosts' (BoostService): the Sun Crown's extra damage and the Moon Shield's lesser damage taken for its carrier and
+-- his team.
 -- Attackers and victims are players or bots (Actors).
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 
+local Boosts = require(ReplicatedStorage.Shared.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Items = require(ReplicatedStorage.Shared.Items)
@@ -106,13 +107,8 @@ function Damage.outgoing(attacker: Instance, amount: number, magic: boolean, tar
 		end
 		hits[target] = now
 	end
-	if
-		character
-		and Workspace:GetAttribute("Crown") == "Carried"
-		and Workspace:GetAttribute("CrownTeam") == character:GetAttribute("Team")
-	then
-		local carries = character:GetAttribute("Crown") == true
-		amount *= 1 + (if carries then Config.Crown.Carrier else Config.Crown.Damage)
+	if character then
+		amount *= 1 + Boosts.bonus(attacker, "Damage")
 	end
 	return amount
 end
@@ -135,6 +131,7 @@ function Damage.mitigated(victim: Model, amount: number, magic: boolean, attacke
 		defence *= 1 - (Items.effect(attacker, if magic then "VoidScepter" else "ArmorPierce") or 0)
 	end
 	amount *= 100 / (100 + defence)
+	amount *= 1 - Boosts.bonus(owner, "Shield")
 
 	local ward, shield = Items.effect(owner, "Spellward")
 	if ward and magic then

@@ -10,18 +10,19 @@
 -- * The feed over the minimap: the last kills as small rows of both portraits, edged in the killer's team colour.
 -- A hero felled by a Master shows that Master's portrait, his team's (Config.Master.Portraits), as his killer's, and
 -- one felled by a minion its team's minion portrait (Config.Minions.Portraits).
--- When a hero takes the Sun Crown (CrownService), the middle banner shows his portrait with the crown on it over
--- Config.Crown.Texts: gold for the player's team, with its sting, and the enemy's colour for theirs, with a dark bell.
--- When it fades, the banner shows the crown alone, fading out with a falling shimmer.
+-- When a hero takes a boost (BoostService), the middle banner shows his portrait with the boost's picture on it in a
+-- halo of its colour over Config.Boosts.Texts, and under that what it does for whoever reads it (Boosts.line): gold
+-- for the player's team, with its sting, and the enemy's colour for theirs, with a dark bell. When it fades, the
+-- banner shows the picture alone, fading out with a falling shimmer.
 
 local CollectionService = game:GetService("CollectionService")
-local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
+local Boosts = require(ReplicatedStorage.Shared.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroCamera = require(script.Parent.HeroCamera)
 local UiSound = require(script.Parent.UiSound)
@@ -45,9 +46,13 @@ local WIPE_AFTER = 1.3
 local TEXT_HEIGHT = { 64, 86, 108, 134 }
 local OTHERS_SCALE = 0.62
 local PORTRAIT = 112
--- The Sun Crown on its banner (Assets.SunCrown, 484 by 275): worn on the taker's portrait, or alone as it fades.
-local CROWN_WORN = UDim2.fromOffset(PORTRAIT * 0.95, PORTRAIT * 0.95 * 275 / 484)
-local CROWN_ALONE = UDim2.fromOffset(PORTRAIT * 1.5, PORTRAIT * 1.5 * 275 / 484)
+-- A boost's picture on its banner, at most this many portraits wide and high: worn on the taker's portrait (as the Sun
+-- Crown sits on a head, rising from his brow so a tall one does not hide his face), or alone as it fades. Worn, a tall
+-- one grows to cover WORN_AREA square portraits, up to WORN_HIGH portraits high, so it is not drawn tiny, and sits
+-- WORN_LOW portraits lower on the head. Its line under the lettering, this high.
+local WORN_BOX, ALONE_BOX = Vector2.new(0.95, 0.55), Vector2.new(1.5, 0.9)
+local WORN_AREA, WORN_HIGH, WORN_LOW = 0.4, 0.85, 0.12
+local LINE_HEIGHT = 40
 -- The feed: its rows, how many show at once, how long each stays, and where its foot sits (over the minimap).
 local ROW_WIDTH, ROW_HEIGHT, ROWS, ROW_LIFE = 210, 52, 5, 8
 local FEED_RIGHT, FEED_BOTTOM = 30, 96 + 270 + 22
@@ -72,7 +77,8 @@ local STING_VOLUME = 1.5
 
 type Kill = {
 	kind: string,
-	crown: boolean?,
+	boost: string?,
+	line: string?,
 	fades: boolean?,
 	wipe: boolean?,
 	killer: Player?,
@@ -234,7 +240,8 @@ function KillFeed.start()
 			Vector2.new(0.5, 0)
 		)
 		row.BackgroundTransparency = 1
-		-- Behind the crown's taker, a halo of short gold rays.
+		-- Behind a boost's taker, a halo of short rays in its colour.
+		local haloRays: { Frame } = {}
 		local halo =
 			UiStyle.frame(row, UDim2.fromOffset(10, 10), UDim2.new(0.5, 0, 0, PORTRAIT / 2), Vector2.new(0.5, 0.5))
 		halo.BackgroundTransparency = 1
@@ -248,8 +255,8 @@ function KillFeed.start()
 				Vector2.new(0.5, 0.5)
 			)
 			ray.Rotation = i * 22.5
-			ray.BackgroundColor3 = Color3.fromRGB(255, 214, 110)
 			ray.ZIndex = 0
+			table.insert(haloRays, ray)
 			UiStyle.corner(ray, UDim.new(0.5, 0))
 			local fade = Instance.new("UIGradient")
 			fade.Rotation = 90
@@ -267,18 +274,27 @@ function KillFeed.start()
 		swords.BackgroundTransparency = 1
 		cross(swords, 86, 14, C.Gold, C.Edge)
 		local struck = cross(victimRing, PORTRAIT * 0.9, 12, Color3.fromRGB(214, 40, 40), Color3.fromRGB(70, 10, 10))
-		-- The crown worn on the portrait: its rim over the ring's top, as on a head.
-		local crown = Instance.new("ImageLabel")
-		crown.BackgroundTransparency = 1
-		crown.Image = Assets.SunCrown
-		crown.AnchorPoint = Vector2.new(0.5, 1)
-		-- Loaded now, so the crown shows with the portrait the first time it is taken.
-		task.spawn(ContentProvider.PreloadAsync, ContentProvider, { crown })
-		local crownFade: Tween? = nil
-		crown.Position = UDim2.new(0.5, 0, 0, PORTRAIT * 0.3)
-		crown.ZIndex = 4
-		crown.Visible = false
-		crown.Parent = row
+		-- The boost worn on the portrait: its foot over the ring's top, as a crown on a head.
+		local worn = Instance.new("ImageLabel")
+		worn.BackgroundTransparency = 1
+		worn.AnchorPoint = Vector2.new(0.5, 1)
+		local wornFade: Tween? = nil
+		worn.Position = UDim2.new(0.5, 0, 0, PORTRAIT * 0.3)
+		worn.ZIndex = 4
+		worn.Visible = false
+		worn.Parent = row
+		-- Each boost's picture stays drawn, tiny and all but clear, so it shows with the portrait: a picture off the
+		-- screen for minutes can be let go of and came in a moment after it (owner, 2026-11-02).
+		for _, boost in Config.Boosts.List do
+			if boost.Image then
+				local picture = Instance.new("ImageLabel")
+				picture.BackgroundTransparency = 1
+				picture.ImageTransparency = 0.99
+				picture.Size = UDim2.fromOffset(2, 2)
+				picture.Image = boost.Image
+				picture.Parent = gui
+			end
+		end
 
 		local textFrame = UiStyle.frame(
 			group,
@@ -290,12 +306,21 @@ function KillFeed.start()
 		local text, fill = lettering(textFrame, 9)
 		local textScale = Instance.new("UIScale")
 		textScale.Parent = textFrame
+		local line = UiStyle.text(group, "", LINE_HEIGHT, Color3.new(1, 1, 1), C.Edge)
+		line.AnchorPoint = Vector2.new(0.5, 0)
+		line.Size = UDim2.fromOffset(width, LINE_HEIGHT)
+		line.TextScaled = true
+		line.Visible = false
+		local lineEdge = line:FindFirstChildOfClass("UIStroke") :: UIStroke
+		lineEdge.Thickness = 4
 
 		local serial = 0
 
 		local function setAlpha(transparency: number)
 			text.TextTransparency = transparency;
 			(text:FindFirstChildOfClass("UIStroke") :: UIStroke).Transparency = transparency
+			line.TextTransparency = transparency
+			lineEdge.Transparency = transparency
 		end
 
 		local function burstCoins(at: UDim2, count: number)
@@ -327,9 +352,10 @@ function KillFeed.start()
 			if claims then
 				player.PlayerGui:SetAttribute("KillBanner", true)
 			end
-			-- The crown's banner: the taker's portrait alone in the middle, the crown on it, `kind` its text. As the
-			-- crown fades it stands alone, bigger, and fades with the banner.
-			local crowned = kill.crown == true
+			-- A boost's banner: the taker's portrait alone in the middle, the boost on it, `kind` its text and its
+			-- line under it. As the boost fades it stands alone, bigger, and fades with the banner.
+			local boost = if kill.boost then Config.Boosts.List[kill.boost] else nil
+			local crowned = boost ~= nil
 			local fading = crowned and kill.fades == true
 			local tier = if crowned then 2 else SETTINGS.Tiers[kind] or 1
 			showHero(killerRing, killerImage, kill.killerHero, kill.killerTeam, false)
@@ -339,14 +365,35 @@ function KillFeed.start()
 			killerRing.Visible = kill.killerHero ~= nil
 			victimRing.Visible = not crowned
 			swords.Visible = kill.killerHero ~= nil and not crowned
-			crown.Visible = crowned
-			crown.Size = if fading then CROWN_ALONE else CROWN_WORN
-			crown.Position = UDim2.new(0.5, 0, 0, if fading then PORTRAIT * 0.85 else PORTRAIT * 0.3)
-			if crownFade then
-				crownFade:Cancel()
+			worn.Visible = boost ~= nil and boost.Image ~= nil
+			if boost and boost.Image then
+				local drawn = boost.ImageSize or Vector2.new(1, 1)
+				local box = PORTRAIT * (if fading then ALONE_BOX else WORN_BOX)
+				local fit = math.min(box.X / drawn.X, box.Y / drawn.Y)
+				if not fading then
+					local even = PORTRAIT * math.sqrt(WORN_AREA / (drawn.X * drawn.Y))
+					fit = math.max(fit, math.min(even, PORTRAIT * WORN_HIGH / drawn.Y)) * (boost.ImageScale or 1)
+				else
+					fit *= boost.FadeScale or 1
+				end
+				worn.Image = boost.Image
+				worn.Size = UDim2.fromOffset(drawn.X * fit, drawn.Y * fit)
 			end
-			crown.ImageTransparency = 0
-			crownFade = if fading then tween(crown, HOLD, { ImageTransparency = 0.75 }, Enum.EasingStyle.Sine) else nil
+			local tall = boost ~= nil and boost.ImageSize ~= nil and boost.ImageSize.Y > boost.ImageSize.X * 1.1
+			worn.Position = UDim2.new(
+				0.5,
+				0,
+				0,
+				if fading then PORTRAIT * 0.85 else PORTRAIT * (0.3 + if tall then WORN_LOW else 0)
+			)
+			if wornFade then
+				wornFade:Cancel()
+			end
+			worn.ImageTransparency = 0
+			wornFade = if fading then tween(worn, HOLD, { ImageTransparency = 0.75 }, Enum.EasingStyle.Sine) else nil
+			for _, ray in haloRays do
+				ray.BackgroundColor3 = if boost then boost.Color:Lerp(Color3.new(1, 1, 1), 0.3) else C.Gold
+			end
 			halo.Visible = crowned and not fading
 			halo.Rotation = 0
 			tween(halo, HOLD + 0.4, { Rotation = 30 }, Enum.EasingStyle.Linear)
@@ -364,7 +411,11 @@ function KillFeed.start()
 				local colour = teamColour(kill.killerTeam)
 				fill.Color = ColorSequence.new(colour:Lerp(Color3.new(1, 1, 1), 0.55), colour)
 			end
-			textFrame.Size = UDim2.fromOffset(width, TEXT_HEIGHT[if own then tier else 1])
+			local textHeight = TEXT_HEIGHT[if own then tier else 1]
+			textFrame.Size = UDim2.fromOffset(width, textHeight)
+			line.Text = kill.line or ""
+			line.Visible = kill.line ~= nil
+			line.Position = UDim2.new(0.5, 0, 0, PORTRAIT + 12 + textHeight + 4)
 			rays.Visible = own and tier >= 3
 			rays.Rotation = 0
 			tween(rays, HOLD + 0.4, { Rotation = 40 }, Enum.EasingStyle.Linear)
@@ -379,13 +430,15 @@ function KillFeed.start()
 			tween(group, 0.34, { Rotation = 0 }, Enum.EasingStyle.Back)
 			tween(text, 0.16, { TextTransparency = 0 })
 			tween(text:FindFirstChildOfClass("UIStroke") :: UIStroke, 0.16, { Transparency = 0 })
+			tween(line, 0.16, { TextTransparency = 0 })
+			tween(lineEdge, 0.16, { Transparency = 0 })
 
-			-- The player's own kills and death go before every other sound (UiSound.announce); the crown's calls wait
+			-- The player's own kills and death go before every other sound (UiSound.announce); a boost's calls wait
 			-- their turn and are left out while one plays.
 			if crowned then
 				if not UiSound.announcing() then
 					UiSound.play(
-						if own then STINGS[tier] elseif fading then "CrownFades" else "CrownEnemy",
+						if own then STINGS[tier] elseif fading then "BoostFades" else "BoostEnemy",
 						if own then STING_VOLUME else nil
 					)
 				end
@@ -436,6 +489,8 @@ function KillFeed.start()
 				tween(groupScale, 0.4, { Scale = size * 0.85 })
 				tween(text, 0.4, { TextTransparency = 1 })
 				tween(text:FindFirstChildOfClass("UIStroke") :: UIStroke, 0.4, { Transparency = 1 })
+				tween(line, 0.4, { TextTransparency = 1 })
+				tween(lineEdge, 0.4, { Transparency = 1 })
 				tween(group, 0.4, { Position = home - UDim2.fromOffset(0, 30) })
 				task.delay(0.4, function()
 					if mine == serial then
@@ -630,31 +685,40 @@ function KillFeed.start()
 
 	-- The player's team, kept while he waits to respawn without a character.
 	local myTeam: string? = nil
-	local crownWas = Workspace:GetAttribute("Crown")
-	Workspace:GetAttributeChangedSignal("Crown"):Connect(function()
-		local state = Workspace:GetAttribute("Crown")
-		local was = crownWas
-		crownWas = state
+	local texts = Config.Boosts.Texts
+	local stateWas = Workspace:GetAttribute("Boost")
+	-- The boost that was in play: as one fades, "BoostKind" already names the next.
+	local kindWas = Workspace:GetAttribute("BoostKind")
+	Workspace:GetAttributeChangedSignal("Boost"):Connect(function()
+		local state = Workspace:GetAttribute("Boost")
+		local was, faded = stateWas, kindWas
+		stateWas = state
+		kindWas = Workspace:GetAttribute("BoostKind")
 		if state == "Waiting" and (was == "Carried" or was == "Dropped") then
-			mine({
-				kind = Config.Crown.Texts.Fades,
-				crown = true,
-				fades = true,
-				killerTeam = "Blue",
-				victimTeam = "Blue",
-				coins = 0,
-				at = Vector3.zero,
-			}, Config.Crown.Texts.Fades, false, false)
+			local gone = if typeof(faded) == "string" then Config.Boosts.List[faded] else nil
+			if gone then
+				local text = string.format(texts.Fades, string.upper(gone.Name))
+				mine({
+					kind = text,
+					boost = faded,
+					fades = true,
+					killerTeam = "Blue",
+					victimTeam = "Blue",
+					coins = 0,
+					at = Vector3.zero,
+				}, text, false, false)
+			end
 			return
 		end
-		if state ~= "Carried" then
+		local boost, kind = Boosts.current()
+		if state ~= "Carried" or not boost then
 			return
 		end
-		-- The taker's own attribute can arrive a moment after the crown's state.
+		-- The taker's own attribute can arrive a moment after the boost's state.
 		local carrier: Model? = nil
 		for _ = 1, 10 do
 			for _, model in CollectionService:GetTagged("Combatant") do
-				if model:IsA("Model") and model:GetAttribute("Crown") == true then
+				if model:IsA("Model") and model:GetAttribute("Boost") == true then
 					carrier = model
 				end
 			end
@@ -663,15 +727,16 @@ function KillFeed.start()
 			end
 			task.wait(0.1)
 		end
-		local team = Workspace:GetAttribute("CrownTeam") or "Blue"
+		local team = Workspace:GetAttribute("BoostTeam") or "Blue"
 		local taker = if carrier then Players:GetPlayerFromCharacter(carrier) else nil
 		myTeam = player.Character and player.Character:GetAttribute("Team") or myTeam
 		local ally = myTeam == team
-		local texts = Config.Crown.Texts
-		local text = if taker == player then texts.Own elseif ally then texts.Ally else texts.Enemy
+		local who = if taker == player then "Own" elseif ally then "Ally" else "Enemy"
+		local text = string.format((texts :: any)[who], string.upper(boost.Name))
 		mine({
 			kind = text,
-			crown = true,
+			boost = kind,
+			line = Boosts.line(boost, who),
 			killer = taker,
 			killerHero = carrier and carrier:GetAttribute("Hero"),
 			killerTeam = team,

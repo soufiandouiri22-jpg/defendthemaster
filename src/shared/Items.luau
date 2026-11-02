@@ -3,6 +3,9 @@
 -- (potions stack), for n from 1 to Config.Shop.Slots; "PotionUntil" is when the potions he drank stop healing (server
 -- time).
 
+local Workspace = game:GetService("Workspace")
+
+local Boosts = require(script.Parent.Boosts)
 local Config = require(script.Parent.Config)
 
 local Items = {}
@@ -142,8 +145,15 @@ function Items.effect(actor: Instance, kind: string): (number?, any)
 	return best and best.Value, best
 end
 
+-- With the Wind Gem's speed while his team carries it (Boosts), and slower while a net statue's net holds him (his
+-- "Netted" attribute, until when in server time, HazardService).
 function Items.walkSpeed(actor: Instance): number
-	return Config.Combat.WalkSpeed + Items.stats(actor).MoveSpeed
+	local speed = (Config.Combat.WalkSpeed + Items.stats(actor).MoveSpeed) * (1 + Boosts.bonus(actor, "Speed"))
+	local netted = actor:GetAttribute("Netted")
+	if netted and netted > Workspace:GetServerTimeNow() then
+		speed *= Config.NetStatues.Slow
+	end
+	return speed
 end
 
 -- How much faster than the kit's `Speed` the M1 combo plays.

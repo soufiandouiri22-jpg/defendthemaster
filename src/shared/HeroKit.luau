@@ -163,7 +163,6 @@ end
 function HeroKit.shotOrigin(muzzle: Vector3, direction: Vector3): Vector3
 	return muzzle + direction * 1.5
 end
-
 -- Where along its way from `from` to `to` (0-1) a projectile `width` studs wide touches `body`, if it does: within its
 -- width of the body's edge, at a height the body reaches.
 function HeroKit.shotTouch(from: Vector3, to: Vector3, width: number, body: Body): number?
@@ -399,6 +398,8 @@ end
 local LEAP_LIFT = 7
 local LEAP_UP, LEAP_DOWN = 9, 14
 local LEAP_FLAT = 0.7
+-- How far down a hero in the air (a jump pad's flight) looks for the ground he aims from.
+local AIR_DEPTH = 200
 -- He lands only where he can stand: the ground this far round the spot on each side lies within FOOTING_STEP of it,
 -- so not on a shrub, a statue's head or a brazier.
 local FOOTING, FOOTING_STEP = 1.5, 2.5
@@ -412,12 +413,18 @@ local FOOTING_SIDES = {
 -- Where a hero whose root part is at `from`, `height` studs above the ground, lands when leaping towards `aim` at most
 -- `range` studs: the furthest spot on that line he can clear at the leap's height, with ground below it no more than
 -- LEAP_UP above or LEAP_DOWN below where he stands; without such a spot he still goes that way along the ground until
--- something stops him (HeroKit.dashEnd). `exclude` are the instances the rays ignore (characters, minions).
+-- something stops him (HeroKit.dashEnd). In the air he aims as from where he would stand on the ground below him, so
+-- a leap brings him down and a strike or a rain falls on the ground. `exclude` are the instances the rays ignore
+-- (characters, minions).
 function HeroKit.leapLanding(from: Vector3, aim: Vector3, range: number, height: number, exclude: { Instance }): Vector3
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = exclude
 	params.RespectCanCollide = true
+	local floor = Workspace:Raycast(from, Vector3.new(0, -AIR_DEPTH, 0), params)
+	if floor and floor.Position.Y < from.Y - height - 1 then
+		from = Vector3.new(from.X, floor.Position.Y + height, from.Z)
+	end
 	local direction = HeroKit.direction(from, aim, Vector3.zAxis)
 	local distance = math.min(range, HeroKit.flat(aim - from).Magnitude)
 	local ground = from.Y - height

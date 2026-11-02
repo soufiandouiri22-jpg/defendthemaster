@@ -1,6 +1,6 @@
 -- The end of a match (design 16, Config.Rewards). When a Master falls (MatchService.onFinished) every hero gets a match
 -- score from his kills, assists and deaths, his share of his team's damage to heroes ("HeroDamage", CombatService)
--- and to the enemy Master ("MasterDamage") and the Sun Crowns he took ("Crowns", CrownService), and from it a grade
+-- and to the enemy Master ("MasterDamage") and the boosts he took ("Boosts", BoostService), and from it a grade
 -- (S+ to D-); the winners' best is the MVP. Every player then earns his coins, account XP and pass XP (twice the XP
 -- while his pass boost runs), and in Ranked his LP (Shared.Ranks, against the enemies' rating) with the ladder told;
 -- it is saved at once and sent to him (Net.MatchEnd "Result"), with every hero's line for the scoreboard. A player who leaves a match from the queue before its
@@ -104,7 +104,7 @@ local function lines(winner: string): ({ Line }, Line?)
 				+ count(actor, "Deaths") * weights.Death
 				+ share * weights.Damage
 				+ masterShare * weights.Master
-				+ count(actor, "Crowns") * weights.Crown
+				+ count(actor, "Boosts") * weights.Boost
 			local line: Line = {
 				actor = actor,
 				team = team,

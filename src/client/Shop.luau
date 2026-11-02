@@ -1005,6 +1005,9 @@ function Shop.start()
 		if not isOpen then
 			return
 		end
+		-- Kept in the middle all the while it is open: as it opens the HUD it is measured against may not have been
+		-- laid out anew yet (a screen just enabled, a window just resized), and measured then it stays too low.
+		refit()
 		local fightAt = Workspace:GetAttribute("FightAt")
 		local left = if fightAt then fightAt - Workspace:GetServerTimeNow() else 0
 		countdown.Visible = left > 0

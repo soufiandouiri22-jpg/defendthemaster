@@ -652,26 +652,123 @@ Config.Match = {
 	Versus = 4.5,
 }
 
--- The Sun Crown, the objective on the plateau in the middle: it appears `FirstAt` seconds into the fight and floats
--- `Float` studs over the plateau's top. The first hero to touch it (within `Reach` studs) takes it at once. While a
--- hero carries it he deals `Carrier` more and the rest of his team `Damage` more, wherever they are. It fades `Lasts`
--- seconds after it was first taken, and the next one comes `Gap` seconds later. A carrier who dies drops it where he
--- fell, for anyone to take. Whenever it is taken, a banner (KillFeed) shows who took it, with `Texts` as seen by its
--- taker, his team and his enemies, and another when it fades; while a team has it, its players see the time it has
--- left (Hud).
-Config.Crown = {
-	FirstAt = 0,
+-- The boosts, the objective on the plateau in the middle (BoostService, owner 2026-11-02), one at a time: the first
+-- appears `FirstAt` seconds into the fight and is always `First`; after it they come in rounds of all of `List`
+-- shuffled, never the same twice in a row. A boost floats `Float` studs over the plateau's top until the first hero
+-- to touch it (within `Reach` studs) takes it, however long that takes. While a hero carries it, he gets its
+-- `Carrier` and the rest of his team its `Team`, wherever they are: `Effect` "Damage" deals that share more, "Shield"
+-- takes that share less, "Speed" walks that share faster, "Cooldown" shortens cooldowns by that share, and "Heal"
+-- heals that share of his health every second. Every boost fades `Lasts` seconds after it was first taken, and the
+-- next comes `Gap` seconds later. A carrier who dies drops it where he fell, for anyone to take; its time runs on.
+-- Whenever one is taken, a banner (KillFeed) shows who took it, with `Texts` as seen by its taker, his team and his
+-- enemies (%s its name) and under it the boost's `Own`, `Ally` or `Enemy` line ({carrier} and {team} its shares), and
+-- another when it fades. The HUD shows everyone the next boost and when it comes from `Warn` seconds before (owner,
+-- 2026-11-02: not the whole gap), and while one is carried its `Short` and the time left (Hud). Each has its own `Model` in ReplicatedStorage (from Meshy), floating in the Sun
+-- Crown's warm light (BoostView) and over its carrier's head at `Worn` of its size (the thin, tall ones bigger, so
+-- they read as well as the crown); its `Color` marks it in the HUD and on its banner. `Image` is the model from the
+-- front (`ImageSize` pixels), worn by the taker's portrait on the banner, at `ImageScale` of its usual size if set, and
+-- alone on the banner as it fades, at `FadeScale` if set.
+Config.Boosts = {
+	FirstAt = 30,
 	Float = 4,
 	Reach = 4,
-	Damage = 0.08,
-	Carrier = 0.15,
 	Lasts = 90,
 	Gap = 60,
+	Warn = 15,
+	First = "SunCrown",
+	Order = { "SunCrown", "MoonShield", "WindGem", "StarHourglass", "LifeHeart" },
 	Texts = {
-		Own = "YOU HAVE THE SUN CROWN",
-		Ally = "YOUR TEAM HAS THE SUN CROWN",
-		Enemy = "THE ENEMY HAS THE SUN CROWN",
-		Fades = "THE SUN CROWN FADES",
+		Own = "YOU HAVE THE %s",
+		Ally = "YOUR TEAM HAS THE %s",
+		Enemy = "THE ENEMY HAS THE %s",
+		Fades = "THE %s FADES",
+	},
+	List = {
+		SunCrown = {
+			Name = "Sun Crown",
+			Effect = "Damage",
+			Carrier = 0.15,
+			Team = 0.08,
+			Short = "DAMAGE UP",
+			Own = "+{carrier} DAMAGE · TEAM +{team}",
+			Ally = "+{team} DAMAGE",
+			Enemy = "ENEMIES DEAL MORE DAMAGE",
+			Color = Color3.fromRGB(255, 196, 64),
+			Model = "SunCrown",
+			Worn = 0.36,
+			-- Art/Icons/Crown/SunCrownFront.png, Tools/render_crown_icon.py.
+			Image = "rbxassetid://108877337730260",
+			ImageSize = Vector2.new(484, 275),
+			FadeScale = 0.85,
+		},
+		MoonShield = {
+			Name = "Moon Shield",
+			Effect = "Shield",
+			Carrier = 0.15,
+			Team = 0.08,
+			Short = "DEFENCE UP",
+			Own = "-{carrier} DAMAGE TAKEN · TEAM -{team}",
+			Ally = "-{team} DAMAGE TAKEN",
+			Enemy = "ENEMIES TAKE LESS DAMAGE",
+			Color = Color3.fromRGB(150, 196, 255),
+			Model = "MoonShield",
+			Worn = 0.53,
+			-- Art/Icons/Boosts/MoonShieldFront.png, Tools/render_crown_icon.py.
+			Image = "rbxassetid://106959352956928",
+			ImageSize = Vector2.new(394, 485),
+		},
+		-- The Wind Feather until the owner chose the winged gem for it (2026-11-02).
+		WindGem = {
+			Name = "Wind Gem",
+			Effect = "Speed",
+			Carrier = 0.2,
+			Team = 0.1,
+			Short = "SPEED UP",
+			Own = "+{carrier} SPEED · TEAM +{team}",
+			Ally = "+{team} SPEED",
+			Enemy = "ENEMIES MOVE FASTER",
+			Color = Color3.fromRGB(90, 222, 230),
+			Model = "WindGem",
+			Worn = 0.5,
+			-- Art/Icons/Boosts/WindGemFront.png, the concept Art/Concepts/Boosts/wind_gem.png cut out (owner, 2026-11-02).
+			Image = "rbxassetid://112514158247644",
+			ImageSize = Vector2.new(450, 480),
+		},
+		StarHourglass = {
+			Name = "Star Hourglass",
+			Effect = "Cooldown",
+			Carrier = 0.25,
+			Team = 0.12,
+			Short = "FASTER ABILITIES",
+			Own = "{carrier} FASTER COOLDOWNS · TEAM {team}",
+			Ally = "{team} FASTER COOLDOWNS",
+			Enemy = "ENEMY ABILITIES COME BACK FASTER",
+			Color = Color3.fromRGB(186, 120, 255),
+			Model = "StarHourglass",
+			Worn = 0.55,
+			-- Art/Icons/Boosts/StarHourglassFront.png, Tools/render_crown_icon.py.
+			Image = "rbxassetid://82010351024678",
+			ImageSize = Vector2.new(298, 501),
+			ImageScale = 0.9,
+			FadeScale = 1.12,
+		},
+		LifeHeart = {
+			Name = "Life Heart",
+			Effect = "Heal",
+			Carrier = 0.01,
+			Team = 0.005,
+			Short = "HEALING",
+			Own = "HEAL {carrier} A SECOND · TEAM {team}",
+			Ally = "HEAL {team} A SECOND",
+			Enemy = "ENEMIES HEAL OVER TIME",
+			-- A deep ruby, apart from the red team's colour.
+			Color = Color3.fromRGB(232, 40, 72),
+			Model = "LifeHeart",
+			Worn = 0.45,
+			-- Art/Icons/Boosts/LifeHeartFront.png, Tools/render_crown_icon.py.
+			Image = "rbxassetid://91763991928043",
+			ImageSize = Vector2.new(484, 471),
+		},
 	},
 }
 
@@ -1810,6 +1907,128 @@ Config.Pads = {
 	CombatPause = 3,
 }
 
+-- The four portals (owner, 2026-11-02): a stone ring on a round pad beside each armory stall, between the stall and
+-- the ruin on the gate's side, in two pairs that cross the arena: each joins one of Red's to the one of Blue's right
+-- across the centre from it (`Spots`: where it stands, `At`, the spot its opening looks at, `Faces`: between the
+-- team's two spawn pads on that side, so its heroes walk from their pads straight in, and the portal it leads `To`),
+-- the kit's portal_ring at `Scale`. A hero, player or bot, who walks through a vortex, from either side, comes out of
+-- the portal it leads to `Exit` studs past its ring, walking on the way he went (in from his own pads, out towards
+-- the enemy's), and cannot go through again for `Again` seconds. Off (`Enabled`) since the owner found them not worth
+-- their room in this small arena (2026-11-02); kept for a bigger map or another mode.
+Config.Portals = {
+	Enabled = false,
+	Spots = {
+		RedEast = { At = Vector3.new(76, 0, -69), Faces = Vector3.new(58, 0, -53), To = "BlueWest" },
+		BlueWest = { At = Vector3.new(-76, 0, 69), Faces = Vector3.new(-58, 0, 53), To = "RedEast" },
+		RedWest = { At = Vector3.new(-76, 0, -69), Faces = Vector3.new(-58, 0, -53), To = "BlueEast" },
+		BlueEast = { At = Vector3.new(76, 0, 69), Faces = Vector3.new(58, 0, 53), To = "RedWest" },
+	},
+	Scale = 6,
+	Exit = 4.5,
+	Again = 1,
+}
+
+-- The arena's traps and ways (owner, 2026-11-02, the concepts in Art/Concepts/Gameplay), placed by ColosseumBuilder
+-- on open sand here and there, not mirrored nor in line (owner: "een beetje random op lege plekken"), about as many on
+-- each team's half, and run by HazardService, RuneGateService and the clients' views. Each can be switched off
+-- (`Enabled`). A trap hurts every hero in it, of either team, by a share of his maximum health; minions and Masters
+-- are not touched.
+
+-- Two spike tiles on the lanes (`Spots`: where each lies, `At`, turned `Turn` degrees), `Width` studs: every `Every`
+-- seconds its cracks glow `Warn` seconds, then its spikes stand `Height` studs up for `Up` seconds and strike each hero
+-- on it once for `Damage` of his maximum health.
+Config.Spikes = {
+	Enabled = true,
+	Spots = {
+		{ At = Vector3.new(78, 0, 14), Turn = 17 },
+		{ At = Vector3.new(-84, 0, -12), Turn = -9 },
+	},
+	Width = 10,
+	Every = 9,
+	Warn = 1.2,
+	Up = 1,
+	Height = 2.6,
+	Damage = 0.12,
+}
+
+-- Two fire grates between the plateau and the cover (`Spots`), `Width` studs: every `Every` seconds, `Offset` after
+-- the spikes so the two do not strike at once, a ring glows on it `Warn` seconds, then it burns `Burn` seconds,
+-- hurting each hero within `Radius` of its middle by `Damage` of his maximum health every `Tick` seconds.
+Config.FireGrates = {
+	Enabled = true,
+	Spots = { Vector3.new(40, 0, -10), Vector3.new(-38, 0, 20) },
+	Width = 9,
+	Every = 12,
+	Offset = 6,
+	Warn = 1.5,
+	Burn = 2.5,
+	Radius = 4.5,
+	Damage = 0.05,
+	Tick = 0.5,
+}
+
+-- Two net-thrower statues near the big side gates (`Spots`: where each stands, `At`, and the spot it aims at,
+-- `Faces`, over open sand clear of the whole pillar by the gate, owner 2026-11-02), `Height` studs tall: a hero within `Reach` studs fires it (F), and after `Flight` seconds its net slows
+-- every enemy of his team within `Range` studs in front of it, `Angle` degrees to either side, to `Slow` of his speed
+-- for `Length` seconds. Then it reloads for `Cooldown` seconds, for both teams. Out of the game (owner, 2026-11-02).
+Config.NetStatues = {
+	Enabled = false,
+	Spots = {
+		{ At = Vector3.new(112, 0, 12), Faces = Vector3.new(70, 0, 24) },
+		{ At = Vector3.new(-110, 0, -16), Faces = Vector3.new(-68, 0, -22) },
+	},
+	Height = 9,
+	Reach = 10,
+	Range = 36,
+	Angle = 35,
+	Flight = 0.5,
+	Slow = 0.45,
+	Length = 2.5,
+	Cooldown = 25,
+}
+
+-- The Rune Gates, flat gold rune circles of `Width` studs in two pairs that cross the centre (`Spots`: where each
+-- lies, `At`, and the gate it leads `To`): a hero, player or bot, who stands within `Middle` studs of a gate's middle
+-- for `Channel` seconds comes out on the other, and cannot go through either again for `Again` seconds. Off
+-- (`Enabled`) since the owner found their gold too faint on the sand (2026-11-02).
+Config.RuneGates = {
+	Enabled = false,
+	Spots = {
+		RedEast = { At = Vector3.new(34, 0, -34), To = "BlueWest" },
+		BlueWest = { At = Vector3.new(-34, 0, 34), To = "RedEast" },
+		RedWest = { At = Vector3.new(-34, 0, -34), To = "BlueEast" },
+		BlueEast = { At = Vector3.new(34, 0, 34), To = "RedWest" },
+	},
+	Width = 10,
+	Middle = 3,
+	Channel = 0.8,
+	Again = 4,
+}
+
+-- Six jump pads, three on each team's half, Red's Blue's turned half round the middle so it stays fair (owner,
+-- 2026-11-02) (`Spots`: where each lies, `At`, and where it throws a hero, `To`, its arrows pointing there): from
+-- before each throne onto the plateau, and from by each armory stall along the side into the other team's half, past
+-- the inside of the whole pillar by the great door. `Width` studs: a hero who jumps onto one (walking onto it does
+-- nothing) flies in an arc `Height` studs over the higher of its ends, low enough that from its top every hero's
+-- shortest shot (30) still reaches 27 studs over the ground (owner, 2026-11-02), at `Speed` studs a second over the
+-- ground but at least `Flight` seconds, and cannot jump again for `Again` seconds.
+Config.JumpPads = {
+	Enabled = true,
+	Spots = {
+		{ At = Vector3.new(-26, 0, 64), To = Vector3.new(-4, 0, 6) },
+		{ At = Vector3.new(26, 0, -64), To = Vector3.new(4, 0, -6) },
+		{ At = Vector3.new(80, 0, 64), To = Vector3.new(88, 0, -20) },
+		{ At = Vector3.new(-80, 0, -64), To = Vector3.new(-88, 0, 20) },
+		{ At = Vector3.new(-80, 0, 64), To = Vector3.new(-90, 0, -26) },
+		{ At = Vector3.new(80, 0, -64), To = Vector3.new(90, 0, 26) },
+	},
+	Width = 8,
+	Height = 13,
+	Speed = 48,
+	Flight = 1.4,
+	Again = 1.5,
+}
+
 Config.Respawn = {
 	Base = 6,
 	PerLevel = 2.5,
@@ -2112,14 +2331,14 @@ Config.Pass = {
 -- better grade (`GradeCoins` by its letter), and twice the XP while a pass boost runs. The grade (S+ to D-, as
 -- League's) comes from a match score: kills, assists
 -- and deaths count `Kill`, `Assist` and `Death`, the share of his team's damage to heroes `Damage`, to the enemy Master
--- `Master`, and every Sun Crown taken `Crown`; `Grades` are the least score of each grade. The best score of the winners
+-- `Master`, and every boost taken `Boost`; `Grades` are the least score of each grade. The best score of the winners
 -- is the MVP.
 Config.Rewards = {
 	Coins = { Win = 100, Loss = 50 },
 	AccountXp = { Win = 200, Loss = 120 },
 	PassXp = { Win = 150, Loss = 100 },
 	GradeCoins = { S = 40, A = 25, B = 15, C = 5, D = 0 },
-	Score = { Kill = 3, Assist = 1.5, Death = -1.5, Damage = 20, Master = 15, Crown = 3 },
+	Score = { Kill = 3, Assist = 1.5, Death = -1.5, Damage = 20, Master = 15, Boost = 3 },
 	Grades = {
 		{ "S+", 22 },
 		{ "S", 19 },

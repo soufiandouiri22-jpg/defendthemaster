@@ -1,18 +1,22 @@
 -- The bar over every other hero's head (design 05): his health in his team's colour, the only thing that tells the
 -- teams apart, with his level in the round knob at its left end. A hero's bar goes when he dies (the "Combatant" tag
--- goes with his life). The Sun Crown's carrier (his "Crown" attribute, CrownService) has his bar raised over the crown
--- that turns over his head (CrownView).
+-- goes with his life). A boost's carrier (his "Boost" attribute, BoostService) has his bar raised over the boost
+-- that turns over his head (BoostView).
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Boosts = require(ReplicatedStorage.Shared.Boosts)
+local BoostView = require(script.Parent.BoostView)
 local UiStyle = require(script.Parent.UiStyle)
 
 local HeroBars = {}
 
 local C = UiStyle.Colors
 local WIDTH, HEIGHT, KNOB = 132, 16, 28
--- The bar floats this many studs over the hero's root, or `CROWNED` while he carries the crown.
-local OVER, CROWNED = 4.4, 6
+-- The bar floats this many studs over the hero's root; while he carries a boost, `BOOSTED` over the top of the boost
+-- (counted from the top of his head).
+local OVER, BOOSTED = 4.4, 4.2
 
 local bars: { [Model]: BillboardGui } = {}
 
@@ -69,11 +73,12 @@ local function build(model: Model)
 	local function update()
 		bar:set(if humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 0)
 		level.Text = tostring(levelOf(model))
-		gui.StudsOffsetWorldSpace = Vector3.new(0, if model:GetAttribute("Crown") == true then CROWNED else OVER, 0)
+		local boost = if model:GetAttribute("Boost") == true then Boosts.current() else nil
+		gui.StudsOffsetWorldSpace = Vector3.new(0, if boost then BOOSTED + BoostView.wornTop(boost) else OVER, 0)
 	end
 	humanoid.HealthChanged:Connect(update)
 	humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(update)
-	model:GetAttributeChangedSignal("Crown"):Connect(update)
+	model:GetAttributeChangedSignal("Boost"):Connect(update)
 	local owner = Players:GetPlayerFromCharacter(model)
 	if owner then
 		owner:GetAttributeChangedSignal("Level"):Connect(update)

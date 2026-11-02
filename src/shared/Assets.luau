@@ -12,9 +12,6 @@ return {
 	-- Art/Icons/keyed/Pointer and cut close round it (Art/UI/Pointer/PointerGold_tight.png, 211 by 238).
 	Pointer = "rbxassetid://124420581695634",
 	HudCrown = "rbxassetid://101598854323035",
-	-- The Sun Crown from the front (Art/Icons/Crown/SunCrownFront.png, Tools/render_crown_icon.py), worn by the
-	-- portrait on the banner when a hero takes it (KillFeed).
-	SunCrown = "rbxassetid://108877337730260",
 	HudCoin = "rbxassetid://127769238687652",
 	-- The menu's icons (one GenerateImage sheet in design 13's look, Art/Icons/concepts/menu_icons_sheet.jpg, cut by
 	-- Tools/cut_icons.py into Art/Icons/Menu): the back arrow, the settings gear, the pass's double-XP potion, the
@@ -61,6 +58,12 @@ return {
 	OrbVortex = "rbxassetid://88154175742294",
 	OrbWisps = "rbxassetid://118394014691190",
 	OrbGlow = "rbxassetid://113973773269405",
+	-- The portals' vortex (Tools/portal_textures.py, Art/VFX): the filled swirl, its bright arms, its glow and the rim
+	-- along the stones.
+	PortalSwirl = "rbxassetid://90106843626407",
+	PortalStreaks = "rbxassetid://130459725696535",
+	PortalGlow = "rbxassetid://136247537255358",
+	PortalRim = "rbxassetid://140092266379335",
 	-- The four card suits Jestrel's beams shed, cut from the owner's sheet by Tools/card_textures.py (Art/VFX/cards),
 	-- white to be tinted: heart, diamond, club, spade.
 	CardSuits = {

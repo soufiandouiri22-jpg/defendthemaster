@@ -1,6 +1,7 @@
 -- Moves every hero (a Combatant with the "Hero" attribute) with its animation pack's clips (Shared.Motion): the battle
 -- idle when it stands, running forward, sideways or backward by the way it moves relative to where it faces, and the
--- jump's takeoff, flight and landing; and over that the motions of its attacks (HeroAnimator.play). When it dies, the
+-- jump's takeoff, flight and landing (a jump pad's flight, its "Flying" attribute, in the air all the way, JumpPadView);
+-- and over that the motions of its attacks (HeroAnimator.play). When it dies, the
 -- pack's fall. Every hero's feet sound as Shadowren's (FEET): his pack's footsteps on the sand where the hero's clips
 -- put a foot down, and his takeoff's and landing's steps when it jumps, whatever the hero's own pack has for those.
 
@@ -154,7 +155,11 @@ end
 
 local function locomote(hero: Hero, dt: number, now: number)
 	local motions, motion, root = hero.motions, hero.motion, hero.root
-	local below = Workspace:Raycast(root.Position, Vector3.new(0, -(hero.height + 0.6), 0), ground)
+	-- A jump pad's flight is in the air from takeoff to landing, whatever it passes over (the pad itself, cover).
+	local flying = hero.character:GetAttribute("Flying")
+	local below = if type(flying) == "number" and flying > Workspace:GetServerTimeNow()
+		then nil
+		else Workspace:Raycast(root.Position, Vector3.new(0, -(hero.height + 0.6), 0), ground)
 	if not below then
 		if hero.airborne == 0 then
 			motion:setBase(motions.Takeoff, 1)

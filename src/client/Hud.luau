@@ -1,9 +1,9 @@
 -- The HUD of design 05 round the ability bar (AbilityBar): at the top each team's Master's health under its crown,
 -- blue left and red right, jolting at every blow he takes, and between them the score (enemy heroes killed) over the match's clock (MatchService),
--- with the time left on the Sun Crown beside it while the player's team has it;
 -- at the bottom left the hero's portrait with his level (a chime as it rises), his kills / deaths / assists
--- (ProgressService), health and XP (Shared.Leveling); at the bottom right the
--- round minimap with every hero, minion and throne on it, over the coin counter.
+-- (ProgressService), health and XP (Shared.Leveling), with the boost over it: which comes next and when, and what it
+-- does and how long it lasts; at the bottom right the round minimap with every hero, minion, throne and the boost
+-- waiting to be taken on it, over the coin counter.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -14,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
+local Boosts = require(ReplicatedStorage.Shared.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local UiSound = require(script.Parent.UiSound)
@@ -29,6 +30,8 @@ local player = Players.LocalPlayer
 local MAP_REACH = Config.Arena.Radius + 36
 local MAP_SIZE = 270
 local MAP_RING = 9
+-- The bottom left's panel, drawn at UiStyle.BottomScale, this far in from the screen's corner.
+local PANEL_WIDTH, PANEL_HEIGHT, PANEL_IN, PANEL_UP = 560, 178, 24, 22
 
 -- The top, measured off design 05: each Master's bar under its team's crown at the ends, the score board in the middle
 -- with the clock on the dark tab under it (Assets.HudScoreboard, drawn by Tools/ui_textures.py with BOARD_* its size).
@@ -280,54 +283,106 @@ local function buildTop(gui: Frame): () -> ()
 	end
 end
 
--- While the player's team has the Sun Crown (CrownService), a pill beside the clock: the crown and the time until it
--- fades, blinking for its last CROWN_BLINK seconds.
-local CROWN_BLINK = 10
-local function buildCrown(gui: Frame): () -> ()
+-- The boost (Shared.Boosts) for everyone, in a pill over the bottom left's panel (owner, 2026-11-02: out of the way of
+-- the rest) edged in the boost's colour, with its picture (a dot in its colour until it has one): in the last `Warn`
+-- seconds before the next one, when it comes and what it does ("WIND FEATHER IN 0:15 · SPEED UP"); while carried what
+-- it does and the time until it fades, "ENEMY" before it in the enemy's colour when they have it; while dropped its
+-- name and the time. While it floats in the middle the pill is gone: the boost shows itself, and on the minimap.
+-- The time blinks for its last BOOST_BLINK seconds.
+local BOOST_BLINK = 10
+local function buildBoost(gui: ScreenGui): () -> ()
 	local pill = UiStyle.frame(
 		gui,
-		UDim2.fromOffset(136, 42),
-		UDim2.new(0.5, 104, 0, BOARD_TOP + BOARD_HEIGHT + TAB_HEIGHT / 2 - 3),
-		Vector2.new(0, 0.5)
+		UDim2.fromOffset(0, 40),
+		UDim2.new(0, PANEL_IN, 1, -PANEL_UP - PANEL_HEIGHT * UiStyle.BottomScale - 10),
+		Vector2.new(0, 1)
 	)
-	pill.Name = "CrownTimer"
+	pill.Name = "BoostTimer"
+	pill.AutomaticSize = Enum.AutomaticSize.X
 	pill.BackgroundColor3 = Color3.fromRGB(46, 32, 22)
 	pill.ZIndex = 3
 	pill.Visible = false
 	UiStyle.corner(pill, UDim.new(0.5, 0))
 	local edge = UiStyle.stroke(pill, C.Gold, 3)
-	local crown = Instance.new("ImageLabel")
-	crown.BackgroundTransparency = 1
-	crown.Image = Assets.SunCrown
-	crown.Size = UDim2.fromOffset(52, 52 * 275 / 484)
-	crown.AnchorPoint = Vector2.new(0, 0.5)
-	crown.Position = UDim2.new(0, 8, 0.5, 0)
-	crown.ZIndex = 4
-	crown.Parent = pill
-	local count = UiStyle.text(pill, "", 30, Color3.new(1, 1, 1), Color3.fromRGB(30, 16, 6))
-	count.AnchorPoint = Vector2.new(1, 0.5)
-	count.Size = UDim2.fromOffset(70, 40)
-	count.Position = UDim2.new(1, -10, 0.5, 0)
-	count.ZIndex = 4
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0, 10)
+	padding.PaddingRight = UDim.new(0, 16)
+	padding.Parent = pill
+	local list = Instance.new("UIListLayout")
+	list.FillDirection = Enum.FillDirection.Horizontal
+	list.VerticalAlignment = Enum.VerticalAlignment.Center
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Padding = UDim.new(0, 8)
+	list.Parent = pill
+	local picture = Instance.new("ImageLabel")
+	picture.BackgroundTransparency = 1
+	picture.ScaleType = Enum.ScaleType.Fit
+	picture.Size = UDim2.fromOffset(48, 34)
+	picture.ZIndex = 4
+	picture.LayoutOrder = 1
+	picture.Parent = pill
+	local dot = UiStyle.frame(pill, UDim2.fromOffset(20, 20))
+	dot.ZIndex = 4
+	dot.LayoutOrder = 1
+	UiStyle.corner(dot, UDim.new(0.5, 0))
+	UiStyle.stroke(dot, Color3.fromRGB(30, 16, 6), 2)
+	local label = UiStyle.text(pill, "", 24, Color3.new(1, 1, 1), Color3.fromRGB(30, 16, 6))
+	label.AutomaticSize = Enum.AutomaticSize.X
+	label.Size = UDim2.fromOffset(0, 36)
+	label.ZIndex = 4
+	label.LayoutOrder = 2
+	local labelEdge = label:FindFirstChildOfClass("UIStroke") :: UIStroke
 	-- The player's team, kept while he waits to respawn without a character.
 	local team: string? = nil
 
 	return function()
 		team = player.Character and player.Character:GetAttribute("Team") or team
-		local ends = Workspace:GetAttribute("CrownEnds")
-		local ours = Workspace:GetAttribute("Crown") == "Carried" and Workspace:GetAttribute("CrownTeam") == team
-		pill.Visible = ours and typeof(ends) == "number"
-		if not pill.Visible then
+		local boost = Boosts.current()
+		local state = Workspace:GetAttribute("Boost")
+		local now = Workspace:GetServerTimeNow()
+		local name = if boost then string.upper(boost.Name) else ""
+		local text: string? = nil
+		local left: number? = nil
+		local enemy = false
+		if boost and state == "Waiting" then
+			local at = Workspace:GetAttribute("BoostAt")
+			if typeof(at) == "number" and at - now <= Config.Boosts.Warn then
+				text =
+					string.format("%s IN %s · %s", name, UiStyle.clock(math.max(0, math.ceil(at - now))), boost.Short)
+			end
+		elseif boost and (state == "Carried" or state == "Dropped") then
+			local ends = Workspace:GetAttribute("BoostEnds")
+			if typeof(ends) == "number" then
+				left = math.max(0, ends - now)
+				local clock = UiStyle.clock(math.ceil(left :: number))
+				if state == "Dropped" then
+					text = string.format("%s DROPPED %s", name, clock)
+				else
+					enemy = Workspace:GetAttribute("BoostTeam") ~= team
+					text = string.format("%s%s %s", if enemy then "ENEMY " else "", boost.Short, clock)
+				end
+			end
+		end
+		pill.Visible = text ~= nil
+		if not boost or not text then
 			return
 		end
-		local left = math.max(0, ends - Workspace:GetServerTimeNow())
-		count.Text = UiStyle.clock(math.ceil(left))
-		local dim = left <= CROWN_BLINK and os.clock() % 0.5 < 0.25
-		count.TextColor3 = if left <= CROWN_BLINK then Color3.fromRGB(255, 110, 90) else Color3.new(1, 1, 1)
-		count.TextTransparency = if dim then 0.6 else 0
-		(count:FindFirstChildOfClass("UIStroke") :: UIStroke).Transparency = if dim then 0.6 else 0
-		crown.ImageTransparency = if dim then 0.6 else 0
-		edge.Color = if left <= CROWN_BLINK then Color3.fromRGB(255, 110, 90) else C.Gold
+		label.Text = text
+		picture.Image = boost.Image or ""
+		picture.Visible = boost.Image ~= nil
+		dot.Visible = boost.Image == nil
+		dot.BackgroundColor3 = boost.Color
+		local ending = left ~= nil and left <= BOOST_BLINK
+		local dim = ending and os.clock() % 0.5 < 0.25
+		local enemyColour = Config.Teams[if team == "Red" then "Blue" else "Red"].Color
+		label.TextColor3 = if ending
+			then Color3.fromRGB(255, 110, 90)
+			elseif enemy then enemyColour:Lerp(Color3.new(1, 1, 1), 0.35)
+			else Color3.new(1, 1, 1)
+		label.TextTransparency = if dim then 0.6 else 0
+		labelEdge.Transparency = if dim then 0.6 else 0
+		picture.ImageTransparency = if dim then 0.6 else 0
+		edge.Color = if ending then Color3.fromRGB(255, 110, 90) else boost.Color
 	end
 end
 
@@ -346,8 +401,14 @@ end
 
 -- The bottom left: portrait, level, kills / deaths / assists, health and XP.
 local function buildPlayer(gui: ScreenGui): () -> ()
-	local outer, inner =
-		UiStyle.panel(gui, UDim2.fromOffset(560, 178), UDim2.new(0, 24, 1, -22), Vector2.new(0, 1), 18, 6)
+	local outer, inner = UiStyle.panel(
+		gui,
+		UDim2.fromOffset(PANEL_WIDTH, PANEL_HEIGHT),
+		UDim2.new(0, PANEL_IN, 1, -PANEL_UP),
+		Vector2.new(0, 1),
+		18,
+		6
+	)
 	UiStyle.shrink(outer, UiStyle.BottomScale)
 	local frame, back = UiStyle.panel(inner, UDim2.fromOffset(150, 150), UDim2.fromOffset(4, 8), nil, 14, 5)
 	frame.Name = "Portrait"
@@ -477,6 +538,17 @@ local function buildMap(gui: ScreenGui): () -> ()
 		end
 	end
 
+	-- The boost waiting to be taken, on the plateau or where its carrier fell.
+	local boostIcon = Instance.new("ImageLabel")
+	boostIcon.Name = "Boost"
+	boostIcon.BackgroundTransparency = 1
+	boostIcon.ScaleType = Enum.ScaleType.Fit
+	boostIcon.Size = UDim2.fromOffset(36, 36)
+	boostIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	boostIcon.ZIndex = 6
+	boostIcon.Visible = false
+	boostIcon.Parent = map
+
 	local pool: { Dot } = {}
 	local function dot(size: number, colour: Color3, edge: Color3, z: number): Frame
 		local d: Dot? = nil
@@ -551,6 +623,16 @@ local function buildMap(gui: ScreenGui): () -> ()
 		if own and root then
 			dot(20, C[own:GetAttribute("Team") or "Blue"], Color3.new(1, 1, 1), 5).Position = at(root.Position)
 		end
+		local boost = Boosts.current()
+		local state = Workspace:GetAttribute("Boost")
+		local spot = Workspace:GetAttribute("BoostSpot")
+		if boost and boost.Image and (state == "Ready" or state == "Dropped") and typeof(spot) == "Vector3" then
+			boostIcon.Image = boost.Image
+			boostIcon.Position = at(spot)
+			boostIcon.Visible = true
+		else
+			boostIcon.Visible = false
+		end
 		for _, d in pool do
 			if not d.used then
 				d.frame.Visible = false
@@ -597,7 +679,7 @@ function Hud.start()
 	insets:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	scale:GetPropertyChangedSignal("Scale"):Connect(fit)
 	fit()
-	local updates = { buildTop(top), buildCrown(top), buildPlayer(gui), buildMap(gui) }
+	local updates = { buildTop(top), buildBoost(gui), buildPlayer(gui), buildMap(gui) }
 	RunService.RenderStepped:Connect(function()
 		for _, update in updates do
 			update()

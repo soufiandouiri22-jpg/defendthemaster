@@ -82,9 +82,9 @@ local CUES: { [string]: Cue } = {
 	TransformBoom = { asset = Assets.FightBoom, start = 0, gain = 1.5 },
 	TransformShimmer = { asset = Assets.FallingShimmer, start = 0.4, length = 2.5, gain = 1.1 },
 
-	-- The Sun Crown: taken by the enemy, fading.
-	CrownEnemy = { asset = Assets.EvilBell, start = 0.5, length = 3, gain = 1.35 },
-	CrownFades = { asset = Assets.FallingShimmer, start = 0.4, length = 2.5, gain = 1.1 },
+	-- A boost: taken by the enemy, fading.
+	BoostEnemy = { asset = Assets.EvilBell, start = 0.5, length = 3, gain = 1.35 },
+	BoostFades = { asset = Assets.FallingShimmer, start = 0.4, length = 2.5, gain = 1.1 },
 
 	-- The minions, only near: a spitter's fireball leaving and bursting, a biter's bite, a minion crumbling (its stone
 	-- and its crystals).
@@ -96,6 +96,18 @@ local CUES: { [string]: Cue } = {
 
 	-- A Master falling.
 	MasterFalls = { asset = Assets.DeepThud, start = 0, length = 4.5, gain = 0.8 },
+
+	-- A hero going through a portal, heard where he goes in and where he comes out (played higher than Respawn).
+	PortalJump = { asset = Assets.MagicExit, start = 0.15, length = 1.5, gain = 0.8, near = 14, far = 90 },
+
+	-- The arena's traps and ways (Config.Spikes, FireGrates, NetStatues, RuneGates, JumpPads), only near: spikes
+	-- shooting up (a sword's ring), a grate's fire bursting up, the net thrown, a hero going through a Rune Gate (as
+	-- a portal), a jump pad's launch.
+	SpikesUp = { asset = Assets.SwordDraw, start = 0, length = 0.35, gain = 1.3, near = 10, far = 60 },
+	GrateFire = { asset = Assets.FireWhoosh, start = 0.03, length = 0.47, gain = 1, near = 10, far = 60 },
+	NetThrow = { asset = Assets.ClothSwing, start = 0, length = 0.32, gain = 1.1, near = 12, far = 70 },
+	RuneGate = { asset = Assets.MagicExit, start = 0.15, length = 1.5, gain = 0.8, near = 14, far = 90 },
+	JumpPad = { asset = Assets.PowerClunk, start = 0, length = 0.3, gain = 0.8, near = 10, far = 60 },
 
 	-- Each shock of Brontar's zap and each bolt of his strike from the sky (Config.Heroes.Brontar.Kit.E and R): only
 	-- the sharp attack at the start of Pro Sound Effects' "Zaps Sharp Attack 1" (owner, 2026-10-31), without the hum

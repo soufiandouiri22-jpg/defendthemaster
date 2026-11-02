@@ -51,7 +51,6 @@ local function invitePicker(gui: ScreenGui, api: any)
 		"INVITE",
 		32
 	)
-	outer.ZIndex = 31
 	local close =
 		Widgets.button(outer, "X", "Gold", UDim2.fromOffset(54, 54), UDim2.new(1, 14, 0, -14), Vector2.new(1, 0), 30)
 	Widgets.paint(close, "Cream")
@@ -136,9 +135,12 @@ end
 
 -- The card of an invite that came in.
 local function invitation(gui: ScreenGui, from: number, name: string)
-	local card = UiStyle.frame(gui, UDim2.fromOffset(520, 190), UDim2.new(0.5, 0, 0, 130), Vector2.new(0.5, 0))
+	local holder = Widgets.popup(gui, "Invitation")
+	local card = UiStyle.frame(holder, UDim2.fromOffset(520, 190), UDim2.new(0.5, 0, 0, 130), Vector2.new(0.5, 0))
 	card.BackgroundTransparency = 1
-	card.ZIndex = 40
+	card.Destroying:Connect(function()
+		holder:Destroy()
+	end)
 	local _, inner = UiStyle.panel(card, UDim2.fromScale(1, 1))
 	Widgets.avatar(inner, from, 90, UDim2.fromOffset(16, 16))
 	local text = Widgets.label(inner, name .. " invites you to his party", 28, C.Ink, "Left")

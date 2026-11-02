@@ -1,11 +1,14 @@
-"""Renders the Sun Crown's model (Art/Models/Crown/sun_crown.glb) from the front for the crown banner (KillFeed),
-where it sits on the taker's portrait: transparent, lit warm from the front and above, cut to its edges and outlined
-in the UI's dark edge.
+"""Renders a boost's model (the Sun Crown's Art/Models/Crown/sun_crown.glb, or another in Art/Models/Boosts) from the
+front for its banner (KillFeed), where it sits on the taker's portrait, and the HUD's boost pill: transparent, lit
+warm from the front and above, cut to its edges and outlined in the UI's dark edge.
 
-    /Applications/Blender.app/Contents/MacOS/Blender -b -P Tools/render_crown_icon.py -- <out.png> [turn] [tilt]
+    /Applications/Blender.app/Contents/MacOS/Blender -b -P Tools/render_crown_icon.py -- <out.png> [turn] [tilt] \
+        [model.glb] [metallic] [lean] [saturation]
 
-`turn` spins the crown about its upright axis (degrees, to bring its gem to the front), `tilt` is how far the camera
-looks down on it (degrees).
+`turn` spins the model about its upright axis (degrees, to bring its front to the camera), `tilt` is how far the
+camera looks down on it (degrees), `metallic` how much it shines as metal (0.75, the crown's polished gold), `lean`
+how far its top leans to the right (degrees; the Wind Feather leans as in its concept) and `saturation` how strong its
+colours are (1 as rendered).
 """
 
 import math
@@ -14,10 +17,9 @@ from pathlib import Path
 
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parent.parent
-MODEL = ROOT / "Art/Models/Crown/sun_crown.glb"
 SIZE = 512
 # The dark edge round it, in pixels, and its colour (UiStyle.Colors.Edge).
 OUTLINE = 9
@@ -27,17 +29,21 @@ args = sys.argv[sys.argv.index("--") + 1 :]
 out = Path(args[0]).resolve()
 turn = float(args[1]) if len(args) > 1 else 0.0
 tilt = float(args[2]) if len(args) > 2 else 8.0
+model = Path(args[3]).resolve() if len(args) > 3 else ROOT / "Art/Models/Crown/sun_crown.glb"
+metallic = float(args[4]) if len(args) > 4 else 0.75
+lean = float(args[5]) if len(args) > 5 else 0.0
+saturation = float(args[6]) if len(args) > 6 else 1.0
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=str(MODEL))
+bpy.ops.import_scene.gltf(filepath=str(model))
 meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
-# Polished gold: the model's colours with a metal's shine.
+# The model's colours with a polished shine, as metal as `metallic` says.
 for o in meshes:
     o.data.shade_smooth()
     for slot in o.material_slots:
         shader = slot.material and slot.material.node_tree.nodes.get("Principled BSDF")
         if shader:
-            shader.inputs["Metallic"].default_value = 0.75
+            shader.inputs["Metallic"].default_value = metallic
             shader.inputs["Roughness"].default_value = 0.3
 
 pivot = bpy.data.objects.new("Pivot", None)
@@ -45,7 +51,7 @@ bpy.context.scene.collection.objects.link(pivot)
 for o in bpy.context.scene.objects:
     if o.parent is None and o is not pivot:
         o.parent = pivot
-pivot.rotation_euler = (0, 0, math.radians(turn))
+pivot.matrix_world = Matrix.Rotation(math.radians(lean), 4, "Y") @ Matrix.Rotation(math.radians(turn), 4, "Z")
 bpy.context.view_layer.update()
 
 corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
@@ -124,6 +130,8 @@ pad = OUTLINE + 4
 top, bottom = max(rows.min() - pad, 0), min(rows.max() + pad + 1, height)
 left, right = max(cols.min() - pad, 0), min(cols.max() + pad + 1, width)
 crown = pixels[top:bottom, left:right]
+grey = (crown[:, :, :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32))[:, :, None]
+crown[:, :, :3] = np.clip(grey + (crown[:, :, :3] - grey) * saturation, 0, 1)
 shape = crown[:, :, 3]
 grown = shape.copy()
 for dy in range(-OUTLINE, OUTLINE + 1):
