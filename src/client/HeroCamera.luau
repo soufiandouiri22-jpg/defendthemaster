@@ -3,6 +3,7 @@
 -- The scroll wheel zooms. HeroCamera.aim() is the point under the crosshair (far along the look at the sky), up and
 -- down too, which every attack aims at (owner, 2026-10-29): a shot or swing hits what the crosshair is on.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -34,6 +35,42 @@ local camRay = RaycastParams.new()
 camRay.FilterType = Enum.RaycastFilterType.Exclude
 local aimRay = RaycastParams.new()
 aimRay.FilterType = Enum.RaycastFilterType.Exclude
+
+-- What the crosshair looks through: the hero himself, the effects, and everyone on his team (heroes, bots, minions and
+-- his Master), as every shot flies through them (owner, 2026-11-02), so it finds the enemy behind one.
+local function aimIgnore(character: Model): { Instance }
+	local ignore: { Instance } = { character }
+	local effects = Workspace:FindFirstChild("Effects")
+	if effects then
+		table.insert(ignore, effects)
+	end
+	local team = character:GetAttribute("Team")
+	if not team then
+		return ignore
+	end
+	local function add(instance: Instance)
+		if instance ~= character and instance:GetAttribute("Team") == team then
+			table.insert(ignore, instance)
+		end
+	end
+	for _, other in Players:GetPlayers() do
+		if other.Character then
+			add(other.Character)
+		end
+	end
+	for _, model in CollectionService:GetTagged("Combatant") do
+		add(model)
+	end
+	for _, name in { "Minions", "MinionViews", "Masters" } do
+		local folder = Workspace:FindFirstChild(name)
+		if folder then
+			for _, child in folder:GetChildren() do
+				add(child)
+			end
+		end
+	end
+	return ignore
+end
 
 function HeroCamera.aim(): Vector3
 	return aimPoint
@@ -101,7 +138,7 @@ local function update(dt: number)
 		root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, turned, 0)
 	end
 
-	aimRay.FilterDescendantsInstances = { character, Workspace:FindFirstChild("Effects") :: Instance }
+	aimRay.FilterDescendantsInstances = aimIgnore(character)
 	local centre = camera.ViewportSize / 2
 	local ray = camera:ViewportPointToRay(centre.X, centre.Y)
 	-- The ray starts level with the hero, so nothing between the camera and him (a banner, a pillar's edge) is aimed at.

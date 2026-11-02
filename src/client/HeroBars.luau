@@ -14,6 +14,9 @@ local HeroBars = {}
 
 local C = UiStyle.Colors
 local WIDTH, HEIGHT, KNOB = 132, 16, 28
+-- The name over the bar (owner, 2026-11-02: friend and foe, so you see whom you kill); a bot goes by his hero, as on
+-- the scoreboard.
+local NAME = 18
 -- The bar floats this many studs over the hero's root; while he carries a boost, `BOOSTED` over the top of the boost
 -- (counted from the top of his head).
 local OVER, BOOSTED = 4.4, 4.2
@@ -43,7 +46,9 @@ local function build(model: Model)
 
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "HeroBar"
-	gui.Size = UDim2.fromOffset(WIDTH + KNOB / 2, KNOB)
+	gui.Size = UDim2.fromOffset(WIDTH + KNOB / 2, KNOB + NAME)
+	-- The bar stays where it was before the name came over it.
+	gui.SizeOffset = Vector2.new(0, NAME / 2 / (KNOB + NAME))
 	gui.LightInfluence = 0
 	-- Only the heroes near enough to matter: further bars would crowd the screen.
 	gui.MaxDistance = 75
@@ -52,7 +57,7 @@ local function build(model: Model)
 	local bar = UiStyle.bar(
 		gui,
 		UDim2.fromOffset(WIDTH, HEIGHT),
-		UDim2.new(0, KNOB / 2, 0.5, 0),
+		UDim2.new(0, KNOB / 2, 1, -KNOB / 2),
 		colour:Lerp(Color3.new(1, 1, 1), 0.2),
 		colour:Lerp(C[team .. "Dark"], 0.4),
 		Vector2.new(0, 0.5),
@@ -61,6 +66,7 @@ local function build(model: Model)
 	);
 	(bar.frame:FindFirstChildOfClass("UIStroke") :: UIStroke).Thickness = 2
 	local knob = UiStyle.frame(gui, UDim2.fromOffset(KNOB, KNOB))
+	knob.Position = UDim2.new(0, 0, 1, -KNOB)
 	knob.BackgroundColor3 = colour
 	knob.ZIndex = 2
 	UiStyle.corner(knob, UDim.new(0.5, 0))
@@ -69,6 +75,12 @@ local function build(model: Model)
 	local level = UiStyle.text(knob, "1", 17, C.Cream, C.Edge)
 	level.Size = UDim2.fromScale(1, 1)
 	level.ZIndex = 3
+
+	local owner = Players:GetPlayerFromCharacter(model)
+	local name =
+		UiStyle.text(gui, if owner then owner.DisplayName else model:GetAttribute("Hero") or "", 16, C.Cream, C.Edge)
+	name.Size = UDim2.new(1, 0, 0, NAME)
+	name.TextTruncate = Enum.TextTruncate.AtEnd
 
 	local function update()
 		bar:set(if humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 0)
@@ -79,7 +91,6 @@ local function build(model: Model)
 	humanoid.HealthChanged:Connect(update)
 	humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(update)
 	model:GetAttributeChangedSignal("Boost"):Connect(update)
-	local owner = Players:GetPlayerFromCharacter(model)
 	if owner then
 		owner:GetAttributeChangedSignal("Level"):Connect(update)
 	else
