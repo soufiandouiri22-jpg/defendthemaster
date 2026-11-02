@@ -52,6 +52,8 @@ local PORTRAIT = 112
 -- WORN_LOW portraits lower on the head. Its line under the lettering, this high.
 local WORN_BOX, ALONE_BOX = Vector2.new(0.95, 0.55), Vector2.new(1.5, 0.9)
 local WORN_AREA, WORN_HIGH, WORN_LOW = 0.4, 0.85, 0.12
+-- A picture this many times higher than wide is tall (the Star Hourglass; the Moon Shield sits where the Wind Gem does).
+local TALL = 1.4
 local LINE_HEIGHT = 40
 -- The feed: its rows, how many show at once, how long each stays, and where its foot sits (over the minimap).
 local ROW_WIDTH, ROW_HEIGHT, ROWS, ROW_LIFE = 210, 52, 5, 8
@@ -379,7 +381,7 @@ function KillFeed.start()
 				worn.Image = boost.Image
 				worn.Size = UDim2.fromOffset(drawn.X * fit, drawn.Y * fit)
 			end
-			local tall = boost ~= nil and boost.ImageSize ~= nil and boost.ImageSize.Y > boost.ImageSize.X * 1.1
+			local tall = boost ~= nil and boost.ImageSize ~= nil and boost.ImageSize.Y > boost.ImageSize.X * TALL
 			worn.Position = UDim2.new(
 				0.5,
 				0,

@@ -716,6 +716,8 @@ Config.Boosts = {
 			-- Art/Icons/Boosts/MoonShieldFront.png, Tools/render_crown_icon.py.
 			Image = "rbxassetid://106959352956928",
 			ImageSize = Vector2.new(394, 485),
+			-- As high on the portrait as the Wind Gem (owner, 2026-11-02).
+			ImageScale = 0.93,
 		},
 		-- The Wind Feather until the owner chose the winged gem for it (2026-11-02).
 		WindGem = {
