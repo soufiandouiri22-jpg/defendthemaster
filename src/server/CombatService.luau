@@ -213,6 +213,39 @@ local function slow(state: State, length: number, speed: number)
 	end)
 end
 
+-- A kit's `Guard` braces the hero `character`: he takes `guard.Share` less damage for `guard.Time` seconds
+-- (Damage.mitigated reads "Guard" and "GuardUntil"), a stronger brace outlasting a weaker one, with an iron sheen
+-- round him meanwhile.
+local function brace(character: Model, guard: any)
+	local now = os.clock()
+	local active = (character:GetAttribute("GuardUntil") or 0) > now
+	local share = if active then math.max(character:GetAttribute("Guard") or 0, guard.Share) else guard.Share
+	local ends = math.max(if active then character:GetAttribute("GuardUntil") else 0, now + guard.Time)
+	character:SetAttribute("Guard", share)
+	character:SetAttribute("GuardUntil", ends)
+	local sheen = character:FindFirstChild("Guard")
+	if not sheen then
+		local highlight = Instance.new("Highlight")
+		highlight.Name = "Guard"
+		highlight.FillColor = Color3.fromRGB(205, 210, 220)
+		highlight.FillTransparency = 0.8
+		highlight.OutlineColor = Color3.fromRGB(255, 214, 110)
+		highlight.OutlineTransparency = 0.2
+		highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+		highlight.Parent = character
+	end
+	task.delay(ends - now, function()
+		if (character:GetAttribute("GuardUntil") or 0) <= os.clock() then
+			character:SetAttribute("Guard", nil)
+			character:SetAttribute("GuardUntil", nil)
+			local left = character:FindFirstChild("Guard")
+			if left then
+				left:Destroy()
+			end
+		end
+	end)
+end
+
 local function strikeCone(
 	player: Instance,
 	state: State,
@@ -487,6 +520,9 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 					damage(player, character, enemy, strength(kit.Damage), magic)
 				end
 			end
+			if kit.Guard then
+				brace(character, kit.Guard)
+			end
 		end)
 		return true, landing
 	elseif kit.Kind == "Dash" then
@@ -669,6 +705,11 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				if target then
 					damage(player, character, reached[target], amount, magic)
 				end
+			end)
+		end
+		if kit.Guard then
+			later(state, kit.Slam or kit.Hits[1], function()
+				brace(character, kit.Guard)
 			end)
 		end
 		for _, time in kit.Pulses or {} do

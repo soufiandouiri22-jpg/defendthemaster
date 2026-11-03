@@ -17,7 +17,8 @@ local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
 
 -- The colours of a slam: its outer ring and smoke, the shade it leaves and the smoke's end, its inner ring, sparks and
 -- flash, and the `sparks` it throws up (their textures, taken in turn). Shadow by default; Light is Jestrel's white
--- magic (Config's Effects "Light"), throwing up the twinkles and card suits his beams shed (owner, 2026-11-01).
+-- magic (Config's Effects "Light"), throwing up the twinkles and card suits his beams shed (owner, 2026-11-01); Red is
+-- Korrund's (Effects "Red", owner 2026-11-03: no violet on him).
 export type Palette = { main: Color3, deep: Color3, bright: Color3, sparks: { string }? }
 local SHADOWS: Palette = { main = SHADOW, deep = DEEP, bright = BRIGHT }
 local SPARK = "rbxasset://textures/particles/sparkles_main.dds"
@@ -26,6 +27,11 @@ ShadowEffects.Light = {
 	deep = Color3.fromRGB(205, 205, 215),
 	bright = Color3.fromRGB(255, 255, 255),
 	sparks = { Assets.CardStar, table.unpack(Assets.CardSuits) },
+} :: Palette
+ShadowEffects.Red = {
+	main = Color3.fromRGB(196, 28, 24),
+	deep = Color3.fromRGB(42, 6, 6),
+	bright = Color3.fromRGB(255, 112, 72),
 } :: Palette
 
 local function effects(): Folder
@@ -142,8 +148,8 @@ function ShadowEffects.burst(at: Vector3)
 end
 
 -- The trail of a dash from `from` to `to` (on the ground) over `duration` seconds: a puff where he leaves, smoke along
--- the way as he passes, and a puff where he arrives.
-function ShadowEffects.dash(from: Vector3, to: Vector3, duration: number)
+-- the way as he passes, and a puff where he arrives; in the colours of `palette` when given.
+function ShadowEffects.dash(from: Vector3, to: Vector3, duration: number, palette: Palette?)
 	local steps = 6
 	for i = 0, steps do
 		local alpha = i / steps
@@ -159,7 +165,8 @@ function ShadowEffects.dash(from: Vector3, to: Vector3, duration: number)
 					NumberSequenceKeypoint.new(0, if ends then 1.8 else 1.4),
 					NumberSequenceKeypoint.new(1, if ends then 3.5 else 2.6),
 				}),
-				NumberRange.new(0.35, 0.6)
+				NumberRange.new(0.35, 0.6),
+				palette
 			)
 			task.delay(1, function()
 				part:Destroy()
@@ -168,16 +175,18 @@ function ShadowEffects.dash(from: Vector3, to: Vector3, duration: number)
 	end
 end
 
--- The shockwave of the leap's landing on the ground at `ground`, reaching `radius` studs.
-function ShadowEffects.shockwave(ground: Vector3, radius: number)
+-- The shockwave of the leap's landing on the ground at `ground`, reaching `radius` studs; in the colours of `palette`
+-- when given.
+function ShadowEffects.shockwave(ground: Vector3, radius: number, palette: Palette?)
+	local colours = palette or SHADOWS
 	local quick = TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 	local slow = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 
-	local ring, ringLabel = decal(ground, Assets.IndicatorRing, SHADOW, 0, 2)
+	local ring, ringLabel = decal(ground, Assets.IndicatorRing, colours.main, 0, 2)
 	TweenService:Create(ring, quick, { Size = Vector3.new(radius * 2.3, 0.05, radius * 2.3) }):Play()
 	TweenService:Create(ringLabel, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
 
-	local shade, shadeLabel = decal(ground, Assets.IndicatorDisc, DEEP, 0.05, radius * 2)
+	local shade, shadeLabel = decal(ground, Assets.IndicatorDisc, colours.deep, 0.05, radius * 2)
 	shade.Size = Vector3.new(radius, 0.05, radius)
 	TweenService:Create(shade, quick, { Size = Vector3.new(radius * 2, 0.05, radius * 2) }):Play()
 	TweenService:Create(shadeLabel, slow, { ImageTransparency = 1 }):Play()
@@ -189,10 +198,11 @@ function ShadowEffects.shockwave(ground: Vector3, radius: number)
 		40,
 		NumberRange.new(14, 26),
 		NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 5) }),
-		NumberRange.new(0.5, 0.9)
+		NumberRange.new(0.5, 0.9),
+		palette
 	)
 	local light = Instance.new("PointLight")
-	light.Color = SHADOW
+	light.Color = colours.main
 	light.Range = radius * 2
 	light.Brightness = 4
 	light.Parent = centre

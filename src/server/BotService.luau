@@ -488,6 +488,9 @@ local function strike(b: Bot, key: string, target: Target, gap: number, now: num
 		return maybe(b, key, aim, now)
 	elseif ability.Kind == "Leap" then
 		return gap >= 5 and gap <= ability.Range - 2 and maybe(b, key, stray(target.position), now)
+	elseif ability.Kind == "Dash" then
+		-- A charge (Korrund's E) runs through him, so it aims at where he stands.
+		return gap >= 4 and gap <= ability.Range - 4 and maybe(b, key, target.position, now)
 	elseif ability.Kind == "Flurry" then
 		return gap <= ability.Range - 1 and maybe(b, key, target.position, now)
 	elseif ability.Kind == "Strike" or ability.Kind == "Rain" then

@@ -171,6 +171,12 @@ local function slamSound(character: Model)
 	end
 end
 
+-- The colours of `settings`' slams, shockwaves and dash trail (Config's Effects), or nil for shadow.
+local function paletteOf(settings: any): ShadowEffects.Palette?
+	local kind = settings and settings.Effects
+	return if kind == "Light" then ShadowEffects.Light elseif kind == "Red" then ShadowEffects.Red else nil
+end
+
 -- The leap's shockwave at `landing` (where the root part comes down) when the hero lands.
 local function landLater(character: Model, landing: Vector3, kit: any)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -188,7 +194,7 @@ local function landLater(character: Model, landing: Vector3, kit: any)
 			if settings and settings.Effects == "Fire" then
 				FireEffects.shockwave(ground, kit.Radius)
 			else
-				ShadowEffects.shockwave(ground, kit.Radius)
+				ShadowEffects.shockwave(ground, kit.Radius, paletteOf(settings))
 			end
 			shakeNear(ground, 0.4)
 			slamSound(character)
@@ -206,7 +212,7 @@ local function slamLater(character: Model, kit: any)
 	end
 	local height = heightOf(root, humanoid)
 	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
-	local palette = if settings and settings.Effects == "Light" then ShadowEffects.Light else nil
+	local palette = paletteOf(settings)
 	local function at(time: number, strike: (ground: Vector3) -> ())
 		task.delay(time, function()
 			if humanoid.Health <= 0 or not root.Parent then
@@ -691,12 +697,14 @@ local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any
 	if kit.Trail ~= false then
 		local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
 		local kind = settings and settings.Effects
-		local trail = if kind == "Fire"
-			then FireEffects.dash
-			elseif kind == "Lightning" then LightningEffects.dash
-			else ShadowEffects.dash
 		task.delay(kit.Start, function()
-			trail(from - drop, to - drop, kit.Move - kit.Start)
+			if kind == "Fire" then
+				FireEffects.dash(from - drop, to - drop, kit.Move - kit.Start)
+			elseif kind == "Lightning" then
+				LightningEffects.dash(from - drop, to - drop, kit.Move - kit.Start)
+			else
+				ShadowEffects.dash(from - drop, to - drop, kit.Move - kit.Start, paletteOf(settings))
+			end
 		end)
 	end
 	task.delay(kit.Stop, function()
@@ -813,7 +821,7 @@ local function cast(key: string)
 		rainLater(character, spot, kit)
 		return
 	end
-	local length = HeroAnimator.play(character, kit.Motion, 1)
+	local length = HeroAnimator.play(character, kit.Motion, 1, nil, kit.InPlace)
 	if kit.Kind == "Leap" then
 		busyUntil = now + kit.Land + RECOVER
 		local to = HeroKit.leapLanding(root.Position, aim, kit.Range, heightOf(root, humanoid), HeroKit.leapIgnore())
@@ -1064,7 +1072,7 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 		end
 		return
 	else
-		local length = HeroAnimator.play(character, kit.Motion, 1)
+		local length = HeroAnimator.play(character, kit.Motion, 1, nil, kit.InPlace)
 		if kit.Kind == "Ascend" then
 			thenLater(character, kit, length)
 		end

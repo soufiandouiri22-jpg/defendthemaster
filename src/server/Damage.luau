@@ -132,6 +132,9 @@ function Damage.mitigated(victim: Model, amount: number, magic: boolean, attacke
 	end
 	amount *= 100 / (100 + defence)
 	amount *= 1 - Boosts.bonus(owner, "Shield")
+	if (victim:GetAttribute("GuardUntil") or 0) > now then
+		amount *= 1 - (victim:GetAttribute("Guard") or 0)
+	end
 
 	local ward, shield = Items.effect(owner, "Spellward")
 	if ward and magic then

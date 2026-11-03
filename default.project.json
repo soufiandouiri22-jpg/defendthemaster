@@ -64,6 +64,16 @@
 					"$path": "Vendor/TricksterCaster/Animations/Included Rig.rbxmx"
 				}
 			},
+			"Wildguard": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/Wildguard/Build/ComponentPlayer"
+				},
+				"Rig": {
+					"$path": "Vendor/Wildguard/Animations/Included Rig.rbxmx"
+				}
+			},
 			"GreataxeBerserker": {
 				"$className": "Folder",
 				"Rig": {

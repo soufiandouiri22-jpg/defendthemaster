@@ -12,6 +12,11 @@
 --
 -- Cues (Motion.cues, per clip id: { Time = seconds into the clip, ... }) are handed to Motion.onCue as the clips'
 -- clocks pass them: the action's, and the base's while no action covers it.
+--
+-- The clips in Motion.mirrored play mirrored, left for right: the packs' rigs are symmetric (each left joint's frames
+-- the right one's reflected across the body's middle), so the left joint takes the right one's pose reflected, and the
+-- other way round. Only the body is mirrored, not the pack's weapons; a hero whose weapons are his own, held in a hand
+-- (HeroLook's Held), keeps it in that hand.
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -60,6 +65,8 @@ type Clip = {
 	hold: boolean,
 	-- Where it stands still, short of its end (Motion.stopAt).
 	stopAt: number?,
+	-- Played left for right (Motion.mirrored).
+	mirror: boolean,
 }
 
 export type Cue = { Time: number, [string]: any }
@@ -96,6 +103,8 @@ export type Motion = typeof(setmetatable(
 		low: boolean,
 		cues: { [string]: { Cue } }?,
 		onCue: ((cue: Cue) -> ())?,
+		-- The clips played mirrored, by id.
+		mirrored: { [string]: boolean }?,
 	},
 	Motion
 ))
@@ -203,6 +212,7 @@ function Motion.new(character: Model, packName: string): Motion
 		low = false,
 		cues = nil,
 		onCue = nil,
+		mirrored = nil,
 	}, Motion)
 	local shift = Motion.rootShift(character)
 	for _, j in p.config.body_joints do
@@ -237,6 +247,22 @@ end
 function Motion.meta(packName: string, id: string): Meta
 	local _, meta = pack(packName).player.Sample(nil, id, 0)
 	return meta
+end
+
+-- `cf` reflected across the body's middle (its X): what the joint on the other side does in a mirrored clip.
+local function reflect(cf: CFrame): CFrame
+	local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+	return CFrame.new(-x, y, z, r00, -r01, -r02, -r10, r11, r12, -r20, r21, r22)
+end
+
+-- The body part on the other side of `name` (LeftHand for RightHand), or `name` itself in the middle.
+local function across(name: string): string
+	if string.sub(name, 1, 4) == "Left" then
+		return "Right" .. string.sub(name, 5)
+	elseif string.sub(name, 1, 5) == "Right" then
+		return "Left" .. string.sub(name, 6)
+	end
+	return name
 end
 
 local function clipTime(clip: Clip): number
@@ -277,6 +303,13 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 				props[name] = { world = shifted, scale = pose.scale }
 			end
 		end
+	end
+	if clip.mirror then
+		local mirrored = {}
+		for name, cf in body do
+			mirrored[across(name)] = reflect(cf)
+		end
+		body = mirrored
 	end
 	return { body = body, bones = bones, props = props, opacity = sample.opacity }
 end
@@ -351,6 +384,7 @@ local function newClip(self: Motion, id: string, speed: number, time: number?): 
 		inPlace = false,
 		grounded = false,
 		hold = false,
+		mirror = self.mirrored ~= nil and self.mirrored[id] == true,
 	}
 end
 

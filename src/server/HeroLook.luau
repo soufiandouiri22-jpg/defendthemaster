@@ -2,6 +2,7 @@
 -- rig, his head hidden under a mask, and the pack's weapons bound to his root part or his hand as on the pack's rig. For the
 -- heroes in a match (HeroService, BotService) and on the lobby's podium (Lobby.ShowcaseService).
 
+local AssetService = game:GetService("AssetService")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -125,7 +126,7 @@ local function arm(character: Model, hero: string)
 	end
 	-- A keyframe pack (Tools/keyframe_pack.py) has its components beside its rig, and its weapon held in a hand.
 	local pack = ReplicatedStorage[settings.Pack]
-	local components = pack.Rig:FindFirstChild("Components") or pack.Components
+	local components = pack.Rig:FindFirstChild("Components") or pack:FindFirstChild("Components")
 	local held = if pack.Rig:FindFirstChild("Components")
 		then nil
 		else HttpService:JSONDecode(pack.ComponentPlayer.Configuration.Value).weapon
@@ -167,8 +168,59 @@ local function arm(character: Model, hero: string)
 	end
 end
 
+local rigidMeshes: { [string]: MeshPart } = {}
+
+-- A catalog accessory worn as layered clothing, but meant to be held (Look.Held: the accessory named `Name` in the hand
+-- `Hand`, at `Grip` from it): its mesh made again as a plain mesh part, welded to the hand so it follows the hand in
+-- every clip, and the accessory taken off. The mesh is skinned, so a part of it straight under the character is drawn
+-- on his bones wherever its weld puts it; inside a model of its own ("Held") it is drawn where it is.
+local function hold(character: Model, held: { Name: string, Hand: string, Grip: CFrame })
+	local accessory = character:FindFirstChild("Accessory (" .. held.Name .. ")")
+	local handle = accessory and accessory:FindFirstChild("Handle") :: MeshPart?
+	local hand = character:FindFirstChild(held.Hand) :: BasePart?
+	if not handle or not handle:IsA("MeshPart") or not hand then
+		warn("[HeroLook] cannot hold", held.Name, "in", held.Hand)
+		return
+	end
+	local rigid = rigidMeshes[handle.MeshId]
+	if not rigid then
+		local ok, made = pcall(function()
+			return AssetService:CreateMeshPartAsync(Content.fromUri(handle.MeshId))
+		end)
+		if not ok then
+			warn("[HeroLook] cannot make", held.Name, "rigid:", made)
+			return
+		end
+		rigid = made :: MeshPart
+		rigidMeshes[handle.MeshId] = rigid
+	end
+	local part = rigid:Clone()
+	part.Name = held.Name
+	part.Size = handle.Size
+	part.Anchored = false
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Massless = true
+	local look = handle:FindFirstChildOfClass("SurfaceAppearance")
+	if look then
+		look:Clone().Parent = part
+	end
+	part.CFrame = hand.CFrame * held.Grip
+	local weld = Instance.new("Weld")
+	weld.Part0 = hand
+	weld.Part1 = part
+	weld.C0 = held.Grip
+	weld.Parent = part
+	local model = Instance.new("Model")
+	model.Name = "Held"
+	part.Parent = model
+	model.Parent = character
+	accessory:Destroy()
+end
+
 -- Gives the hero body `character` the look of `hero` beyond his avatar: his head hidden under a mask, or its painted
--- face taken off and his own face painted on, and his weapons.
+-- face taken off and his own face painted on, his held catalog weapon, and his weapons.
 function HeroLook.dress(character: Model, hero: string)
 	character:SetAttribute("Hero", hero)
 	local look = Config.Heroes[hero].Look
@@ -304,6 +356,9 @@ function HeroLook.dress(character: Model, hero: string)
 			weld.Parent = strip
 			strip.Parent = head
 		end
+	end
+	if look.Held then
+		hold(character, look.Held)
 	end
 	arm(character, hero)
 end

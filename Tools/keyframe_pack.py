@@ -3,7 +3,7 @@
 Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack rig's joints in its Configuration, its
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
-    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster
+    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
@@ -51,6 +51,17 @@ PACKS = {
             "parent": "RightHand",
             "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
             "c1": [0, 0.3191, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+    },
+    # The Wildguard's clips with its axe and shield are its weapon tracks; the axe hangs from the right hand ("Attach
+    # Equipment.lua"). Korrund holds his own axe and fist from the catalog instead, so neither is shown.
+    "Wildguard": {
+        "clips": "Individual Animations/weapon-tracks",
+        "weapon": {
+            "name": "Axe",
+            "parent": "RightHand",
+            "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            "c1": [0.32262, -1.00134, 0.00021, 1, 0, 0, 0, 1, 0, 0, 0, 1],
         },
     },
 }

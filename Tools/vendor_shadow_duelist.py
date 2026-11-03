@@ -2,14 +2,14 @@
 """Unpacks the bought whole-pack ZIPs (KitsBlox, Docs/Third_Party.md) into Vendor/: the Shadow Duelist (Shadowren)
 into Vendor/ShadowDuelist/, the Ranger (Rowan) into Vendor/Ranger/, the Elementalist (the dark mage) into
 Vendor/Elementalist/, the Scythe Wielder (the reaper) into Vendor/ScytheWielder/, the Greatsword Knight into
-Vendor/GreatswordKnight/ and the Trickster Caster (the jester) into Vendor/TricksterCaster/, each with its animations
-and its sounds.
+Vendor/GreatswordKnight/, the Trickster Caster (the jester) into Vendor/TricksterCaster/ and the Wildguard (Korrund)
+into Vendor/Wildguard/, each with its animations and its sounds.
 
 Their licence forbids sharing the files, so Vendor/ stays out of git: run this once on a new machine with the ZIPs
 in ~/Downloads. Rojo serves each pack's playback module and rig from there (default.project.json).
 
     python3 Tools/vendor_shadow_duelist.py [ShadowDuelist] [Ranger] [Elementalist] [ScytheWielder] [GreatswordKnight]
-        [TricksterCaster]
+        [TricksterCaster] [Wildguard]
 """
 
 import pathlib
@@ -33,6 +33,8 @@ PACKS = {
     "RobloxAnimations-Greatsword-Knight-Sounds-v1.2.1.zip": ("GreatswordKnight", "Sounds"),
     "RobloxAnimations-Trickster-Caster-v1.1.0.zip": ("TricksterCaster", "Animations"),
     "RobloxAnimations-Trickster-Caster-Sounds-v1.3.1.zip": ("TricksterCaster", "Sounds"),
+    "RobloxAnimations-Wildguard-v1.1.0.zip": ("Wildguard", "Animations"),
+    "RobloxAnimations-Wildguard-Sounds-v1.3.1.zip": ("Wildguard", "Sounds"),
 }
 
 

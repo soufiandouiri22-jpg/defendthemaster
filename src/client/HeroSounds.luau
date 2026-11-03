@@ -41,6 +41,14 @@ function HeroSounds.bank(name: string): Bank?
 		local bank = if module then require(module) :: any else false
 		banks[name] = bank
 		if bank then
+			-- The packs whose recordings its cues borrow are loaded with it.
+			for _, cues in bank.Cues do
+				for _, cue in cues do
+					if cue.Bank then
+						HeroSounds.bank(cue.Bank)
+					end
+				end
+			end
 			-- Kept for the whole session: while one Sound holds the file it stays loaded, and every recording
 			-- played from it sounds at once instead of waiting for the file again (or not at all).
 			local probe = Instance.new("Sound")
@@ -84,7 +92,8 @@ function HeroSounds.step(walker: Instance, at: BasePart, bank: Bank, volume: num
 	end
 end
 
--- Plays a clip's cue on `character`: one of its recordings, or the next footstep.
+-- Plays a clip's cue on `character`: one of its recordings (from the pack `cue.Bank`'s when it names one), or the next
+-- footstep.
 function HeroSounds.cue(character: Model, bank: Bank, cue: any)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
@@ -93,7 +102,10 @@ function HeroSounds.cue(character: Model, bank: Bank, cue: any)
 	if cue.Footstep then
 		HeroSounds.step(character, root, bank, cue.Volume)
 	elseif cue.Sounds and #cue.Sounds > 0 then
-		play(root, bank, cue.Sounds[math.random(#cue.Sounds)], cue.Volume)
+		local from = if cue.Bank then HeroSounds.bank(cue.Bank) else bank
+		if from then
+			play(root, from, cue.Sounds[math.random(#cue.Sounds)], cue.Volume)
+		end
 	end
 end
 

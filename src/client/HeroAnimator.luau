@@ -101,6 +101,16 @@ local function add(character: Instance)
 		landingUntil = 0,
 		dead = false,
 	}
+	-- A key whose clip is played left for right (its `Mirror`, Config.Heroes).
+	local mirrored = {}
+	for _, kit in settings.Kit or {} do
+		if kit.Mirror and kit.Motion then
+			mirrored[kit.Motion] = true
+		end
+	end
+	if next(mirrored) then
+		hero.motion.mirrored = mirrored
+	end
 	humanoid.Died:Connect(function()
 		fall(hero)
 		Motion.holdJoints(character)

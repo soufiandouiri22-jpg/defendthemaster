@@ -922,7 +922,11 @@ Config.Minions = {
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
 -- With a `Slash` those he passed are struck only when his weapon cuts, `Time` seconds into its motion (after `Move`),
 -- together with everyone within its `Range` of where he lands.
--- A "Leap"'s `Swings` strike all round him before he lands, at each of their `Hits` (`Damage`, `Ratio`, `Range`).
+-- A "Leap"'s `Swings` strike all round him before he lands, at each of their `Hits` (`Damage`, `Ratio`, `Range`);
+-- with `InPlace` its motion plays without its own travel over the ground, as the game carries him.
+-- A `Guard` (a Flurry's at its `Slam`, a Leap's where he lands) braces him: he takes `Share` less damage for `Time`
+-- seconds (Damage.mitigated), with an iron sheen round him.
+-- With `Mirror` a key's `Motion` plays left for right (Shared.Motion), its body only, not the pack's weapons.
 -- A "Strike" keeps him where he stands and strikes the spot aimed at (up to `Range` away) at each of its `Strikes`
 -- (seconds from the cast), everyone within `Radius` of it, from the sky (LightningEffects); his motion itself strikes
 -- no one. A `Hold` plays its motion at `Speed` from `From` to `To` seconds into the clip, a moment drawn out.
@@ -1894,6 +1898,157 @@ Config.Heroes = {
 			},
 		},
 	},
+	-- Korrund, an iron-clad tank in hazard-striped power armour with a chainsaw axe and an iron fist (owner, 2026-11-03;
+	-- the RobloxAnimations Wildguard pack, its axe-and-shield clips chosen by the owner: M1 the basic attacks 1 to 3, M2
+	-- 057, E 058, R 056). The times are where the axe moves fastest and where the clips lift him and set him down
+	-- (Tools/clip_hits.py).
+	-- A tank: the most health and the least damage (AGENTS.md), against Mortael and Brontar, the warriors:
+	--   Health 1500 against their 1100 and Shadowren's 900, and his Guard (25% less damage for 3 s after every M2, 40%
+	--   for 5 s after his R), which keeps him in the fight.
+	--   M1 about 45 damage a second (142 in 3.16 s, slower and harder blows) against their 65 to 71 and Shadowren's
+	--   67, a little shorter (7 studs).
+	--   His whole kit on one foe up close (M1 combo, M2, E, R) 432 against Brontar's 665 and Mortael's 765, so he
+	--   kills slowly and survives long; his ratios are lower too (M1 0.53 a slower blow against 0.6, R 0.8 against
+	--   1.3).
+	Korrund = {
+		Role = "Tank",
+		Description = "Holds the line in iron and charges through his foes.",
+		Starter = true,
+		-- His entrance (owner, 2026-11-03: a short one of his own): he reaches back for his axe, swings it high over his
+		-- head and settles into his battle stance with it, facing the camera.
+		Showcase = {
+			Motion = "RA-WGD-014",
+			Enter = { Motion = "RA-WGD-016", From = 0.3, Then = "Breathe" },
+			Aura = Color3.fromRGB(220, 36, 30),
+		},
+		-- His slams, shockwaves and charge strike in red, never violet (ShadowEffects.Red; owner, 2026-11-03).
+		Effects = "Red",
+		Health = 1500,
+		Scales = "Attack",
+		Look = {
+			-- Nexus Exchange's Iron Eradicator (owner, 2026-11-03): its greaves, armour, iron fist on the left hand and
+			-- helmet, and the same maker's Handheld Iron Chainsaw Axe in the right.
+			Layered = {
+				{ Id = 140171325535687, Type = Enum.AccessoryType.Pants },
+				{ Id = 137609089658275, Type = Enum.AccessoryType.Sweater },
+				{ Id = 107980357661881, Type = Enum.AccessoryType.Jacket },
+				{ Id = 83433998996446, Type = Enum.AccessoryType.Jacket },
+			},
+			HatAccessory = "122552163634316",
+			Skin = Color3.fromRGB(234, 184, 146),
+			-- The axe comes as layered clothing hung from the torso; held fast in his right hand instead (HeroLook): its
+			-- haft (the mesh's Z, its wrapped grip at the +Z end) through the fist, the head forward and the blade down.
+			Held = { Name = "Handheld Iron Chainsaw Axe", Hand = "RightHand", Grip = CFrame.new(0, -0.3, -1.3) },
+		},
+		-- Painted from a sheet of Play views of every part of him (Art/Portraits/concepts/korrund_sheet.png; owner,
+		-- 2026-11-03): his bare right hand under the striped bracer holding the axe, plain shoulder plates, the iron fist
+		-- with its four brass skulls (Art/Portraits/korrund.png).
+		Portrait = { Image = "rbxassetid://81789107930980", Face = { 190, 20, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Korrund, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Korrund, keyed by Tools/key_icons.py --glow); his dash shows him, as every hero's does.
+		Icons = {
+			M1 = "rbxassetid://116965090015004",
+			M2 = "rbxassetid://140726616248213",
+			E = "rbxassetid://111935721720679",
+			R = "rbxassetid://136038754142153",
+			Dash = "rbxassetid://111595173340478",
+		},
+		Pack = "Wildguard",
+		-- He holds his own axe and fist from the catalog (Look), so the pack's axe and shield are not shown.
+		Weapons = {},
+		Motions = {
+			Idle = "RA-WGD-015",
+			Run = "RA-WGD-005",
+			RunLeft = "RA-WGD-006",
+			RunRight = "RA-WGD-007",
+			Back = "RA-WGD-002",
+			Takeoff = "RA-WGD-011",
+			Air = "RA-WGD-012",
+			Land = "RA-WGD-013",
+			Death = "RA-WGD-035",
+		},
+		Kit = {
+			-- Three blows of axe and fist, each followed through before the next, the third the heaviest. Swung slower
+			-- than the warriors' and harder each, so they feel heavy (owner, 2026-11-03), at the same damage a second
+			-- as before (the ratio too: 0.45 at full speed).
+			M1 = {
+				Kind = "Combo",
+				Speed = 0.85,
+				Ratio = 0.53,
+				Reset = 1.8,
+				Hits = {
+					{ Motion = "RA-WGD-025", Hit = 0.38, Recover = 0.4, Damage = 37, Range = 7, Angle = 140 },
+					{ Motion = "RA-WGD-026", Hit = 0.38, Recover = 0.4, Damage = 42, Range = 7, Angle = 120 },
+					{ Motion = "RA-WGD-027", Hit = 0.32, Recover = 0.5, Damage = 63, Range = 7, Angle = 160 },
+				},
+			},
+			-- He jumps up with his axe over his head and slams it into the ground (057, down at 1.0 s): everyone round
+			-- him is struck, and he braces in his armour after (Guard), less often than the warriors' M2 (9 s).
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-WGD-057",
+				Indicator = "Ring",
+				Cooldown = 9,
+				Hits = { 1.0 },
+				Slam = 1.0,
+				SlamRadius = 10,
+				SlamDamage = 80,
+				SlamRatio = 0.4,
+				Damage = 80,
+				Ratio = 0.4,
+				Range = 10,
+				Angle = 360,
+				Guard = { Share = 0.25, Time = 3 },
+			},
+			-- A shield charge (058) to where he aims: he winds up and storms 18 studs ahead (1.12 to 1.43 s into the
+			-- clip, played 1.25 times as fast), striking everyone he runs through once. Played mirrored (Motion), so
+			-- the blow at its end is struck with his iron fist rather than his axe (owner, 2026-11-03).
+			E = {
+				Kind = "Dash",
+				Motion = "RA-WGD-058",
+				Mirror = true,
+				Indicator = "Arrow",
+				Speed = 1.25,
+				Cooldown = 10,
+				Range = 18,
+				Width = 5,
+				Damage = 60,
+				Ratio = 0.4,
+				Start = 0.9,
+				Move = 1.15,
+				Stop = 2.2,
+			},
+			-- A leap high up and down onto the spot aimed at, axe first (056: off the ground at 0.27 s, down at 1.1),
+			-- the clip in place as the game carries him; where he lands he braces in his armour (Guard).
+			R = {
+				Kind = "Leap",
+				Motion = "RA-WGD-056",
+				InPlace = true,
+				Indicator = "Zone",
+				Cooldown = 40,
+				Range = 16,
+				Radius = 10,
+				Damage = 150,
+				Ratio = 0.8,
+				Takeoff = 0.27,
+				Land = 1.1,
+				Guard = { Share = 0.4, Time = 5 },
+			},
+			-- The pack has no dash: a short burst of his sprint (008), slower to come back than the others' (9 s) and
+			-- striking no one.
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-WGD-008",
+				Speed = 1.2,
+				Cooldown = 9,
+				Range = 12,
+				Width = 4,
+				Start = 0.05,
+				Move = 0.35,
+				Stop = 0.5,
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -2061,7 +2216,7 @@ Config.Bots = {
 	Hero = "Shadowren",
 	-- Every hero at most once a team, the bots' at random (owner, 2026-11-01): each bot takes the first of these, shuffled
 	-- per match and team (Shared.Lineup.botOrder), that its team does not play yet.
-	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel" },
+	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel", "Korrund" },
 	Sight = 25,
 	Taken = 20,
 	Reaction = { Min = 1.3, Max = 2.6 },
