@@ -129,18 +129,25 @@ local function arm(character: Model, hero: string)
 	if not settings.Pack or not root then
 		return
 	end
-	-- A keyframe pack (Tools/keyframe_pack.py) has its components beside its rig, and its weapon held in a hand.
+	-- A keyframe pack (Tools/keyframe_pack.py) has its components beside its rig, and its weapon held in a hand. The
+	-- newest packs (the Katana Swordsman) have each weapon as a part on the rig itself, on a joint of its own to a body
+	-- part (its Configuration's props).
 	local pack = ReplicatedStorage[settings.Pack]
-	local components = pack.Rig:FindFirstChild("Components") or pack:FindFirstChild("Components")
-	local held = if pack.Rig:FindFirstChild("Components")
-		then nil
-		else HttpService:JSONDecode(pack.ComponentPlayer.Configuration.Value).weapon
+	local config = HttpService:JSONDecode(pack.ComponentPlayer.Configuration.Value)
+	local components = pack.Rig:FindFirstChild("Components") or pack:FindFirstChild("Components") or pack.Rig
+	local held = if pack.Rig:FindFirstChild("Components") then nil else config.weapon
+	local joints = {}
+	for _, prop in config.props or {} do
+		joints[prop.name] = prop
+	end
 	local shift = Motion.rootShift(character)
 	local folder = Instance.new("Folder")
 	folder.Name = "Weapons"
 	for _, name in settings.Weapons or {} do
 		local weapon = components[name]:Clone()
-		for _, d in weapon:GetDescendants() do
+		local parts = weapon:GetDescendants()
+		table.insert(parts, weapon)
+		for _, d in parts do
 			if d:IsA("BasePart") then
 				d.Anchored = false
 				d.CanCollide = false
@@ -162,6 +169,17 @@ local function arm(character: Model, hero: string)
 			if d:IsA("BasePart") and table.find(settings.Burning or {}, d.Name) then
 				burn(d)
 			end
+		end
+		local joint = joints[name]
+		if joint and weapon:IsA("BasePart") then
+			-- Shared.Motion poses it on this joint, from the body part it hangs from as on the pack's rig.
+			local binding = Instance.new("Motor6D")
+			binding.Name = "ComponentBinding"
+			binding.Part0 = character:FindFirstChild(joint.part0) :: BasePart
+			binding.Part1 = weapon
+			binding.C0 = CFrame.new(table.unpack(joint.c0))
+			binding.C1 = CFrame.new(table.unpack(joint.c1))
+			binding.Parent = weapon
 		end
 		weapon.Parent = folder
 	end
@@ -237,6 +255,12 @@ function HeroLook.dress(character: Model, hero: string)
 	end
 	if look.BlankFace and head and head:IsA("MeshPart") then
 		head.TextureID = ""
+		-- The plain R15 head's smile is a Decal, under a face accessory that brings the face instead.
+		for _, face in head:GetChildren() do
+			if face:IsA("Decal") then
+				face:Destroy()
+			end
+		end
 	end
 	local visor = look.VisorEyes
 	if visor and head and head:IsA("BasePart") then

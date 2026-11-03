@@ -176,7 +176,11 @@ end
 -- The colours of `settings`' slams, shockwaves and dash trail (Config's Effects), or nil for shadow.
 local function paletteOf(settings: any): ShadowEffects.Palette?
 	local kind = settings and settings.Effects
-	return if kind == "Light" then ShadowEffects.Light elseif kind == "Red" then ShadowEffects.Red else nil
+	return if kind == "Light"
+		then ShadowEffects.Light
+		elseif kind == "Red" then ShadowEffects.Red
+		elseif kind == "Blue" then ShadowEffects.Blue
+		else nil
 end
 
 -- The leap's shockwave at `landing` (where the root part comes down) when the hero lands.
@@ -692,7 +696,7 @@ end
 
 -- The dash's lunge in place while the hero is carried from `from` to `to`, its trail, and the lunge cut off at its end.
 local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any)
-	HeroAnimator.play(character, kit.Motion, kit.Speed, nil, true)
+	HeroAnimator.play(character, kit.Motion, kit.Speed or 1, nil, true)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local drop = if root and humanoid then Vector3.new(0, heightOf(root, humanoid), 0) else Vector3.zero

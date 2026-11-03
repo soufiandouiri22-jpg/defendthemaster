@@ -2060,6 +2060,142 @@ Config.Heroes = {
 			},
 		},
 	},
+	-- Kaeda (owner, 2026-11-03): the samurai, an assassin in a blue aura, with the Katana Swordsman pack. Her
+	-- numbers set against Shadowren's, the other assassin, key by key: a little less health (880 to his 900); her combo
+	-- as strong (126 to his 125 over three swings) but a stud longer with the katana; her M2 a kick and two cuts (96),
+	-- a little more than his leap (90) as it comes a second later (8 s); her E a leap as strong as his thrown dagger
+	-- (110), a second slower to come back (9 s) as it lands on a group; her R the most burst up close of any hero
+	-- (four cuts of 30 and a slam of 140, to his six of 24 and 120); her dash his.
+	Kaeda = {
+		Role = "Assassin",
+		Description = "Draws, cuts and is gone before the blade is seen.",
+		Starter = true,
+		Showcase = {
+			Motion = "RA-KAT-080",
+			-- Her weapon pose's entrance, 3.5 s long, played faster to end about when the others' do (2.7 s).
+			Enter = { Motion = "RA-KAT-079", Speed = 1.3, Then = "Breathe" },
+			Aura = Color3.fromRGB(40, 120, 255),
+		},
+		-- Her slams, shockwaves and dash trail strike in blue (ShadowEffects.Blue).
+		Effects = "Blue",
+		Health = 880,
+		Scales = "Attack",
+		Look = {
+			Layered = {
+				{ Id = 14229182778, Type = Enum.AccessoryType.Pants },
+				{ Id = 14229518618, Type = Enum.AccessoryType.Jacket },
+			},
+			HairAccessory = "137533691447463",
+			-- The anime face sits on the plain head, its smile taken off.
+			FaceAccessory = "13549793554",
+			BlankFace = true,
+			Skin = Color3.fromRGB(234, 190, 150),
+		},
+		-- Painted from a sheet of Play views of her (Art/Portraits/concepts/kaeda_sheet.png): her katana raised over
+		-- her shoulder in dark smoke (Art/Portraits/kaeda.png). Her eyes, nose and mouth are her face item's own
+		-- (kaeda_face.png) laid on the painting under her fringe, the face lengthened below the nose to fit them: the
+		-- painted ones were half-closed and the mouth too high (owner, 2026-11-03).
+		Portrait = { Image = "rbxassetid://122602852609484", Face = { 170, 0, 680 } },
+		-- The ability bar's icons per key (Art/Icons/Kaeda, each a GenerateImage drawing on a key colour in
+		-- Art/Icons/keyed/Kaeda, keyed by Tools/key_icons.py, the effects with --glow); her dash shows her.
+		Icons = {
+			M1 = "rbxassetid://128402845134025",
+			M2 = "rbxassetid://93734458529950",
+			E = "rbxassetid://82139192734494",
+			R = "rbxassetid://76683046055055",
+			Dash = "rbxassetid://130312930580945",
+		},
+		Pack = "KatanaSwordsman",
+		-- The pack's katana in her right hand and its scabbard at her hips, drawn and sheathed as the clips say.
+		Weapons = { "Katana", "Scabbard" },
+		Motions = {
+			Idle = "RA-KAT-015",
+			Run = "RA-KAT-005",
+			RunLeft = "RA-KAT-006",
+			RunRight = "RA-KAT-007",
+			Back = "RA-KAT-002",
+			Takeoff = "RA-KAT-011",
+			Air = "RA-KAT-012",
+			Land = "RA-KAT-013",
+			Death = "RA-KAT-033",
+		},
+		Kit = {
+			-- A cut down from overhead (023), a wide sweep from left to right (024) and a thrust straight ahead (025),
+			-- the thrust the hardest and the narrowest; the times are where the katana's tip moves fastest in front.
+			-- Each swings out before the next (Recover; owner 2026-11-03): without, her three cuts took 1.3 s, about 98
+			-- damage a second, the most of any hero; with, 1.8 s and about 71, a little more than Shadowren's 67.
+			M1 = {
+				Kind = "Combo",
+				Speed = 1.25,
+				Ratio = 0.6,
+				Reset = 1.5,
+				Hits = {
+					{ Motion = "RA-KAT-023", Hit = 0.38, Recover = 0.2, Damage = 32, Range = 7, Angle = 110 },
+					{ Motion = "RA-KAT-024", Hit = 0.40, Recover = 0.2, Damage = 36, Range = 7, Angle = 150 },
+					{ Motion = "RA-KAT-025", Hit = 0.38, Recover = 0.2, Damage = 58, Range = 8, Angle = 60 },
+				},
+			},
+			-- A spinning kick (059, owner 2026-11-03; her foot at hip height ahead of her at 0.5 s), then a little hop
+			-- into a wide sweep of her katana (1.15 s, about 8 studs out) and a low cut ahead (1.7 s).
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-KAT-059",
+				Indicator = "Cone",
+				Cooldown = 8,
+				Hits = { 0.50, 1.15, 1.70 },
+				Damage = 32,
+				Ratio = 0.35,
+				Range = 8,
+				Angle = 150,
+			},
+			-- A leap high up (069: off the ground at 0.35 s) and down onto the spot aimed at, the katana first (down at
+			-- 0.8 s), the clip in place as the game carries her.
+			E = {
+				Kind = "Leap",
+				Motion = "RA-KAT-069",
+				InPlace = true,
+				Indicator = "Zone",
+				Cooldown = 9,
+				Range = 14,
+				Radius = 8,
+				Damage = 110,
+				Ratio = 1.1,
+				Takeoff = 0.35,
+				Land = 0.8,
+			},
+			-- Four fast cuts in a cone ahead of her (066), then a short jump and a slam all round her as she comes
+			-- down (1.8 s), the kit's strongest hit.
+			R = {
+				Kind = "Flurry",
+				Motion = "RA-KAT-066",
+				Indicator = "Cone",
+				Cooldown = 40,
+				Hits = { 0.43, 0.67, 0.90, 1.17, 1.80 },
+				Slam = 1.80,
+				SlamRadius = 12,
+				SlamDamage = 140,
+				SlamRatio = 1,
+				Damage = 30,
+				Ratio = 0.25,
+				Range = 10,
+				Angle = 80,
+			},
+			-- A low lunge (074, its cut early in it) to where she aims, nicking every enemy she passes through once.
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-KAT-074",
+				Speed = 1.3,
+				Cooldown = 5,
+				Range = 16,
+				Width = 4,
+				Damage = 20,
+				Ratio = 0.3,
+				Start = 0.06,
+				Move = 0.34,
+				Stop = 0.6,
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -2227,7 +2363,7 @@ Config.Bots = {
 	Hero = "Shadowren",
 	-- Every hero at most once a team, the bots' at random (owner, 2026-11-01): each bot takes the first of these, shuffled
 	-- per match and team (Shared.Lineup.botOrder), that its team does not play yet.
-	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel", "Korrund" },
+	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel", "Korrund", "Kaeda" },
 	Sight = 25,
 	Taken = 20,
 	Reaction = { Min = 1.3, Max = 2.6 },

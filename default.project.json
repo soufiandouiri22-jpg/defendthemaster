@@ -34,6 +34,15 @@
 					"$path": "Vendor/ScytheWielder/Animations/Included Rig.rbxmx"
 				}
 			},
+			"KatanaSwordsman": {
+				"$className": "Folder",
+				"ComponentPlayer": {
+					"$path": "Vendor/KatanaSwordsman/Animations/Component Playback.rbxm"
+				},
+				"Rig": {
+					"$path": "Vendor/KatanaSwordsman/Animations/Included Rig.rbxmx"
+				}
+			},
 			"Elementalist": {
 				"$className": "Folder",
 				"$ignoreUnknownInstances": true,

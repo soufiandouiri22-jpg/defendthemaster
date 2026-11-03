@@ -219,6 +219,24 @@ PACKS = {
         },
         "events": {},
     },
+    "KatanaSwordsman": {
+        "folder": ROOT / "Vendor/KatanaSwordsman/Sounds",
+        "clips": [
+            # Kaeda's attacks (Config.Heroes.Kaeda.Kit) and the clips under them.
+            "RA-KAT-023", "RA-KAT-024", "RA-KAT-025", "RA-KAT-059", "RA-KAT-069", "RA-KAT-066", "RA-KAT-074",
+            "RA-KAT-005", "RA-KAT-006", "RA-KAT-007", "RA-KAT-002", "RA-KAT-011", "RA-KAT-013", "RA-KAT-033",
+        ],
+        # Her steps are a woman's.
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "f", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # Her leap's landing (069) and her ultimate's slam (066) already sound in their clips' own recordings, so
+        # they need no Slam.
+        "events": {},
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no

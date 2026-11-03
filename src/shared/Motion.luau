@@ -5,7 +5,8 @@
 -- rig, standing on the same ground. The weapons (the pack's components, in the character's "Weapons" folder) follow
 -- the clips as on the pack's rig: a skinned one (a bow, a dagger) by its bones, a rigid one (a quiver) by its
 -- ComponentBinding Motor6D on the root part (or on a hand, the Elementalist's staff); and they fade in and out as the
--- clips say.
+-- clips say. The newest packs (the Katana Swordsman) bind each rigid weapon to a body part, the sword to the right hand
+-- and its scabbard to the hips, and grow and shrink its mesh (Geometry, welded beneath it) as the clips say.
 --
 -- Two layers: the base (standing, running, jumping), which crossfades when it changes, and over it one action (an
 -- attack), which fades in, plays once and fades back to the base.
@@ -35,7 +36,8 @@ local STEP_LIFT = 28
 -- in over BREATH_IN seconds.
 local BREATH, BREATH_CHEST, BREATH_HEAD, BREATH_IN = 3.6, 1.6, 1, 0.6
 
-type Prop = { world: CFrame, scale: Vector3 }
+-- A rigid weapon's joint pose and size; in the newest packs also where its mesh sits within it (`geometry`).
+type Prop = { world: CFrame, scale: Vector3, geometry: CFrame? }
 
 type Pose = {
 	body: { [string]: CFrame },
@@ -87,8 +89,9 @@ export type Motion = typeof(setmetatable(
 		rootTurn: CFrame,
 		bones: { [string]: Bone },
 		meshes: { [string]: { MeshPart } },
-		-- The rigid components' joints by their part's name, with the part's size as made.
-		props: { [string]: { motor: Motor6D, size: Vector3 } },
+		-- The rigid components' joints by their part's name, with the part's size as made (and its mesh's, in the
+		-- newest packs).
+		props: { [string]: { motor: Motor6D, size: Vector3, meshSize: Vector3? } },
 		base: Clip?,
 		previous: Clip?,
 		baseBlend: number,
@@ -275,7 +278,17 @@ end
 
 function Motion.sample(self: Motion, clip: Clip): Pose
 	local sample = self.player.Sample(nil, clip.id, clipTime(clip))
-	local body, bones, props = sample.body, sample.bones, sample.props or {}
+	local body, bones, props, opacity = sample.body, sample.bones or {}, sample.props or {}, sample.opacity
+	if not opacity then
+		-- The newest packs give each weapon its joint's transform, one scale, its own opacity and its mesh's place.
+		local converted = {}
+		opacity = {}
+		for name, p in props do
+			converted[name] = { world = p.transform, scale = Vector3.one * p.scale, geometry = p.geometry }
+			opacity[name] = p.opacity
+		end
+		props = converted
+	end
 	local root = self.rootPart and body[self.rootPart]
 	if clip.inPlace and root then
 		body = table.clone(body)
@@ -300,7 +313,7 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 			local onRoot = prop.motor.Part0 ~= nil and prop.motor.Part0.Name == "HumanoidRootPart"
 			if pose and onRoot then
 				local shifted = CFrame.new(prop.motor.C0.Rotation:VectorToObjectSpace(travel)) * pose.world
-				props[name] = { world = shifted, scale = pose.scale }
+				props[name] = { world = shifted, scale = pose.scale, geometry = pose.geometry }
 			end
 		end
 	end
@@ -311,7 +324,15 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 		end
 		body = mirrored
 	end
-	return { body = body, bones = bones, props = props, opacity = sample.opacity }
+	return { body = body, bones = bones, props = props, opacity = opacity }
+end
+
+local function mixProp(a: Prop, b: Prop, w: number): Prop
+	return {
+		world = a.world:Lerp(b.world, w),
+		scale = a.scale:Lerp(b.scale, w),
+		geometry = if a.geometry and b.geometry then a.geometry:Lerp(b.geometry, w) else b.geometry,
+	}
 end
 
 local function blend(a: Pose, b: Pose, w: number): Pose
@@ -331,9 +352,7 @@ local function blend(a: Pose, b: Pose, w: number): Pose
 	end
 	for name, prop in a.props do
 		local other = b.props[name]
-		props[name] = if other
-			then { world = prop.world:Lerp(other.world, w), scale = prop.scale:Lerp(other.scale, w) }
-			else prop
+		props[name] = if other then mixProp(prop, other, w) else prop
 	end
 	return { body = body, bones = bones, props = props, opacity = if w < 0.5 then a.opacity else b.opacity }
 end
@@ -366,9 +385,7 @@ local function stepped(from: Pose, to: Pose, w: number, feet: { [string]: number
 	end
 	for name, prop in to.props do
 		local old = from.props[name]
-		props[name] = if old
-			then { world = old.world:Lerp(prop.world, w), scale = old.scale:Lerp(prop.scale, w) }
-			else prop
+		props[name] = if old then mixProp(old, prop, w) else prop
 	end
 	return { body = body, bones = bones, props = props, opacity = to.opacity }
 end
@@ -620,11 +637,23 @@ function Motion.apply(self: Motion, pose: Pose)
 		local p = pose.props[name]
 		if p then
 			prop.motor.Transform = p.world
-			local size = prop.size
-				* Vector3.new(math.max(p.scale.X, 1e-4), math.max(p.scale.Y, 1e-4), math.max(p.scale.Z, 1e-4))
+			local scale = Vector3.new(math.max(p.scale.X, 1e-4), math.max(p.scale.Y, 1e-4), math.max(p.scale.Z, 1e-4))
 			local part = prop.motor.Part1 :: BasePart
-			if (part.Size - size).Magnitude > 1e-3 then
-				part.Size = size
+			local mesh = part:FindFirstChild("Geometry")
+			local weld = part:FindFirstChild("GeometryBinding")
+			if p.geometry and mesh and mesh:IsA("BasePart") and weld and weld:IsA("Weld") then
+				-- The newest packs' weapon part only holds its mesh, which is what grows and shrinks.
+				prop.meshSize = prop.meshSize or mesh.Size
+				local size = (prop.meshSize :: Vector3) * scale
+				if (mesh.Size - size).Magnitude > 1e-3 then
+					mesh.Size = size
+				end
+				weld.C0 = p.geometry
+			else
+				local size = prop.size * scale
+				if (part.Size - size).Magnitude > 1e-3 then
+					part.Size = size
+				end
 			end
 		end
 	end
