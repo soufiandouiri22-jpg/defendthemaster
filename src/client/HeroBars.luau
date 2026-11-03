@@ -1,5 +1,5 @@
--- The bar over every other hero's head (design 05): his health in his team's colour, the only thing that tells the
--- teams apart, with his level in the round knob at its left end. A hero's bar goes when he dies (the "Combatant" tag
+-- The bar over every other hero's head (design 05): his health in his team's colour on this screen (Side: allies blue,
+-- enemies red), the only thing that tells the teams apart, with his level in the round knob at its left end. A hero's bar goes when he dies (the "Combatant" tag
 -- goes with his life). A boost's carrier (his "Boost" attribute, BoostService) has his bar raised over the boost
 -- that turns over his head (BoostView).
 
@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Boosts = require(ReplicatedStorage.Shared.Boosts)
 local BoostView = require(script.Parent.BoostView)
+local Side = require(script.Parent.Side)
 local UiStyle = require(script.Parent.UiStyle)
 
 local HeroBars = {}
@@ -41,7 +42,7 @@ local function build(model: Model)
 	then
 		return
 	end
-	local team = model:GetAttribute("Team") or "Blue"
+	local team = Side.shown(model:GetAttribute("Team"))
 	local colour = C[team]
 
 	local gui = Instance.new("BillboardGui")

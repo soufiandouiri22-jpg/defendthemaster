@@ -15,6 +15,7 @@ local Workspace = game:GetService("Workspace")
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Items = require(ReplicatedStorage.Shared.Items)
+local Side = require(script.Parent.Side)
 local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 
@@ -162,7 +163,7 @@ local function show(r: Row, entry: Instance, team: string)
 	r.gradient.Color = if own then ColorSequence.new(OWN_TOP, OWN_BOTTOM) else ColorSequence.new(ROW_TOP, ROW_BOTTOM)
 	r.edge.Color = if own then C.Edge else C.GoldDark
 	r.edge.Thickness = if own then 3 else 1.5
-	r.ring.BackgroundColor3 = C[team]
+	r.ring.BackgroundColor3 = C[Side.shown(team)]
 
 	local hero = entry:GetAttribute("Hero")
 	local portrait = hero and Config.Heroes[hero] and Config.Heroes[hero].Portrait
@@ -214,9 +215,11 @@ function Scoreboard.start()
 	outer.Name = "Board"
 	UiStyle.shrink(outer, SCALE)
 
-	-- The top: each team's crown and score at its end, the clock between them.
+	-- The top: each team's crown and score at its end, the clock between them; the player's own team left and first.
+	local order = Side.order()
 	local scores: { [string]: TextLabel } = {}
-	for i, team in Config.TeamOrder do
+	for i, team in order do
+		local shown = Side.shown(team)
 		local left = i == 1
 		local crown = Instance.new("ImageLabel")
 		crown.BackgroundTransparency = 1
@@ -227,7 +230,7 @@ function Scoreboard.start()
 			then UDim2.fromOffset(PAD + 35, PAD + HEADER / 2)
 			else UDim2.new(1, -PAD - 35, 0, PAD + HEADER / 2)
 		crown.Parent = inner
-		local score = UiStyle.text(inner, "", 46, C[team], C[team .. "Dark"])
+		local score = UiStyle.text(inner, "", 46, C[shown], C[shown .. "Dark"])
 		score.TextXAlignment = if left then Enum.TextXAlignment.Left else Enum.TextXAlignment.Right
 		score.AnchorPoint = Vector2.new(if left then 0 else 1, 0.5)
 		score.Size = UDim2.fromOffset(260, 56)
@@ -245,14 +248,15 @@ function Scoreboard.start()
 
 	-- Each team: a strip in its colour with the columns' names, then its rows.
 	local sections: { [string]: { holder: Frame, rows: { Row } } } = {}
-	for _, team in Config.TeamOrder do
+	for _, team in order do
+		local shown = Side.shown(team)
 		local holder = UiStyle.frame(inner, UDim2.new(1, -2 * PAD, 0, 0))
 		holder.BackgroundTransparency = 1
 		local strip = UiStyle.frame(holder, UDim2.new(1, 0, 0, STRIP))
 		UiStyle.corner(strip, 10)
-		UiStyle.gradient(strip, C[team], C[team .. "Dark"])
+		UiStyle.gradient(strip, C[shown], C[shown .. "Dark"])
 		UiStyle.stroke(strip, C.Edge, 2)
-		local title = UiStyle.text(strip, string.upper(Config.Teams[team].Name) .. " TEAM", 24, C.Cream, C.Edge)
+		local title = UiStyle.text(strip, Side.name(team), 24, C.Cream, C.Edge)
 		title.TextXAlignment = Enum.TextXAlignment.Left
 		title.Size = UDim2.new(0, 260, 1, 0)
 		title.Position = UDim2.fromOffset(14, 0)
@@ -287,7 +291,7 @@ function Scoreboard.start()
 		end
 
 		local y = PAD + HEADER
-		for _, team in Config.TeamOrder do
+		for _, team in order do
 			local section = sections[team]
 			local list = byTeam[team]
 			table.sort(list, function(a, b)

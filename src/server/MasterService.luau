@@ -10,6 +10,7 @@
 -- for the red circle), then lands as a hero's does (Net.HeroHit). He holds his animation pack's weapon.
 
 local CollectionService = game:GetService("CollectionService")
+local PathfindingService = game:GetService("PathfindingService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -37,6 +38,18 @@ local SETTLE = 0.45
 local ARRIVED = 2.5
 -- The weapon of his pack's rig, and the joint its clips swing it by.
 local WEAPON = "Greataxe"
+-- He walks round what stands in his way (the cover's blocks before his dais): straight on while a ball of `BODY` studs
+-- `KNEE` over his feet meets nothing of the map on the way, else along a path, found again every `REPATH` seconds or
+-- once his goal moved `MOVED` studs; he has passed a waypoint `WAYPOINT` studs from it.
+local KNEE, BODY = 3.5, 3
+local REPATH, MOVED, WAYPOINT = 0.6, 4, 3
+local AGENT = {
+	AgentRadius = 3.5,
+	AgentHeight = 16,
+	AgentCanJump = false,
+	AgentCanClimb = false,
+	WaypointSpacing = 6,
+}
 
 type Foe = {
 	instance: Instance,
@@ -61,9 +74,15 @@ type Master = {
 	slamReady: number,
 	aloneSince: number?,
 	combo: number,
+	path: { Vector3 }?,
+	pathStep: number,
+	pathGoal: Vector3?,
+	pathAt: number,
 }
 
 local masters: { Master } = {}
+local mapRay = RaycastParams.new()
+mapRay.FilterType = Enum.RaycastFilterType.Include
 local actionEvent: RemoteEvent
 local hitEvent: RemoteEvent
 
@@ -260,6 +279,58 @@ local function rise(m: Master)
 	end)
 end
 
+-- Finds `m` a path to `goal` without holding up the Heartbeat; a later search's path replaces it.
+local function plan(m: Master, goal: Vector3, now: number)
+	m.pathGoal = goal
+	m.pathAt = now
+	local from = ground(m)
+	task.spawn(function()
+		local path = PathfindingService:CreatePath(AGENT)
+		local ok = pcall(function()
+			path:ComputeAsync(from, goal)
+		end)
+		if m.pathGoal ~= goal then
+			return
+		end
+		if ok and path.Status == Enum.PathStatus.Success then
+			local points = {}
+			for _, waypoint in path:GetWaypoints() do
+				table.insert(points, waypoint.Position)
+			end
+			m.path = points
+			m.pathStep = math.min(2, #points)
+		else
+			m.path = nil
+		end
+	end)
+end
+
+-- Walks `m` towards `goal`: straight on, or round what is in the way.
+local function walk(m: Master, goal: Vector3, now: number)
+	local feet = ground(m)
+	local from = feet + Vector3.new(0, KNEE, 0)
+	local line = Vector3.new(goal.X, from.Y, goal.Z) - from
+	if line.Magnitude < 0.5 or not Workspace:Spherecast(from, BODY, line, mapRay) then
+		m.path = nil
+		m.pathGoal = nil
+		m.humanoid:MoveTo(goal)
+		return
+	end
+	local last = m.pathGoal
+	if not last or now - m.pathAt >= REPATH or HeroKit.flat(goal - last).Magnitude > MOVED then
+		plan(m, goal, now)
+	end
+	local path = m.path
+	if not path then
+		m.humanoid:MoveTo(goal)
+		return
+	end
+	while m.pathStep < #path and HeroKit.flat(path[m.pathStep] - feet).Magnitude <= WAYPOINT do
+		m.pathStep += 1
+	end
+	m.humanoid:MoveTo(path[m.pathStep])
+end
+
 local function update(m: Master, dt: number, now: number)
 	if
 		m.humanoid.Health <= 0
@@ -304,7 +375,7 @@ local function update(m: Master, dt: number, now: number)
 				end
 			end)
 		else
-			m.humanoid:MoveTo(home)
+			walk(m, home, now)
 		end
 		return
 	end
@@ -352,7 +423,7 @@ local function update(m: Master, dt: number, now: number)
 	if out.Magnitude > SETTINGS.Leash then
 		goal = m.front + out.Unit * SETTINGS.Leash
 	end
-	m.humanoid:MoveTo(goal)
+	walk(m, goal, now)
 end
 
 -- His hands are as wide as his forearms, so where a hand lies in its sleeve their sides would share one plane and
@@ -494,6 +565,10 @@ local function create(team: string, layout: Layout): Master
 		slamReady = 0,
 		aloneSince = nil,
 		combo = 0,
+		path = nil,
+		pathStep = 1,
+		pathGoal = nil,
+		pathAt = 0,
 	}
 	root.Anchored = true
 	model:PivotTo(m.throne)
@@ -506,6 +581,54 @@ local function create(team: string, layout: Layout): Master
 		root.Anchored = true
 	end)
 	return m
+end
+
+-- What of `model`'s clothes comes in each team's colours: his shirt and his cape.
+local function teamClothes(model: Model): { [string]: Instance }
+	local found: { [string]: Instance } = {}
+	local shirt = model:FindFirstChildOfClass("Shirt")
+	if shirt then
+		found.Shirt = shirt
+	end
+	for _, accessory in model:GetChildren() do
+		if accessory:IsA("Accessory") and accessory.AccessoryType == Enum.AccessoryType.Back then
+			local handle = accessory:FindFirstChild("Handle")
+			local surface = if handle and handle:IsA("MeshPart")
+				then handle
+				else handle and handle:FindFirstChildOfClass("SpecialMesh")
+			if surface then
+				found.Cape = surface
+			end
+		end
+	end
+	return found
+end
+
+local function textureOf(instance: Instance): string?
+	if instance:IsA("Shirt") then
+		return instance.ShirtTemplate
+	elseif instance:IsA("MeshPart") then
+		return instance.TextureID
+	elseif instance:IsA("SpecialMesh") then
+		return instance.TextureId
+	end
+	return nil
+end
+
+-- Each Master wears the other's shirt and cape on the screens of the other team's players (client Side): his own carry
+-- the other's texture.
+local function twins(a: Master, b: Master)
+	local mine, theirs = teamClothes(a.model), teamClothes(b.model)
+	for key, one in mine do
+		local two = theirs[key]
+		local first, second = textureOf(one), two and textureOf(two)
+		if two and first and second and first ~= second then
+			one:SetAttribute("OtherTexture", second)
+			two:SetAttribute("OtherTexture", first)
+			CollectionService:AddTag(one, "TeamSwap")
+			CollectionService:AddTag(two, "TeamSwap")
+		end
+	end
 end
 
 export type Layout = {
@@ -525,8 +648,13 @@ function MasterService.start(layout: Layout, teams: { string }?)
 	local folder = Instance.new("Folder")
 	folder.Name = "Masters"
 	folder.Parent = Workspace
+	local map = Workspace:FindFirstChild("Map")
+	mapRay.FilterDescendantsInstances = if map then { map } else {}
 	for _, team in teams or Config.TeamOrder do
 		table.insert(masters, create(team, layout))
+	end
+	if #masters == 2 then
+		twins(masters[1], masters[2])
 	end
 
 	RunService.Heartbeat:Connect(function(dt)

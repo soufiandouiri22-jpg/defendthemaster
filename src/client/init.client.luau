@@ -82,9 +82,12 @@ local RuneGateView = require(script.RuneGateView)
 local Scoreboard = require(script.Scoreboard)
 local Shop = require(script.Shop)
 local Showroom = require(script.Showroom)
+local Side = require(script.Side)
 local Vanish = require(script.Vanish)
 local VersusView = require(script.VersusView)
 
+-- The views take their colours from the player's team (Side), so they wait for it.
+Side.start()
 Music.start()
 HeroSounds.start()
 MinionView.start()

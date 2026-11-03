@@ -12,6 +12,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroSounds = require(script.Parent.HeroSounds)
+local Side = require(script.Parent.Side)
 local UiSound = require(script.Parent.UiSound)
 
 local MinionView = {}
@@ -77,7 +78,7 @@ local function healthBar(body: BasePart, team: string): Frame
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
 	fill.Size = UDim2.fromScale(1, 1)
-	fill.BackgroundColor3 = Config.Teams[team].Color
+	fill.BackgroundColor3 = Config.Teams[Side.shown(team)].Color
 	fill.BorderSizePixel = 0
 	fill.Parent = back
 	corner:Clone().Parent = fill
@@ -206,7 +207,8 @@ local function add(root: Instance)
 		return
 	end
 	local templates = ReplicatedStorage:WaitForChild("MinionTemplates")
-	local template = templates:FindFirstChild((root:GetAttribute("Team") or "") .. (root:GetAttribute("Kind") or ""))
+	local template =
+		templates:FindFirstChild(Side.shown(root:GetAttribute("Team")) .. (root:GetAttribute("Kind") or ""))
 	if not template then
 		return
 	end
@@ -396,7 +398,7 @@ end
 
 -- A fireball flying in a low arc from the spitter's mouth to `target`, bursting on it after `travel` seconds.
 local function spit(view: View, target: Instance, travel: number)
-	local colors = FIRE[view.root:GetAttribute("Team")] or FIRE.Red
+	local colors = FIRE[Side.shown(view.root:GetAttribute("Team"))] or FIRE.Red
 	local from = (view.cframe * CFrame.new(0, 1.9, -2.2)).Position
 	local fireball = newFireball(colors)
 	fireball.CFrame = CFrame.new(from)

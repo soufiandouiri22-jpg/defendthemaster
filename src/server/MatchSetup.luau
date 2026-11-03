@@ -2,7 +2,8 @@
 -- MemoryStore hash map "Matches" (keyed by the server's PrivateServerId) holds its mode and teams: only its players
 -- are let in, each on his team (the "Team" attribute), and the match waits up to Config.Draft.Arrive seconds for them;
 -- whoever did not come is played by a bot. Without a record (Studio, or the match place before the lobby exists) it is
--- a match of whoever comes in, all on Blue, in Quick Play (in Studio the Workspace attribute "Mode" may say "Ranked").
+-- a match of whoever comes in, all on Blue, in Quick Play (in Studio the Workspace attribute "Mode" may say "Ranked"
+-- and "TestTeam" "Red").
 -- Someone who comes into the match place on his own once the lobby exists is sent there.
 
 local MemoryStoreService = game:GetService("MemoryStoreService")
@@ -65,7 +66,9 @@ local function admit(player: Player)
 	elseif Places.canTeleport() then
 		pcall(TeleportService.TeleportAsync, TeleportService, Config.Places.Lobby :: number, { player })
 	else
-		player:SetAttribute("Team", "Blue")
+		-- In Studio the Workspace attribute "TestTeam" may put him on Red, to see the match from there.
+		local test = if RunService:IsStudio() then Workspace:GetAttribute("TestTeam") else nil
+		player:SetAttribute("Team", if test == "Red" then "Red" else "Blue")
 	end
 end
 

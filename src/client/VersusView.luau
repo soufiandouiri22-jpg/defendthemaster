@@ -29,6 +29,7 @@ local Trace = require(ReplicatedFirst:WaitForChild("Trace"))
 local HeroCamera = require(script.Parent.HeroCamera)
 local Music = require(script.Parent.Music)
 local PlayerCard = require(script.Parent.PlayerCard)
+local Side = require(script.Parent.Side)
 local UiStyle = require(script.Parent.UiStyle)
 local Widgets = require(script.Parent.Widgets)
 
@@ -193,6 +194,9 @@ local function travelling(lineup: any): { Entry }
 	local list = {}
 	for _, team in Config.TeamOrder do
 		local ids = (lineup.teams or {})[team] or {}
+		if table.find(ids, player.UserId) then
+			Side.tell(team)
+		end
 		local taken = {}
 		local count = math.min(#ids, Config.HeroesPerTeam)
 		for index = 1, count do
@@ -277,7 +281,7 @@ local function edge(card: Card, entry: Entry, mine: boolean)
 	card.glint = nil
 	local tier = if entry.empty then nil else entry.shown
 	if not tier then
-		stroke.Color = if mine then C.Gold else (TEAM_FILL[entry.team] or TEAM_FILL.Blue)[1]
+		stroke.Color = if mine then C.Gold else TEAM_FILL[Side.shown(entry.team)][1]
 		return
 	end
 	local shine = PlayerCard.shine(stroke, tier)
@@ -314,7 +318,7 @@ local function draw(card: Card, entry: Entry)
 	card.frame:SetAttribute("Turned", nil)
 	card.entry = entry
 	card.bar, card.status = nil, nil
-	local fill = TEAM_FILL[entry.team] or TEAM_FILL.Blue
+	local fill = TEAM_FILL[Side.shown(entry.team)]
 	local mine = entry.userId == player.UserId and entry.userId > 0
 	edge(card, entry, mine)
 
@@ -584,7 +588,8 @@ end
 -- Puts `entries` on the cards, drawing again only those that changed.
 local function place(cards: { [string]: Card }, entries: { Entry })
 	for _, entry in entries do
-		local card = cards[entry.team .. entry.index]
+		-- The player's own team on the top row, in blue (Side).
+		local card = cards[Side.shown(entry.team) .. entry.index]
 		if card then
 			local key = keyOf(entry)
 			if key ~= card.key then

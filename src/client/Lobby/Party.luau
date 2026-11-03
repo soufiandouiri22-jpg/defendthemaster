@@ -136,7 +136,8 @@ end
 -- The card of an invite that came in.
 local function invitation(gui: ScreenGui, from: number, name: string)
 	local holder = Widgets.popup(gui, "Invitation")
-	local card = UiStyle.frame(holder, UDim2.fromOffset(520, 190), UDim2.new(0.5, 0, 0, 130), Vector2.new(0.5, 0))
+	-- Tall enough that the buttons stand clear under the portrait.
+	local card = UiStyle.frame(holder, UDim2.fromOffset(520, 214), UDim2.new(0.5, 0, 0, 130), Vector2.new(0.5, 0))
 	card.BackgroundTransparency = 1
 	card.Destroying:Connect(function()
 		holder:Destroy()

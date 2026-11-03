@@ -22,6 +22,7 @@ local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local HeroCamera = require(script.Parent.HeroCamera)
 local Music = require(script.Parent.Music)
 local PlayerCard = require(script.Parent.PlayerCard)
+local Side = require(script.Parent.Side)
 local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 local Widgets = require(script.Parent.Widgets)
@@ -301,17 +302,26 @@ local function scoreboard(parent: Instance, result: any): number
 
 	local y = 40
 	local current: string? = nil
-	for _, row in result.players or {} do
+	-- The player's own team first.
+	local rows = {}
+	for _, team in Side.order() do
+		for _, row in result.players or {} do
+			if row.team == team then
+				table.insert(rows, row)
+			end
+		end
+	end
+	for _, row in rows do
 		if row.team ~= current then
 			current = row.team
-			local fill = TEAM_FILL[row.team] or TEAM_FILL.Blue
+			local fill = TEAM_FILL[Side.shown(row.team)]
 			local strip = UiStyle.frame(inner, UDim2.new(1, -20, 0, 34), UDim2.fromOffset(10, y))
 			UiStyle.corner(strip, 8)
 			UiStyle.gradient(strip, fill[1], fill[2])
 			local won = row.team == result.winner
 			local label = Widgets.label(
 				strip,
-				string.upper(row.team) .. " TEAM  -  " .. (if won then "VICTORY" else "DEFEAT"),
+				Side.name(row.team) .. "  -  " .. (if won then "VICTORY" else "DEFEAT"),
 				22,
 				C.Cream,
 				"Left",
@@ -334,7 +344,7 @@ local function scoreboard(parent: Instance, result: any): number
 		local face =
 			Widgets.portrait(line, row.hero, UDim2.fromOffset(ROW - 10, ROW - 10), UDim2.fromOffset(4, 3), true)
 		UiStyle.corner(face, 6)
-		local faceEdge = UiStyle.stroke(face, (TEAM_FILL[row.team] or TEAM_FILL.Blue)[2], 2)
+		local faceEdge = UiStyle.stroke(face, TEAM_FILL[Side.shown(row.team)][2], 2)
 		faceEdge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		local x = ROW + 6
 		if row.shown then
@@ -382,7 +392,7 @@ local function starCard(parent: Instance, row: any, side: number, high: number, 
 	local picture = Widgets.portrait(holder, row.hero, UDim2.fromScale(1, 1))
 	UiStyle.corner(picture, 16)
 
-	local fill = TEAM_FILL[row.team] or TEAM_FILL.Blue
+	local fill = TEAM_FILL[Side.shown(row.team)]
 	local card = UiStyle.frame(parent, size, position, anchor)
 	card.Name = if mvp then "MatchMvp" else "BestLoser"
 	card.BackgroundTransparency = 1
@@ -397,7 +407,7 @@ local function starCard(parent: Instance, row: any, side: number, high: number, 
 		UiStyle.gradient(ribbon, fill[1], fill[2])
 	end
 	UiStyle.stroke(ribbon, C.Edge, 3)
-	Widgets.label(ribbon, if mvp then "MATCH MVP" else "BEST OF " .. string.upper(row.team), 30, C.Cream, nil, C.Edge)
+	Widgets.label(ribbon, if mvp then "MATCH MVP" else "BEST OF " .. Side.name(row.team), 30, C.Cream, nil, C.Edge)
 
 	local plate = Widgets.dark(card, UDim2.new(1, -28, 0, 150), UDim2.new(0.5, 0, 1, -14), Vector2.new(0.5, 1), 12)
 	UiStyle.stroke(plate, if mvp then C.GoldDark else fill[2], 3)
@@ -649,10 +659,12 @@ local function results(gui: ScreenGui, titleImage: CanvasGroup, event: RemoteEve
 	score.BackgroundTransparency = 1
 	local scoreLayout = Widgets.list(score, "Horizontal", 14, "Center")
 	scoreLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	local first, second = table.unpack(Side.order())
+	local scored = result.score or {}
 	local parts = {
-		{ "BLUE " .. (result.score and result.score.Blue or 0), C.Blue:Lerp(Color3.new(1, 1, 1), 0.2) },
+		{ Side.name(first) .. " " .. (scored[first] or 0), C.Blue:Lerp(Color3.new(1, 1, 1), 0.2) },
 		{ "-", C.Cream },
-		{ (result.score and result.score.Red or 0) .. " RED", C.Red:Lerp(Color3.new(1, 1, 1), 0.2) },
+		{ (scored[second] or 0) .. " " .. Side.name(second), C.Red:Lerp(Color3.new(1, 1, 1), 0.2) },
 	}
 	for i, part in parts do
 		local t = UiStyle.text(score, part[1], 44, part[2], C.Edge)

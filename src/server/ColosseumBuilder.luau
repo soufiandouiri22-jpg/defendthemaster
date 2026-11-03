@@ -5,6 +5,7 @@
 -- lanes. Every piece is a Meshy model from ServerStorage.ColosseumKit (imported through Import 3D, pivot at its bottom
 -- centre, front towards -Z); only the sand floor, fire and light are Roblox's own.
 
+local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
@@ -129,6 +130,22 @@ local function kit(parent: Instance, name: string, at: CFrame, scale: number, so
 	end
 	m.Parent = parent
 	return m
+end
+
+-- Gives the team piece `m` the texture of its twin in the other team's colours, kit piece `other` (the same mesh), in
+-- which the screens of the other team's players show it (client Side).
+local function twin(m: Model?, other: string)
+	local source = kitPiece(other)
+	if not m or not source then
+		return
+	end
+	local texture = (source.PrimaryPart :: MeshPart).TextureID
+	for _, d in m:GetDescendants() do
+		if d:IsA("MeshPart") and d.TextureID ~= texture then
+			d:SetAttribute("OtherTexture", texture)
+			CollectionService:AddTag(d, "TeamSwap")
+		end
+	end
 end
 
 -- A kit piece stretched to `size` studs, with its pivot (bottom centre) at `at`.
@@ -315,12 +332,15 @@ local function buildRing(map: Folder, doors: { [string]: { CFrame } })
 				local team = if polar(angle, 1).Z > 0 then "blue" else "red"
 				local bannerScale = byHeight("banner_" .. team, PODIUM_BANNER)
 				local bannerDepth = kitSize("banner_" .. team).Z * bannerScale
-				kit(
-					wallFolder,
-					"banner_" .. team,
-					ring(angle, face - bannerDepth / 2, wallSize.Y - PODIUM_BANNER - 0.4),
-					bannerScale,
-					false
+				twin(
+					kit(
+						wallFolder,
+						"banner_" .. team,
+						ring(angle, face - bannerDepth / 2, wallSize.Y - PODIUM_BANNER - 0.4),
+						bannerScale,
+						false
+					),
+					if team == "blue" then "banner_red" else "banner_blue"
 				)
 			elseif table.find(DOOR_SECTIONS, i) then
 				local doorScale = byHeight("wall_door", wallSize.Y - 0.8)
@@ -544,7 +564,9 @@ export type Base = {
 -- room is laid out from the backwall forward; `at` places from the dais' front middle, `back` away from the centre.
 local function buildBase(map: Folder, team: string): Base
 	local suffix = if team == "Blue" then "_blue" else ""
+	local otherSuffix = if team == "Blue" then "" else "_blue"
 	local bannerName = if team == "Blue" then "banner_blue" else "banner_red"
+	local otherBanner = if team == "Blue" then "banner_red" else "banner_blue"
 	local area = folder(map, team .. "Base")
 	local s = THRONE_ROOM
 
@@ -565,13 +587,22 @@ local function buildBase(map: Folder, team: string): Base
 	-- The backwall stands before the podium wall and carries the great banner.
 	kit(area, "backwall", at(0, 0, backFront + backDepth / 2), backScale)
 	local bannerScale = byHeight(bannerName, 22 * s)
-	kit(area, bannerName, at(0, 7 * s, backFront - kitSize(bannerName).Z * bannerScale / 2 - 0.2), bannerScale, false)
+	twin(
+		kit(
+			area,
+			bannerName,
+			at(0, 7 * s, backFront - kitSize(bannerName).Z * bannerScale / 2 - 0.2),
+			bannerScale,
+			false
+		),
+		otherBanner
+	)
 
-	kit(area, "dais" .. suffix, at(0, 0, daisDepth / 2), daisScale)
+	twin(kit(area, "dais" .. suffix, at(0, 0, daisDepth / 2), daisScale), "dais" .. otherSuffix)
 	local throneScale = byHeight("throne" .. suffix, THRONE_HEIGHT)
 	local throneDepth = kitSize("throne" .. suffix).Z * throneScale
 	local throneBack = daisDepth - throneDepth / 2 - 2 * s
-	kit(area, "throne" .. suffix, at(0, DAIS_HEIGHT, throneBack), throneScale)
+	twin(kit(area, "throne" .. suffix, at(0, DAIS_HEIGHT, throneBack), throneScale), "throne" .. otherSuffix)
 
 	for _, side in { -1, 1 } do
 		kit(
@@ -608,7 +639,10 @@ local function buildBase(map: Folder, team: string): Base
 	local shops = {}
 	for _, side in { -1, 1 } do
 		local shop = at(side * 66, 0, 18) * CFrame.Angles(0, math.rad(side * 25), 0)
-		kit(area, "armory_stall" .. suffix, shop, byHeight("armory_stall" .. suffix, 12))
+		twin(
+			kit(area, "armory_stall" .. suffix, shop, byHeight("armory_stall" .. suffix, 12)),
+			"armory_stall" .. otherSuffix
+		)
 		kit(
 			area,
 			"weapon_rack",

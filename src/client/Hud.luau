@@ -1,5 +1,5 @@
 -- The HUD of design 05 round the ability bar (AbilityBar): at the top each team's Master's health under its crown,
--- blue left and red right, jolting at every blow he takes, and between them the score (enemy heroes killed) over the match's clock (MatchService),
+-- the player's own team left in blue and the enemy right in red (Side), jolting at every blow he takes, and between them the score (enemy heroes killed) over the match's clock (MatchService),
 -- at the bottom left the hero's portrait with his level (a chime as it rises), his kills / deaths / assists
 -- (ProgressService), health and XP (Shared.Leveling), with the boost over it: which comes next and when, and what it
 -- does and how long it lasts; at the bottom right the round minimap with every hero, minion, throne and the boost
@@ -17,6 +17,7 @@ local Assets = require(ReplicatedStorage.Shared.Assets)
 local Boosts = require(ReplicatedStorage.Shared.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
+local Side = require(script.Parent.Side)
 local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 local Vanish = require(script.Parent.Vanish)
@@ -46,6 +47,8 @@ local CROWN_X, CROWN_Y = 62, 88
 local CROWN_EDGE, BAR_UNDER, FILL_TUCK = 42, 22, 9
 local CROWN_COVER = CROWN_EDGE - BAR_UNDER - 6
 local SCORE_GAP = 92
+-- "ALLIES 28" and "35 ENEMIES" (Side.name) are longer than the teams' own names: a size at which they fit the board.
+local SCORE_SIZE = 46
 local TOP_BAR_MIN = 420
 
 local TOP_COLOURS = {
@@ -95,7 +98,7 @@ end
 -- A Master's bar as in design 05: a light gold rim, a black line inside it, a dark grey track and a glossy fill, with
 -- its crown held on the rim's end so the two stay together on every screen.
 local function masterBar(parent: Frame, team: string, left: boolean): MasterBar
-	local colours = TOP_COLOURS[team]
+	local colours = TOP_COLOURS[Side.shown(team)]
 	local rim = UiStyle.frame(
 		parent,
 		UDim2.new(0.5, -(BOARD_WIDTH / 2 + BAR_GAP + CROWN_X + BAR_UNDER), 0, BAR_HEIGHT),
@@ -201,11 +204,11 @@ local function showMaster(bar: MasterBar, share: number, now: number)
 end
 
 local function scoreText(parent: Instance, team: string?, align: Enum.TextXAlignment, x: number): TextLabel
-	local colours = team and TOP_COLOURS[team]
+	local colours = team and TOP_COLOURS[Side.shown(team)]
 	local label = UiStyle.text(
 		parent,
 		"",
-		58,
+		if colours then SCORE_SIZE else 58,
 		if colours then colours.ink else Color3.fromRGB(50, 28, 12),
 		colours and colours.edge
 	)
@@ -227,15 +230,14 @@ local function buildTop(gui: Frame): () -> ()
 		local max = Workspace:GetAttribute("MasterMax" .. team) or Config.Master.Health
 		return math.clamp((Workspace:GetAttribute("Master" .. team) or max) / max, 0, 1)
 	end
-	for i, team in Config.TeamOrder do
-		local bar = masterBar(gui, team, i == 1)
-		bars[team] = bar
+	for _, team in Config.TeamOrder do
 		local was = shareOf(team)
 		Workspace:GetAttributeChangedSignal("Master" .. team):Connect(function()
 			local share = shareOf(team)
 			local lost = was - share
 			was = share
-			if lost <= 0 then
+			local bar = bars[team]
+			if lost <= 0 or not bar then
 				return
 			end
 			strike(bar, lost, os.clock())
@@ -257,11 +259,44 @@ local function buildTop(gui: Frame): () -> ()
 	board.Position = UDim2.new(0.5, 0, 0, BOARD_TOP - BOARD_PAD)
 	board.ZIndex = 2
 	board.Parent = gui
-	local blue, red = Config.TeamOrder[1], Config.TeamOrder[2]
-	local blueScore = scoreText(board, blue, Enum.TextXAlignment.Right, -SCORE_GAP)
 	local versus = scoreText(board, nil, Enum.TextXAlignment.Center, -85)
 	versus.Text = "- VS -"
-	local redScore = scoreText(board, red, Enum.TextXAlignment.Left, SCORE_GAP)
+
+	-- The player's own team on the left, its Master's bar and its score (owner, 2026-11-02), Blue's while he has none.
+	local order: { string } = {}
+	local scores: { [string]: TextLabel } = {}
+	local function arrange(own: string?)
+		local first = if own and table.find(Config.TeamOrder, own) then own else Config.TeamOrder[1]
+		order = { first }
+		for _, team in Config.TeamOrder do
+			if team ~= first then
+				table.insert(order, team)
+			end
+		end
+		for i, team in order do
+			local left = i == 1
+			if bars[team] then
+				bars[team].rim:Destroy()
+			end
+			local bar = masterBar(gui, team, left)
+			bar.lostShare.Value = shareOf(team)
+			bars[team] = bar
+			if scores[team] then
+				scores[team]:Destroy()
+			end
+			scores[team] = scoreText(
+				board,
+				team,
+				if left then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left,
+				if left then -SCORE_GAP else SCORE_GAP
+			)
+		end
+	end
+	local function ownTeam(): string?
+		return player:GetAttribute("Team") or player.Character and player.Character:GetAttribute("Team")
+	end
+	local arranged = ownTeam()
+	arrange(arranged)
 
 	local clock = UiStyle.text(board, "0:00", 36, Color3.new(1, 1, 1), Color3.fromRGB(30, 16, 6))
 	clock.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -270,14 +305,21 @@ local function buildTop(gui: Frame): () -> ()
 	clock.ZIndex = 3
 
 	return function()
+		local own = ownTeam()
+		if own ~= arranged then
+			arranged = own
+			arrange(own)
+		end
 		local now = os.clock()
 		for team, bar in bars do
 			showMaster(bar, shareOf(team), now)
 		end
-		blueScore.Text =
-			string.format("%s %d", string.upper(Config.Teams[blue].Name), Workspace:GetAttribute("Score" .. blue) or 0)
-		redScore.Text =
-			string.format("%d %s", Workspace:GetAttribute("Score" .. red) or 0, string.upper(Config.Teams[red].Name))
+		for i, team in order do
+			local name, score = Side.name(team), Workspace:GetAttribute("Score" .. team) or 0
+			scores[team].Text = if i == 1
+				then string.format("%s %d", name, score)
+				else string.format("%d %s", score, name)
+		end
 		local start = Workspace:GetAttribute("MatchStart")
 		clock.Text = UiStyle.clock(if start then math.max(0, Workspace:GetServerTimeNow() - start) else 0)
 	end
@@ -374,7 +416,7 @@ local function buildBoost(gui: ScreenGui): () -> ()
 		dot.BackgroundColor3 = boost.Color
 		local ending = left ~= nil and left <= BOOST_BLINK
 		local dim = ending and os.clock() % 0.5 < 0.25
-		local enemyColour = Config.Teams[if team == "Red" then "Blue" else "Red"].Color
+		local enemyColour = Config.Teams[Side.shown(if team == "Red" then "Blue" else "Red")].Color
 		label.TextColor3 = if ending
 			then Color3.fromRGB(255, 110, 90)
 			elseif enemy then enemyColour:Lerp(Color3.new(1, 1, 1), 0.35)
@@ -529,7 +571,7 @@ local function buildMap(gui: ScreenGui): () -> ()
 			local crown = Instance.new("ImageLabel")
 			crown.BackgroundTransparency = 1
 			crown.Image = Assets.HudCrown
-			crown.ImageColor3 = C[team]
+			crown.ImageColor3 = C[Side.shown(team)]
 			crown.Size = UDim2.fromOffset(30, 26)
 			crown.AnchorPoint = Vector2.new(0.5, 0.5)
 			crown.Position = at(throne)
@@ -602,7 +644,7 @@ local function buildMap(gui: ScreenGui): () -> ()
 			for _, root in minions:GetChildren() do
 				local team = root:GetAttribute("Team")
 				if root:IsA("BasePart") and team and not root:GetAttribute("Dead") then
-					dot(8, C[team], C.Edge, 3).Position = at(root.Position)
+					dot(8, C[Side.shown(team)], C.Edge, 3).Position = at(root.Position)
 				end
 			end
 		end
@@ -616,12 +658,12 @@ local function buildMap(gui: ScreenGui): () -> ()
 				and model ~= own
 				and not Vanish.unseen(model)
 			then
-				dot(16, C[team], C.Edge, 4).Position = at(model:GetPivot().Position)
+				dot(16, C[Side.shown(team)], C.Edge, 4).Position = at(model:GetPivot().Position)
 			end
 		end
 		local root = own and own:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if own and root then
-			dot(20, C[own:GetAttribute("Team") or "Blue"], Color3.new(1, 1, 1), 5).Position = at(root.Position)
+			dot(20, C[Side.shown(own:GetAttribute("Team"))], Color3.new(1, 1, 1), 5).Position = at(root.Position)
 		end
 		local boost = Boosts.current()
 		local state = Workspace:GetAttribute("Boost")

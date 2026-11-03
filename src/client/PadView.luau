@@ -14,6 +14,7 @@ local Workspace = game:GetService("Workspace")
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HitFeedback = require(script.Parent.HitFeedback)
+local Side = require(script.Parent.Side)
 local UiSound = require(script.Parent.UiSound)
 
 local PadView = {}
@@ -39,7 +40,7 @@ local healing: { [Model]: Healing } = {}
 local effects: Folder
 
 local function lightOf(team: string?): Color3
-	local colour = (Config.Teams[team or "Blue"] or Config.Teams.Blue).Color
+	local colour = Config.Teams[Side.shown(team)].Color
 	return colour:Lerp(Color3.new(1, 1, 1), 0.3)
 end
 
@@ -158,10 +159,7 @@ local function healed(character: Model, amount: number)
 		beam.FaceCamera = true
 		beam.Width0 = COLUMN_WIDTH
 		beam.Width1 = COLUMN_WIDTH * 0.8
-		beam.Color = ColorSequence.new(
-			colour,
-			(Config.Teams[character:GetAttribute("Team") or "Blue"] or Config.Teams.Blue).Color
-		)
+		beam.Color = ColorSequence.new(colour, Config.Teams[Side.shown(character:GetAttribute("Team"))].Color)
 		beam.LightEmission = 1
 		beam.LightInfluence = 0
 		beam.Transparency = NumberSequence.new({

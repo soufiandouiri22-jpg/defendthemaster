@@ -25,6 +25,7 @@ local Assets = require(ReplicatedStorage.Shared.Assets)
 local Boosts = require(ReplicatedStorage.Shared.Boosts)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroCamera = require(script.Parent.HeroCamera)
+local Side = require(script.Parent.Side)
 local UiSound = require(script.Parent.UiSound)
 local UiStyle = require(script.Parent.UiStyle)
 
@@ -109,7 +110,7 @@ local function tween(
 end
 
 local function teamColour(team: string?): Color3
-	return (Config.Teams[team or "Blue"] or Config.Teams.Blue).Color
+	return Config.Teams[Side.shown(team)].Color
 end
 
 -- Big lettering filling its frame, with a gradient fill and a thick dark edge (as BuyPhase's).
@@ -148,9 +149,9 @@ end
 -- The portrait of `hero`, or of `team`'s Master when he is "Master" and of its minions when he is "Minion".
 local function faceOf(hero: string?, team: string?): { Image: string, Face: { number } }?
 	if hero == "Master" then
-		return Config.Master.Portraits[team or "Blue"]
+		return Config.Master.Portraits[Side.shown(team)]
 	elseif hero == "Minion" then
-		return Config.Minions.Portraits[team or "Blue"]
+		return Config.Minions.Portraits[Side.shown(team)]
 	end
 	return hero and Config.Heroes[hero] and Config.Heroes[hero].Portrait
 end
