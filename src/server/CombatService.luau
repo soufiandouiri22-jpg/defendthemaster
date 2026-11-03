@@ -527,6 +527,10 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		return true, landing
 	elseif kit.Kind == "Dash" then
 		local from = root.Position
+		if kit.Grounded then
+			local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
+			from = HeroKit.grounded(from, humanoid.HipHeight + root.Size.Y / 2, HeroKit.leapIgnore())
+		end
 		local landing = HeroKit.dashEnd(from, direction, kit.Range, HeroKit.leapIgnore())
 		state.busyUntil = now + kit.Move + RECOVER
 		motionEvent:FireAllClients(character, key, 0, landing)

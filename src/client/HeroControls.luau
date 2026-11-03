@@ -65,6 +65,8 @@ type Leap = {
 	lift: any?,
 	-- Whether he cast that in the air (a jump pad's flight): known once it lets him down.
 	aloft: boolean?,
+	-- Where a Grounded dash cast in the air found him: he comes down from there to `from` in its windup.
+	down: Vector3?,
 }
 
 -- A jump pad's throw (HeroControls.launch): from where to where his root goes, how high over the higher of the two,
@@ -779,9 +781,14 @@ local function cast(key: string)
 	AbilityBar.cooldown(key, cooldown)
 	if kit.Kind == "Dash" then
 		local from = root.Position
+		local down = nil
+		if kit.Grounded then
+			from = HeroKit.grounded(from, heightOf(root, humanoid), HeroKit.leapIgnore())
+			down = if from ~= root.Position then root.Position else nil
+		end
 		local to = HeroKit.dashEnd(from, direction, kit.Range, HeroKit.leapIgnore())
 		busyUntil = now + kit.Move + RECOVER
-		leap = { started = now, from = from, to = to, takeoff = kit.Start, land = kit.Move, sharp = true }
+		leap = { started = now, from = from, to = to, takeoff = kit.Start, land = kit.Move, sharp = true, down = down }
 		slow(humanoid, kit.Move, 0)
 		dashMotion(character, from, to, kit)
 		return
@@ -976,8 +983,11 @@ local function updateLeap()
 		return
 	end
 	-- An attack that moves him takes over from a jump pad's flight once it moves him, from where he is then, and he
-	-- falls from where it leaves him; until then the flight carries him through its windup.
-	if l and flight and (l.lift or os.clock() - l.started >= l.takeoff) then
+	-- falls from where it leaves him; until then the flight carries him through its windup. A Grounded dash takes over
+	-- at once and brings him down to the ground in its windup instead.
+	if l and flight and l.down then
+		endFlight()
+	elseif l and flight and (l.lift or os.clock() - l.started >= l.takeoff) then
 		local shift = root.Position - l.from
 		l.from = root.Position
 		if l.sharp then
@@ -1014,6 +1024,12 @@ local function updateLeap()
 		return
 	end
 	if t < l.takeoff then
+		if l.down then
+			local fall = math.clamp(t / l.takeoff, 0, 1)
+			fall = fall * fall * (3 - 2 * fall)
+			root.CFrame = CFrame.new(l.down:Lerp(l.from, fall)) * root.CFrame.Rotation
+			root.AssemblyLinearVelocity = Vector3.zero
+		end
 		return
 	end
 	local alpha = math.clamp((t - l.takeoff) / (l.land - l.takeoff), 0, 1)
@@ -1058,8 +1074,13 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 		)
 	elseif kit.Kind == "Dash" then
 		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if root and landing then
-			dashMotion(character, root.Position, landing, kit)
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if root and humanoid and landing then
+			local from = root.Position
+			if kit.Grounded then
+				from = HeroKit.grounded(from, heightOf(root, humanoid), HeroKit.leapIgnore())
+			end
+			dashMotion(character, from, landing, kit)
 		end
 		return
 	elseif kit.Kind == "Vanish" then

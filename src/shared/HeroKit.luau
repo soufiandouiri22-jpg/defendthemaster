@@ -410,6 +410,20 @@ local FOOTING_SIDES = {
 	Vector3.new(0, 0, -FOOTING),
 }
 
+-- Where a hero whose root part is at `from`, `height` studs above the ground, would stand on the ground below him:
+-- `from` itself unless he is in the air (a jump pad's flight). `exclude` are the instances the ray ignores.
+function HeroKit.grounded(from: Vector3, height: number, exclude: { Instance }): Vector3
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = exclude
+	params.RespectCanCollide = true
+	local floor = Workspace:Raycast(from, Vector3.new(0, -AIR_DEPTH, 0), params)
+	if floor and floor.Position.Y < from.Y - height - 1 then
+		return Vector3.new(from.X, floor.Position.Y + height, from.Z)
+	end
+	return from
+end
+
 -- Where a hero whose root part is at `from`, `height` studs above the ground, lands when leaping towards `aim` at most
 -- `range` studs: the furthest spot on that line he can clear at the leap's height, with ground below it no more than
 -- LEAP_UP above or LEAP_DOWN below where he stands; without such a spot he still goes that way along the ground until
@@ -421,10 +435,7 @@ function HeroKit.leapLanding(from: Vector3, aim: Vector3, range: number, height:
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = exclude
 	params.RespectCanCollide = true
-	local floor = Workspace:Raycast(from, Vector3.new(0, -AIR_DEPTH, 0), params)
-	if floor and floor.Position.Y < from.Y - height - 1 then
-		from = Vector3.new(from.X, floor.Position.Y + height, from.Z)
-	end
+	from = HeroKit.grounded(from, height, exclude)
 	local direction = HeroKit.direction(from, aim, Vector3.zAxis)
 	local distance = math.min(range, HeroKit.flat(aim - from).Magnitude)
 	local ground = from.Y - height

@@ -40,6 +40,11 @@ function HeroLook.description(name: string): HumanoidDescription
 	for _, part in BODY_COLOURS do
 		(description :: any)[part] = look.Skin
 	end
+	-- Legs of their own colour: tight trousers under what he wears over them.
+	if look.Legs then
+		description.LeftLegColor = look.Legs
+		description.RightLegColor = look.Legs
+	end
 	-- The proportions of the animation packs' rigs.
 	description.BodyTypeScale = 0
 	description.ProportionScale = 0

@@ -10,10 +10,11 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local HeroKit = require(game:GetService("ReplicatedStorage").Shared.HeroKit)
+local Preferences = require(script.Parent.Preferences)
 
 local HeroCamera = {}
 
--- Degrees the camera turns per pixel the mouse moves.
+-- Degrees the camera turns per pixel the mouse moves, at the usual speed (the player's own: Preferences.sensitivity).
 local SENSITIVITY = 0.22
 local PITCH_MIN, PITCH_MAX = -55, 35
 local ZOOM_MIN, ZOOM_MAX = 7, 20
@@ -154,8 +155,9 @@ end
 function HeroCamera.start()
 	UserInputService.InputChanged:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseMovement and enabled then
-			yaw -= input.Delta.X * SENSITIVITY
-			pitch = math.clamp(pitch - input.Delta.Y * SENSITIVITY, PITCH_MIN, PITCH_MAX)
+			local speed = SENSITIVITY * Preferences.sensitivity()
+			yaw -= input.Delta.X * speed
+			pitch = math.clamp(pitch - input.Delta.Y * speed, PITCH_MIN, PITCH_MAX)
 		elseif input.UserInputType == Enum.UserInputType.MouseWheel and not processed then
 			zoom = math.clamp(zoom - input.Position.Z * 1.5, ZOOM_MIN, ZOOM_MAX)
 		end

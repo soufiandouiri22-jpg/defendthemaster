@@ -927,6 +927,8 @@ Config.Minions = {
 -- A `Guard` (a Flurry's at its `Slam`, a Leap's where he lands) braces him: he takes `Share` less damage for `Time`
 -- seconds (Damage.mitigated), with an iron sheen round him.
 -- With `Mirror` a key's `Motion` plays left for right (Shared.Motion), its body only, not the pack's weapons.
+-- A `Grounded` dash cast in the air (a jump pad's flight) brings him down to the ground below him in its windup and
+-- charges along it, as a leap comes down (HeroKit.grounded).
 -- A "Strike" keeps him where he stands and strikes the spot aimed at (up to `Range` away) at each of its `Strikes`
 -- (seconds from the cast), everyone within `Radius` of it, from the sky (LightningEffects); his motion itself strikes
 -- no one. A `Hold` plays its motion at `Speed` from `From` to `To` seconds into the clip, a moment drawn out.
@@ -1936,6 +1938,8 @@ Config.Heroes = {
 			},
 			HatAccessory = "122552163634316",
 			Skin = Color3.fromRGB(234, 184, 146),
+			-- Tight black trousers under his greaves (owner, 2026-11-03), where the skin showed between their plates.
+			Legs = Color3.fromRGB(22, 22, 24),
 			-- The axe comes as layered clothing hung from the torso; held fast in his right hand instead (HeroLook): its
 			-- haft (the mesh's Z, its wrapped grip at the +Z end) through the fist, the head forward and the blade down.
 			Held = { Name = "Handheld Iron Chainsaw Axe", Hand = "RightHand", Grip = CFrame.new(0, -0.3, -1.3) },
@@ -2001,22 +2005,27 @@ Config.Heroes = {
 				Guard = { Share = 0.25, Time = 3 },
 			},
 			-- A shield charge (058) to where he aims: he winds up and storms 18 studs ahead (1.12 to 1.43 s into the
-			-- clip, played 1.25 times as fast), striking everyone he runs through once. Played mirrored (Motion), so
-			-- the blow at its end is struck with his iron fist rather than his axe (owner, 2026-11-03).
+			-- clip, played 1.25 times as fast) through a wide lane. Played mirrored (Motion), so the blow at its end is
+			-- struck with his iron fist rather than his axe (owner, 2026-11-03): when it lands (1.4 s into the clip)
+			-- everyone he ran through and everyone round where he stops is struck once (Slash), so it reaches a group
+			-- rather than the one foe in his way. In the air (a jump pad) he comes down first and charges along the
+			-- ground, as his R does (Grounded; owner, 2026-11-03).
 			E = {
 				Kind = "Dash",
 				Motion = "RA-WGD-058",
 				Mirror = true,
+				Grounded = true,
 				Indicator = "Arrow",
 				Speed = 1.25,
 				Cooldown = 10,
 				Range = 18,
-				Width = 5,
+				Width = 7,
 				Damage = 60,
 				Ratio = 0.4,
 				Start = 0.9,
 				Move = 1.15,
 				Stop = 2.2,
+				Slash = { Time = 1.4, Range = 8 },
 			},
 			-- A leap high up and down onto the spot aimed at, axe first (056: off the ground at 0.27 s, down at 1.1),
 			-- the clip in place as the game carries him; where he lands he braces in his armour (Guard).
@@ -2034,8 +2043,8 @@ Config.Heroes = {
 				Land = 1.1,
 				Guard = { Share = 0.4, Time = 5 },
 			},
-			-- The pack has no dash: a short burst of his sprint (008), slower to come back than the others' (9 s) and
-			-- striking no one.
+			-- The pack has no dash: a short burst of his sprint (008), slower to come back than the others' (9 s),
+			-- barging into everyone he runs through once, a little softer than the warriors' (owner, 2026-11-03).
 			Dash = {
 				Kind = "Dash",
 				Motion = "RA-WGD-008",
@@ -2043,6 +2052,8 @@ Config.Heroes = {
 				Cooldown = 9,
 				Range = 12,
 				Width = 4,
+				Damage = 20,
+				Ratio = 0.2,
 				Start = 0.05,
 				Move = 0.35,
 				Stop = 0.5,

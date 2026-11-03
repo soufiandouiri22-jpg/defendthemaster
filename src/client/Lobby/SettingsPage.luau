@@ -1,8 +1,8 @@
 -- The settings (design 17, Preferences) over the whole screen: the SETTINGS ribbon with a close button, the four
--- sections on the left (Audio: the volumes and the menu's music; Controls: the keys; Graphics: the shadows; Interface:
--- the damage numbers) and the chosen one on the right, with RESET TO DEFAULT and SAVE under it. Every change is heard
--- and seen at once (Preferences.preview); SAVE keeps it in the profile (MenuService's Settings), closing without saving
--- goes back to what was saved.
+-- sections on the left (Audio: the volumes and the menu's music; Controls: the mouse's speed and the keys; Graphics:
+-- the shadows; Interface: the damage numbers) and the chosen one on the right, with RESET TO DEFAULT and SAVE under it.
+-- Every change is heard and seen at once (Preferences.preview); SAVE keeps it in the profile (MenuService's Settings),
+-- closing without saving goes back to what was saved.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -51,29 +51,36 @@ local function heading(parent: Instance, text: string, order: number, height: nu
 	return row
 end
 
-local function volumeRow(
+local function percentOf(v: number): string
+	return math.round(v * 100) .. "%"
+end
+
+-- A slider row for the setting `key` (0 to 1), its value shown on the right by `show` (a percentage by default).
+local function sliderRow(
 	parent: Instance,
 	key: string,
 	text: string,
 	order: number,
 	values: any,
-	changed: () -> ()
+	changed: () -> (),
+	show: ((v: number) -> string)?
 ): Control
+	local shown = show or percentOf
 	local row = heading(parent, text, order, 92)
-	local percent = Widgets.label(row, "", 32, C.Ink, "Right")
-	percent.Size = UDim2.fromOffset(110, 40)
-	percent.Position = UDim2.new(1, -4, 0, 44)
-	percent.AnchorPoint = Vector2.new(1, 0)
+	local value = Widgets.label(row, "", 32, C.Ink, "Right")
+	value.Size = UDim2.fromOffset(110, 40)
+	value.Position = UDim2.new(1, -4, 0, 44)
+	value.AnchorPoint = Vector2.new(1, 0)
 	local _, set = Widgets.slider(row, UDim2.new(1, -150, 0, 24), UDim2.fromOffset(4, 52), values[key], function(v)
 		values[key] = v
-		percent.Text = math.round(v * 100) .. "%"
+		value.Text = shown(v)
 		changed()
 	end)
-	percent.Text = math.round(values[key] * 100) .. "%"
+	value.Text = shown(values[key])
 	return {
 		set = function(v: number)
 			set(v)
-			percent.Text = math.round(v * 100) .. "%"
+			value.Text = shown(v)
 		end,
 	}
 end
@@ -186,13 +193,25 @@ function SettingsPage.open(gui: Instance, api: any)
 	end
 
 	for i, volume in VOLUMES do
-		controls[volume[1]] = volumeRow(pages.Audio, volume[1], volume[2], i, values, changed)
+		controls[volume[1]] = sliderRow(pages.Audio, volume[1], volume[2], i, values, changed)
 	end
 	rule(pages.Audio, 10)
 	controls.MenuMusic = toggleRow(pages.Audio, "MenuMusic", "MUSIC IN MENU", 11, values, changed)
 	-- The credit the menu music's licence (CC BY 4.0) asks for.
 	note(pages.Audio, 'Menu music: "Ancient God" by Gary Boudreaux, licensed under CC BY 4.0.', 12)
 
+	controls.Sensitivity = sliderRow(
+		pages.Controls,
+		"Sensitivity",
+		"MOUSE SENSITIVITY",
+		-2,
+		values,
+		changed,
+		function(v)
+			return string.format("%.2fx", Preferences.sensitivity(v))
+		end
+	)
+	rule(pages.Controls, -1)
 	for i, key in KEYS do
 		local row = UiStyle.frame(pages.Controls, UDim2.new(1, 0, 0, 52))
 		row.LayoutOrder = i

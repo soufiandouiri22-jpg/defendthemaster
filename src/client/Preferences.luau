@@ -1,7 +1,7 @@
 -- The player's settings (design 17, Shared.Profile's Settings) at work: the sound groups in SoundService ("Music",
 -- "Effects", "Interface", each at Master times its own volume; the menu's music only with MenuMusic on), the shadows,
--- and whether damage numbers show. The saved settings come from the profile (ProfileClient); the settings page may
--- try values first (Preferences.preview) before it saves them.
+-- whether damage numbers show, and the mouse's speed on the camera. The saved settings come from the profile
+-- (ProfileClient); the settings page may try values first (Preferences.preview) before it saves them.
 
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -70,6 +70,13 @@ end
 -- The setting `key` as it is now (previewed or saved).
 function Preferences.get(key: string): any
 	return (current :: any)[key]
+end
+
+-- How many times the usual speed the mouse turns the camera (HeroCamera): the Sensitivity slider (0 to 1) from 0.1
+-- at its left over 1 in its middle to 3 at its right.
+function Preferences.sensitivity(slider: number?): number
+	local v = slider or current.Sensitivity
+	return if v <= 0.5 then 0.1 + 0.9 * v / 0.5 else 1 + 2 * (v - 0.5) / 0.5
 end
 
 -- Runs `callback` whenever a setting changes.

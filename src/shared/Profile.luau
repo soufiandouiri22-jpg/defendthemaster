@@ -15,6 +15,8 @@ export type Settings = {
 	MenuMusic: boolean,
 	Shadows: boolean,
 	DamageNumbers: boolean,
+	-- The mouse's speed on the camera, as the slider stands (Preferences.sensitivity: the middle is the usual speed).
+	Sensitivity: number,
 }
 
 export type Data = {
@@ -69,6 +71,7 @@ function Profile.defaultSettings(): Settings
 		MenuMusic = true,
 		Shadows = true,
 		DamageNumbers = true,
+		Sensitivity = 0.5,
 	}
 end
 
