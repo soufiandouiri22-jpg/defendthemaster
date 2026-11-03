@@ -20,6 +20,7 @@ import argparse
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -34,9 +35,11 @@ BASE = f"https://apis.roblox.com/datastores/v1/universes/{UNIVERSE}/standard-dat
 # A batch is written up to this long after its first mark (TraceService's FLUSH, and some room).
 FLUSH = timedelta(seconds=90)
 ERRORS = ("error", "warning", "teleport.failed", "trace.dropped")
+# How often a call refused for too many requests is tried again.
+RETRIES = 8
 
 
-def call(url, key, method="GET"):
+def call(url, key, method="GET", attempt=0):
     request = urllib.request.Request(url, method=method)
     request.add_header("x-api-key", key)
     try:
@@ -45,6 +48,10 @@ def call(url, key, method="GET"):
             return json.loads(body) if body else None
     except urllib.error.HTTPError as error:
         text = error.read().decode(errors="replace")[:300]
+        # Open Cloud's rate limit: wait longer each time and try again.
+        if error.code == 429 and attempt < RETRIES:
+            time.sleep(2 * (attempt + 1))
+            return call(url, key, method, attempt + 1)
         if error.code == 404 and "DatastoreNotFound" in text:
             sys.exit("No log yet: the published game has not written one (is the version with TraceService published?).")
         if error.code in (401, 403):
@@ -128,7 +135,7 @@ def main():
 
     since = datetime.now(timezone.utc) - args.since
     names = in_window(key, since - FLUSH)
-    with ThreadPoolExecutor(8) as pool:
+    with ThreadPoolExecutor(4) as pool:
         batches = list(pool.map(lambda name: (name, fetch(key, name)), names))
 
     players, rows = {}, []

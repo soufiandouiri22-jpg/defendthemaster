@@ -228,9 +228,12 @@ local function buildBlades(): ScreenGui
 	ringEdge.Thickness = 3
 	ringEdge.Transparency = 1
 	ringEdge.Parent = ring
-	for _, name in { "BladeBack", "BladeFront" } do
-		local blade = tall(content, name, "ImageLabel", 0.5, BLADES_AT, BLADE_LONG, BLADE_LONG / BLADE_ASPECT)
+	-- Apart as a round starts (animate's first frame): Roblox shows a teleport's screen still, as built, until the
+	-- next place's script turns its blades on.
+	for _, pair in { { "BladeBack", -135 - OPEN }, { "BladeFront", -45 + OPEN } } do
+		local blade = tall(content, pair[1], "ImageLabel", 0.5, BLADES_AT, BLADE_LONG, BLADE_LONG / BLADE_ASPECT)
 		blade.Image = BLADE
+		blade.Rotation = pair[2]
 	end
 
 	local label = tall(content, "Label", "TextLabel", 0.5, LABEL_AT, 1, LABEL_SIZE)
@@ -674,6 +677,25 @@ function Loading.preload(instances: { Instance | string }, seconds: number)
 	RunService.RenderStepped:Wait()
 	RunService.RenderStepped:Wait()
 	warm:Destroy()
+end
+
+-- Takes the screen away at once (Loading.finish failed), so the player is never left behind it; the match's cards that
+-- came along stay for VersusView.
+function Loading.abandon()
+	local gui = shown
+	shown = nil
+	covering = false
+	if not readyAll then
+		readyAll = true
+		readySignal:Fire()
+	end
+	if not gone then
+		gone = true
+		goneSignal:Fire()
+	end
+	if gui and gui ~= cards then
+		gui:Destroy()
+	end
 end
 
 -- The client has what its first look shows: the screen may go.

@@ -5,4 +5,9 @@ local Loading = require(script.Parent:WaitForChild("Loading"))
 
 Trace.start()
 Loading.show()
-Loading.finish()
+-- An error in its own waiting must not leave the player behind a black screen for good.
+local ok, problem = pcall(Loading.finish)
+if not ok then
+	Trace.mark("loading.failed", { error = tostring(problem) })
+	Loading.abandon()
+end

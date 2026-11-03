@@ -73,6 +73,10 @@ local PICTURES = 3
 -- The screen comes right after this client's loading screen, as League's does, and stays until every player is in
 -- (the server's "VersusUntil" comes then); waiting longer than WAITING_AFTER seconds, the tip's line says for how many.
 local WAITING_AFTER = 1
+-- The server gives every player his hero as the screen's time runs out; the screen stays until this client's own
+-- stands in the arena, at most HERO_WAIT seconds, so it never opens on the camera where it stood before he came (the
+-- arena's middle; owner, 2026-11-03).
+local HERO_WAIT = 5
 
 local TIPS = {
 	"An ability you can raise glows on your bar: spend your points before you forget them.",
@@ -766,12 +770,28 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		tip.TextColor3 = if line then C.Gold else C.Cream
 		task.wait(0.25)
 	end
-	Trace.mark(
-		"versus.done",
-		{ final = placedFinal, over = over(), shown = math.floor((os.clock() - shownAt) * 100) / 100 }
-	)
-	release()
+	local heroSince = os.clock()
+	local function heroHere(): boolean
+		local character = Players.LocalPlayer.Character
+		return character ~= nil
+			and character:GetAttribute("Hero") ~= nil
+			and character:FindFirstChild("HumanoidRootPart") ~= nil
+	end
+	while not heroHere() and os.clock() - heroSince < HERO_WAIT do
+		task.wait(0.05)
+	end
+	-- The camera behind him for a frame before anything of the arena shows.
 	HeroCamera.setEnabled(true)
+	RunService.RenderStepped:Wait()
+	RunService.RenderStepped:Wait()
+	Trace.mark("versus.done", {
+		final = placedFinal,
+		over = over(),
+		shown = math.floor((os.clock() - shownAt) * 100) / 100,
+		hero = heroHere(),
+		heroWait = math.floor((os.clock() - heroSince) * 100) / 100,
+	})
+	release()
 	showChat()
 	local group = gui:FindFirstChild("Fade") :: CanvasGroup?
 	if group then
