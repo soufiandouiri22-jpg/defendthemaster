@@ -21,6 +21,9 @@ return {
 	MenuBoost = "rbxassetid://114387804158897",
 	MenuTrophy = "rbxassetid://94424280113656",
 	MenuLock = "rbxassetid://127375543575027",
+	-- An emote (Config.Emotes): two gold notes, GenerateImage with the trophy as the style (Art/Icons/keyed/Menu/emote.jpg,
+	-- keyed by Tools/key_icons.py into Art/Icons/Menu/emote.png).
+	MenuEmote = "rbxassetid://131454714076812",
 	-- The hero mastery crests, level 1 to 10, each with an empty plate for the level (two Meshy sheets in the
 	-- logo's style, Art/Icons/concepts/mastery_crests_*, cut into Art/Icons/Mastery), and the grade seals by letter
 	-- (Art/Icons/concepts/grade_seals_sheet.png, cut by Tools/cut_icons.py into Art/Icons/Grades).

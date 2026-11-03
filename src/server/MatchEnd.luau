@@ -151,6 +151,8 @@ local function reward(player: Player, line: Line?, won: boolean, mvp: boolean): 
 	local coins = SETTINGS.Coins[key] + (SETTINGS.GradeCoins[string.sub(grade, 1, 1)] or 0)
 	local ranked = MatchSetup.mode() == "Ranked"
 	return ProfileService.update(player, function(data)
+		-- A pass that began during the match gets its XP.
+		Pass.refresh(data)
 		local boosted = data.Pass.BoostUntil > os.time()
 		local times = if boosted then 2 else 1
 		local accountXp = SETTINGS.AccountXp[key] * times

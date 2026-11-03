@@ -1583,9 +1583,8 @@ Config.Heroes = {
 			Layered = { { Id = 11462148792, Type = Enum.AccessoryType.DressSkirt } },
 			HatAccessory = "11462150810",
 			BackAccessory = "73112264371344",
-			-- [Animated] Tired Anime Demon w/ Yellow Eyes (bundle 191152447832218, owner 2026-10-31) with its Default Mood.
-			Head = 111545403653088,
-			Mood = 14618207727,
+			-- The plain head under the helm, which hides it (owner, 2026-11-03); the catalog's [Animated] Tired Anime
+			-- Demon w/ Yellow Eyes 111545403653088 was not seen and needed its creator's leave.
 			-- Glowing yellow eyes in his helm's slit as in his portrait (owner, 2026-10-31; Art/Faces/brontar_eyes.png).
 			-- The slit is painted on, so each eye lies just in front of its half of the helm's front, which slopes back
 			-- 28 degrees each way from a ridge 0.88 studs in front of the head's centre.
@@ -2621,14 +2620,154 @@ Config.Ranked = {
 
 -- The season pass (design 13, Shared.Pass): `Levels` levels of `XpPerLevel` pass XP each. Every level has a reward on
 -- the free track and one on the premium track: coins, or a boost that doubles the account and pass XP of the matches
--- played in the next `Boost` seconds. The premium track's last reward is the season's exclusive hero (`Hero`, nil until
+-- played in the next `Boost` seconds. The premium track's last reward is the pass's exclusive hero (`Hero`, nil until
 -- he is built); the premium track opens later, for Robux.
+-- A pass runs `Weeks` weeks, apart from the ranked season (Config.Season; owner, 2026-11-03): from a Friday at `Hour`
+-- o'clock Dutch time (summer time included) to the same hour `Weeks` weeks later, when the next begins. The first
+-- begins at the launch, on the Friday `Launch` ({ year, month, day }; nil until the date is known); before it runs a
+-- test pass, number 0, whose progress the first clears.
 Config.Pass = {
+	Weeks = 6,
+	Hour = 16,
+	Launch = nil :: { year: number, month: number, day: number }?,
 	Levels = 30,
 	XpPerLevel = 500,
 	Boost = 3600,
 	Hero = nil :: string?,
 	Premium = false,
+	-- Every pass has emotes (Config.Emotes) at the same levels (owner, 2026-11-03): two on the free track, the second
+	-- the cooler, and three on the premium track, the last the coolest, at `EmoteLevels`, in order. `Emotes` names
+	-- them by the pass's number; the test pass has the first's. Each track's first is in the first seven levels, so the
+	-- pass shows some variety as soon as it opens (owner, 2026-11-03).
+	EmoteLevels = { Free = { 5, 24 }, Premium = { 3, 20, 28 } },
+	Emotes = {
+		[0] = { Free = { "HeelToe", "SillyDance" }, Premium = { "Showtime", "Whirlwind", "Breakdance" } },
+		[1] = { Free = { "HeelToe", "SillyDance" }, Premium = { "Showtime", "Whirlwind", "Breakdance" } },
+	} :: { [number]: { Free: { string }, Premium: { string } } },
+}
+
+-- The emotes (owner, 2026-11-03): dances of the Dance Collection (Docs/Third_Party.md), played on any hero's body
+-- (Motion.lend), in the lobby on the podium for the player himself and in a match for everyone, from the wheel (the
+-- Play page's EMOTE button, or G held down in a match). A dance in a match ends when the hero moves, attacks, is hit
+-- or dies, and another can only start `Cooldown` seconds after the last. Every player has the `Default` ones; the
+-- others come from the passes (Config.Pass.Emotes). Each is its clip `Motion`, played over and over unless `Once`,
+-- after its `Start` if it has one.
+-- Every dance of the pack is in `List` with its icon (owner, 2026-11-03), the ones of no pass yet kept for the next
+-- passes in this order (two free, three premium each): pass 2 QuickStep, BunnyHop; Wiggle, Twirl, RingDance. Pass 3
+-- SideShuffle, PumpIt; Flow, Hopscotch, Mambo. Pass 4 Swing, Festival; FireDance, FanDance, Spotlight. Pass 5 Jig,
+-- Waltz; Harvest, Jive, PopStar. Left over: Ritual and Hype. Not to be used: 002 (the same as 003), 029 (as 017), 030
+-- (as 031) and the Pole Dance (032, made for a pole the pack does not have).
+Config.Emotes = {
+	Pack = "DanceCollection",
+	-- How the pack's clips' ids begin.
+	Prefix = "RA-DNC-",
+	Cooldown = 3,
+	-- Each `Icon` is a glossy blocky dancer in its dance's pose with what goes with it (Art/Icons/Emotes, GenerateImage
+	-- drawings in Art/Icons/keyed/Emotes keyed by Tools/key_icons.py; owner, 2026-11-03, as Fortnite's emote icons).
+	List = {
+		BoxStep = {
+			Name = "Box Step",
+			Motion = "RA-DNC-020",
+			Default = true,
+			Icon = "rbxassetid://100336373568030",
+		},
+		HappyFeet = {
+			Name = "Happy Feet",
+			Motion = "RA-DNC-014",
+			Default = true,
+			Icon = "rbxassetid://100104825191085",
+		},
+		Groove = {
+			Name = "Groove",
+			Motion = "RA-DNC-006",
+			Once = true,
+			Default = true,
+			Icon = "rbxassetid://88515609673302",
+		},
+		HeelToe = { Name = "Heel Toe", Motion = "RA-DNC-013", Icon = "rbxassetid://91002316015282" },
+		SillyDance = { Name = "Silly Dance", Motion = "RA-DNC-034", Icon = "rbxassetid://71845450045834" },
+		Showtime = { Name = "Showtime", Motion = "RA-DNC-001", Icon = "rbxassetid://104161225113628" },
+		Whirlwind = { Name = "Whirlwind", Motion = "RA-DNC-037", Icon = "rbxassetid://76528981121165" },
+		Breakdance = { Name = "Breakdance", Motion = "RA-DNC-018", Once = true, Icon = "rbxassetid://122110952110177" },
+		QuickStep = { Name = "Quick Step", Motion = "RA-DNC-024", Icon = "rbxassetid://79422362816680" },
+		BunnyHop = { Name = "Bunny Hop", Motion = "RA-DNC-011", Icon = "rbxassetid://108917320781281" },
+		Wiggle = { Name = "Wiggle", Motion = "RA-DNC-026", Icon = "rbxassetid://73510896905373" },
+		Twirl = { Name = "Twirl", Motion = "RA-DNC-019", Icon = "rbxassetid://129171725606591" },
+		RingDance = { Name = "Ring Dance", Motion = "RA-DNC-036", Once = true, Icon = "rbxassetid://73059276737872" },
+		SideShuffle = { Name = "Side Shuffle", Motion = "RA-DNC-027", Icon = "rbxassetid://104933756088995" },
+		PumpIt = { Name = "Pump It", Motion = "RA-DNC-025", Icon = "rbxassetid://113096807041807" },
+		Flow = { Name = "Flow", Motion = "RA-DNC-012", Icon = "rbxassetid://135135045433759" },
+		Hopscotch = { Name = "Hopscotch", Motion = "RA-DNC-008", Icon = "rbxassetid://104936606573949" },
+		Mambo = { Name = "Mambo", Motion = "RA-DNC-009", Icon = "rbxassetid://85205029111286" },
+		Swing = { Name = "Swing", Motion = "RA-DNC-016", Icon = "rbxassetid://98760770740975" },
+		Festival = { Name = "Festival", Motion = "RA-DNC-015", Icon = "rbxassetid://107982397866328" },
+		FireDance = { Name = "Fire Dance", Motion = "RA-DNC-010", Icon = "rbxassetid://113047634611495" },
+		FanDance = { Name = "Fan Dance", Motion = "RA-DNC-038", Once = true, Icon = "rbxassetid://125803413954125" },
+		Spotlight = {
+			Name = "Spotlight",
+			Start = "RA-DNC-017",
+			Motion = "RA-DNC-028",
+			Icon = "rbxassetid://84260007994705",
+		},
+		Jig = { Name = "Jig", Start = "RA-DNC-004", Motion = "RA-DNC-007", Icon = "rbxassetid://131118033601742" },
+		Waltz = { Name = "Waltz", Start = "RA-DNC-023", Motion = "RA-DNC-022", Icon = "rbxassetid://76135050127236" },
+		Harvest = {
+			Name = "Harvest",
+			Start = "RA-DNC-021",
+			Motion = "RA-DNC-005",
+			Icon = "rbxassetid://140364395956052",
+		},
+		Jive = { Name = "Jive", Motion = "RA-DNC-035", Icon = "rbxassetid://120389247525346" },
+		PopStar = { Name = "Pop Star", Motion = "RA-DNC-033", Once = true, Icon = "rbxassetid://91448674797318" },
+		Ritual = { Name = "Ritual", Motion = "RA-DNC-031", Icon = "rbxassetid://80710475618836" },
+		Hype = { Name = "Hype", Motion = "RA-DNC-003", Icon = "rbxassetid://126812403157109" },
+	} :: {
+		[string]: {
+			Name: string,
+			Motion: string,
+			Icon: string,
+			Start: string?,
+			Once: boolean?,
+			Default: boolean?,
+		},
+	},
+	-- How the collection lists them: the defaults first, then by the pass they came from.
+	Order = {
+		"BoxStep",
+		"HappyFeet",
+		"Groove",
+		"HeelToe",
+		"SillyDance",
+		"Showtime",
+		"Whirlwind",
+		"Breakdance",
+		"QuickStep",
+		"BunnyHop",
+		"Wiggle",
+		"Twirl",
+		"RingDance",
+		"SideShuffle",
+		"PumpIt",
+		"Flow",
+		"Hopscotch",
+		"Mambo",
+		"Swing",
+		"Festival",
+		"FireDance",
+		"FanDance",
+		"Spotlight",
+		"Jig",
+		"Waltz",
+		"Harvest",
+		"Jive",
+		"PopStar",
+		"Ritual",
+		"Hype",
+	},
+	-- The wheel's slots (owner, 2026-11-03): the player chooses which of his emotes fill them (Profile.wheel); a new
+	-- one takes an empty slot by itself, and once all are full it waits in his collection, marked new, for him to put
+	-- it in in the lobby, where the wheel's last place is a + that opens the collection.
+	Slots = 7,
 }
 
 -- What a match earns every player in it (MatchEnd): coins, account XP and pass XP for a win or a loss, more coins for a
@@ -2706,7 +2845,6 @@ Config.Queue = {
 	FillAfter = 30,
 	RankedHumans = 2,
 }
-
 -- The draft (design 07, DraftService): the teams pick in `Order`, `Turn` seconds each; a bot picks after a moment
 -- between `BotDelay`'s two. Each hero once per match, while the picker has an untaken one of his own. After the last
 -- pick the heroes are shown for `Ready` seconds. The match waits `Arrive` seconds for its players to come in.

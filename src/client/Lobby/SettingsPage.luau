@@ -1,6 +1,7 @@
--- The settings (design 17, Preferences) over the whole screen: the SETTINGS ribbon with a close button, the four
+-- The settings (design 17, Preferences) over the whole screen: the SETTINGS ribbon with a close button, the five
 -- sections on the left (Audio: the volumes and the menu's music; Controls: the mouse's speed and the keys; Graphics:
--- the shadows; Interface: the damage numbers) and the chosen one on the right, with RESET TO DEFAULT and SAVE under it.
+-- the shadows; Interface: the damage numbers; Credits: who made the heroes' outfits, their motions and the music) and
+-- the chosen one on the right, with RESET TO DEFAULT and SAVE under it.
 -- Every change is heard and seen at once (Preferences.preview); SAVE keeps it in the profile (MenuService's Settings),
 -- closing without saving goes back to what was saved.
 
@@ -16,7 +17,7 @@ local SettingsPage = {}
 
 local C = UiStyle.Colors
 local W = Widgets.Colors
-local SECTIONS = { "Audio", "Controls", "Graphics", "Interface" }
+local SECTIONS = { "Audio", "Controls", "Graphics", "Interface", "Credits" }
 local VOLUMES = {
 	{ "Master", "MASTER VOLUME" },
 	{ "Music", "MUSIC" },
@@ -35,6 +36,78 @@ local KEYS = {
 	{ "HEALTH POTION", "Q" },
 	{ "ARMORY", "B  /  HOLD F" },
 	{ "SCOREBOARD", "HOLD TAB" },
+}
+-- The Marketplace creators of what each hero and the Masters wear (their `Look` in Config), with the designer named
+-- where the item's description gives one; keep it in step with the looks.
+local OUTFITS = {
+	{
+		"KORRUND",
+		{ "Iron Eradicator set and Handheld Iron Chainsaw Axe: RosariaDev and Scylen, Nexus Exchange" },
+	},
+	{
+		"JESTREL",
+		{ "Jester set: RosariaDev and Scylen, Nexus Exchange" },
+	},
+	{
+		"BRONTAR",
+		{
+			"Crusader Helmet and Crusader Armor: RosariaDev, Nexus Exchange",
+			"Crusader Cape (White): Brrrr's Graveyard",
+		},
+	},
+	{
+		"KAEDA",
+		{
+			"Phantom Ronin Redux Hakama: XeniusPrime",
+			"Anime Samurai Ponytail: loveanwgel",
+			"Anime face - Blue eyes: Babyzokas UGC Store",
+		},
+	},
+	{
+		"SHADOWREN",
+		{
+			"Victorian black coat and plain black pants: Dark Academia Attire",
+			"Ghost Hair: teIetabby, Tabasco Sauce",
+			"Glowing Demon Blaze Eyes Mask: Manwire UGC",
+		},
+	},
+	{
+		"ROWAN",
+		{
+			"White Shirt: HemyIli",
+			"Brown pants with sandal: Bebajuan",
+			"Emo Hair in Brown: kaixiuuu",
+			"Cool Striking Anime head: minokumi",
+		},
+	},
+	{
+		"MAVORAK",
+		{
+			"Battle Mage Shirt and Pants: Blotnik",
+			"Mens Black Flat Long Hair: blacklaced",
+			"Black Hood: Grame",
+			"Necromancer Cape: Dev_R0VER",
+			"Scary Purple Shadow head: minokumi",
+		},
+	},
+	{
+		"MORTAEL",
+		{
+			"Ashen Reaper Robe: consciousnessofdeath",
+			"Grim Reaper Skull Hood: #JEN",
+			"Grim Reaper Cloak: roblox_user_1729238081",
+		},
+	},
+	{
+		"THE MASTERS",
+		{
+			"Toga: Gens Vipsania",
+			"Red Cape and Blue Cape: Valkenheim UGC 2",
+			"Golden Crown: Vih's Studio",
+			"Angry Face: Satler Store",
+			"Messy Boy Spikes Hair: Tropika Fashion",
+		},
+	},
 }
 
 local openNow: Frame? = nil
@@ -110,6 +183,15 @@ local function note(parent: Instance, text: string, order: number)
 	label.LayoutOrder = order
 end
 
+-- A line of text as high as its wrapped text.
+local function textLine(parent: Instance, text: string, order: number)
+	local label = Widgets.label(parent, text, 24, W.Muted, "Left")
+	label.Size = UDim2.fromScale(1, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextWrapped = true
+	label.LayoutOrder = order
+end
+
 local function rule(parent: Instance, order: number)
 	local line = UiStyle.frame(parent, UDim2.new(1, 0, 0, 2))
 	line.BackgroundColor3 = C.GoldDark
@@ -158,7 +240,7 @@ function SettingsPage.open(gui: Instance, api: any)
 	shineRound.CornerRadius = UDim.new(0.5, 0)
 
 	-- The sections on the left.
-	local menu = UiStyle.frame(inner, UDim2.fromOffset(300, 520), UDim2.fromOffset(40, 96))
+	local menu = UiStyle.frame(inner, UDim2.new(0, 300, 1, -250), UDim2.fromOffset(40, 96))
 	menu.BackgroundTransparency = 1
 	Widgets.list(menu, "Vertical", 22)
 	local content = UiStyle.frame(inner, UDim2.new(1, -420, 1, -250), UDim2.fromOffset(380, 96))
@@ -230,6 +312,32 @@ function SettingsPage.open(gui: Instance, api: any)
 
 	controls.DamageNumbers = toggleRow(pages.Interface, "DamageNumbers", "DAMAGE NUMBERS", 1, values, changed)
 	note(pages.Interface, "The numbers that rise from what your hero hits in a match.", 2)
+
+	local order = 0
+	local function nextOrder(): number
+		order += 1
+		return order
+	end
+	textLine(
+		pages.Credits,
+		"The heroes' outfits are made by these creators on the Roblox Marketplace. Thank you!",
+		nextOrder()
+	)
+	for _, outfit in OUTFITS do
+		heading(pages.Credits, outfit[1], nextOrder(), 40)
+		for _, text in outfit[2] do
+			textLine(pages.Credits, text, nextOrder())
+		end
+	end
+	rule(pages.Credits, nextOrder())
+	heading(pages.Credits, "MOTIONS AND SOUNDS", nextOrder(), 40)
+	textLine(
+		pages.Credits,
+		"The heroes' and Masters' animation and sound packs: RobloxAnimations, KitsBlox",
+		nextOrder()
+	)
+	heading(pages.Credits, "MUSIC", nextOrder(), 40)
+	textLine(pages.Credits, 'Menu music: "Ancient God" by Gary Boudreaux, licensed under CC BY 4.0.', nextOrder())
 
 	local sectionButtons: { [string]: TextButton } = {}
 	local function choose(name: string)

@@ -123,6 +123,10 @@ function MatchSetup.start()
 		player:SetAttribute("Loaded", 1)
 		player:SetAttribute("ClientReady", true)
 	end)
+	-- Everything the heroes standing in the arena bring has loaded on the player's client (VersusView).
+	Remote.event("HeroesLoaded", 1, function(player)
+		player:SetAttribute("HeroesLoaded", true)
+	end)
 	-- How far a player's loading screen is (0 to 1), for everyone's cards (VersusView).
 	Remote.event("LoadProgress", 8, function(player, share)
 		if typeof(share) == "number" and share == share and not player:GetAttribute("ClientReady") then
@@ -169,13 +173,42 @@ function MatchSetup.awaitArrivals()
 	end)
 end
 
+-- Whether a player of the match who is in the server still lacks what `ready` asks.
+local function anyLoading(ready: (Player) -> boolean): boolean
+	for _, player in Players:GetPlayers() do
+		if player:GetAttribute("Team") and not ready(player) then
+			return true
+		end
+	end
+	return false
+end
+
 -- Waits for the match's players, their data and their clients, which say so once they have everything in under the
--- loading screen ("ClientReady"): all of them, or as many as are ready within Config.Draft.Arrive seconds; without a
--- record, for the first player. So the draft and its clock start when everyone can see it.
+-- loading screen ("ClientReady"): those who never come in for Config.Draft.Arrive seconds (without a record, for the
+-- first player), and those who are in however long their loading takes, as League of Legends waits for its slowest
+-- player (owner, 2026-11-03); one who leaves is no longer waited for. So the draft and its clock start when everyone
+-- can see it.
 function MatchSetup.awaitPlayers()
-	await(function(player)
+	local function ready(player: Player): boolean
 		return player:GetAttribute("ClientReady") == true
-	end)
+	end
+	await(ready)
+	while anyLoading(ready) do
+		task.wait(0.25)
+	end
+end
+
+-- Waits until every player of the match in the server has loaded everything the heroes in the arena bring (their
+-- clothing, weapons and effects; Net.HeroesLoaded from VersusView), however long that takes; one who leaves is no
+-- longer waited for. So the match begins with nothing left to come in (owner, 2026-11-03).
+function MatchSetup.awaitHeroesLoaded()
+	local started = os.clock()
+	while anyLoading(function(player)
+		return player:GetAttribute("HeroesLoaded") == true
+	end) do
+		task.wait(0.25)
+	end
+	TraceService.mark("match.heroesloaded", { took = math.floor((os.clock() - started) * 100) / 100 })
 end
 
 -- The draft's eight places in Config.Draft.Order's names: each team's players first, in the record's order (as the

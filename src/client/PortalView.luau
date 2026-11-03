@@ -213,7 +213,8 @@ local function arrive(opening: Opening, character: Model)
 	highlight.OutlineTransparency = 0.3
 	highlight.DepthMode = Enum.HighlightDepthMode.Occluded
 	highlight.Adornee = character
-	highlight.Parent = character
+	-- Beside the hero, not in him: what is put in a hero makes Roblox fit his layered clothing again.
+	highlight.Parent = effects
 	TweenService:Create(highlight, info, { FillTransparency = 1, OutlineTransparency = 1 }):Play()
 	task.delay(FLARE + 0.2, function()
 		highlight:Destroy()

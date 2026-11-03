@@ -1,7 +1,8 @@
 -- Moves every hero (a Combatant with the "Hero" attribute) with its animation pack's clips (Shared.Motion): the battle
 -- idle when it stands, running forward, sideways or backward by the way it moves relative to where it faces, and the
 -- jump's takeoff, flight and landing (a jump pad's flight, its "Flying" attribute, in the air all the way, JumpPadView);
--- and over that the motions of its attacks (HeroAnimator.play). When it dies, the
+-- and over that the motions of its attacks (HeroAnimator.play), or the emote it dances (its "Emote" attribute,
+-- EmoteService) until it moves or attacks. When it dies, the
 -- pack's fall. Every hero's feet sound as Shadowren's (FEET): his pack's footsteps on the sand where the hero's clips
 -- put a foot down, and his takeoff's and landing's steps when it jumps, whatever the hero's own pack has for those.
 
@@ -11,6 +12,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Emote = require(ReplicatedStorage.Shared.Emote)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Motion = require(ReplicatedStorage.Shared.Motion)
 
@@ -37,6 +39,9 @@ type Hero = {
 	airborne: number,
 	landingUntil: number,
 	dead: boolean,
+	-- His "Emote" attribute as last seen, and the dance it plays (Shared.Emote).
+	emote: string?,
+	dance: Emote.Dance?,
 }
 
 local heroes: { [Model]: Hero } = {}
@@ -163,6 +168,31 @@ local function jumpSteps(hero: Hero, clip: string?)
 	end
 end
 
+-- Dances the emote of `hero`'s "Emote" attribute ("<id>@<time>", EmoteService) when it changes to one, and ends the
+-- dance as the attribute goes, he moves or leaves the ground, or another clip takes its place.
+local function dance(hero: Hero)
+	local value = hero.character:GetAttribute("Emote")
+	local emote = if type(value) == "string" then value else nil
+	if emote ~= hero.emote then
+		hero.emote = emote
+		local id = emote and string.match(emote, "^(.-)@")
+		if hero.dance and not id then
+			Emote.stop(hero.dance)
+		end
+		hero.dance = if id then Emote.dance(hero.motion, id) else nil
+	end
+	local current = hero.dance
+	if not current then
+		return
+	end
+	if hero.airborne > 0 or HeroKit.flat(hero.root.AssemblyLinearVelocity).Magnitude >= 1 then
+		Emote.stop(current)
+		hero.dance = nil
+	elseif not Emote.going(current) then
+		hero.dance = nil
+	end
+end
+
 local function locomote(hero: Hero, dt: number, now: number)
 	local motions, motion, root = hero.motions, hero.motion, hero.root
 	-- A jump pad's flight is in the air from takeoff to landing, whatever it passes over (the pad itself, cover).
@@ -266,6 +296,7 @@ function HeroAnimator.start()
 			end
 			if not hero.dead then
 				locomote(hero, dt, now)
+				dance(hero)
 			end
 			hero.motion:step(dt)
 		end

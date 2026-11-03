@@ -197,9 +197,17 @@ local function playLoaded(sound: Sound, parent: Instance, started: (() -> ())?)
 end
 
 -- A sound of the cue `name` at `volume` and `pitch`, parented to `parent` and playing as soon as it has loaded; nil
--- when there is no such cue, or while the loading screen is up (the menu behind it hears the mouse pass over it).
-local function start(name: string, parent: Instance, volume: number?, pitch: number?, group: string): (Sound?, Cue?)
-	if not Loading.isGone() then
+-- when there is no such cue, or while the loading screen is up (the menu behind it hears the mouse pass over it) unless
+-- `over`: the sound of a screen shown over the loading screen (the match's cards, VersusView).
+local function start(
+	name: string,
+	parent: Instance,
+	volume: number?,
+	pitch: number?,
+	group: string,
+	over: boolean?
+): (Sound?, Cue?)
+	if not over and not Loading.isGone() then
 		return nil, nil
 	end
 	local speed = pitch or 1
@@ -251,9 +259,10 @@ local function start(name: string, parent: Instance, volume: number?, pitch: num
 	return sound, cue
 end
 
--- Plays `name` flat, at `volume` (1 when not given) and a little higher or lower by `pitch` (1 is as recorded).
-function UiSound.play(name: string, volume: number?, pitch: number?)
-	start(name, SoundService, volume, pitch, "Interface")
+-- Plays `name` flat, at `volume` (1 when not given) and a little higher or lower by `pitch` (1 is as recorded); with
+-- `over` also while the loading screen is up, for a screen shown over it.
+function UiSound.play(name: string, volume: number?, pitch: number?, over: boolean?)
+	start(name, SoundService, volume, pitch, "Interface", over)
 end
 
 -- An announcement goes before every other sound (owner, 2026-10-30): the music and the effects sink to DUCK of

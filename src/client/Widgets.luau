@@ -161,6 +161,13 @@ function Widgets.ribbon(parent: Instance, value: string, size: UDim2, position: 
 	return f
 end
 
+-- Whether `button` stands on a screen shown over the loading screen (the "OverLoading" attribute, VersusView), whose
+-- sounds play while the loading screen is up under it.
+local function overLoading(button: GuiButton): boolean
+	local screen = button:FindFirstAncestorWhichIsA("LayerCollector")
+	return screen ~= nil and screen:GetAttribute("OverLoading") == true
+end
+
 -- Plays the hover cue and grows `button` a little while the mouse is over it, and the pick cue on a click.
 function Widgets.feel(button: GuiButton, quiet: boolean?)
 	local scale = Instance.new("UIScale")
@@ -168,7 +175,7 @@ function Widgets.feel(button: GuiButton, quiet: boolean?)
 	button.MouseEnter:Connect(function()
 		if button.Active then
 			tween(scale, 0.1, { Scale = 1.04 })
-			UiSound.play("Hover", 0.6)
+			UiSound.play("Hover", 0.6, nil, overLoading(button))
 		end
 	end)
 	button.MouseLeave:Connect(function()
@@ -185,7 +192,7 @@ function Widgets.feel(button: GuiButton, quiet: boolean?)
 	if not quiet then
 		button.Activated:Connect(function()
 			if button.Active then
-				UiSound.play("Pick", 0.8)
+				UiSound.play("Pick", 0.8, nil, overLoading(button))
 			end
 		end)
 	end
@@ -546,6 +553,22 @@ function Widgets.reward(parent: GuiObject): (reward: { [string]: any }) -> ()
 			local text = Widgets.label(holder, span, 20, C.Cream)
 			text.Size = UDim2.fromScale(1, 0.16)
 			text.Position = UDim2.fromScale(0, 0.74)
+		elseif reward.Emote then
+			local emote = Config.Emotes.List[reward.Emote]
+			local icon = Instance.new("ImageLabel")
+			icon.BackgroundTransparency = 1
+			icon.Image = if emote then emote.Icon else Assets.MenuEmote
+			icon.ScaleType = Enum.ScaleType.Fit
+			icon.Size = UDim2.fromScale(0.62, 0.52)
+			icon.Position = UDim2.fromScale(0.5, 0.06)
+			icon.AnchorPoint = Vector2.new(0.5, 0)
+			icon.Parent = holder
+			local kind = Widgets.label(holder, "EMOTE", 24, C.Cream, nil, C.Edge)
+			kind.Size = UDim2.fromScale(1, 0.16)
+			kind.Position = UDim2.fromScale(0, 0.58)
+			local name = Widgets.label(holder, string.upper(emote and emote.Name or reward.Emote), 20, C.Cream)
+			name.Size = UDim2.fromScale(1, 0.16)
+			name.Position = UDim2.fromScale(0, 0.74)
 		else
 			local coin = Instance.new("ImageLabel")
 			coin.BackgroundTransparency = 1

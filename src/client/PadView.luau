@@ -243,7 +243,8 @@ local function burst(character: Model, again: boolean)
 	highlight.OutlineTransparency = 1
 	highlight.DepthMode = Enum.HighlightDepthMode.Occluded
 	highlight.Adornee = character
-	highlight.Parent = character
+	-- Beside the hero, not in him: what is put in a hero makes Roblox fit his layered clothing again.
+	highlight.Parent = effects
 	TweenService:Create(highlight, info, { FillTransparency = 1 }):Play()
 
 	task.delay(BURST + 1.2, function()

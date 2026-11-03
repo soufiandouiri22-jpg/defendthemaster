@@ -12,6 +12,11 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   crown, gold sword; the blue team's Master wears the same in blue.
 - Every character (heroes, king, crowd) is a Roblox R15 avatar. The world and the statues come from Meshy, with
   variants so nothing repeats.
+- The heroes keep their layered clothing (owner, 2026-11-03). Roblox sometimes stops drawing a hero's layered
+  clothing in a match, and the body under it goes with it (heroes with only hair and weapons left, 2026-11-03, a
+  known engine bug after respawns). Workspace's `LayeredClothingCacheOptimizations` stays `Disabled` (set in Studio's
+  Properties, Behavior; scripts and Rojo cannot reach it), Roblox's own workaround; `ClothingWatch` logs every change
+  to a hero's clothing ("clothing.state", `Tools/trace.py --kind clothing`).
 - Draft like League of Legends without bans: in turns with a timer, each hero once per match, the same category is
   fine, no trading. Teams are told apart only by the HP bar (red or blue).
 - Attacks: left mouse a three-hit combo, right mouse and E specials, R the ultimate; built on the bought animation
@@ -32,6 +37,12 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   health, paying for range with damage, a Tank the most health and little damage, and so on. Do this for every new
   hero and every change to one, test the doubtful cases in Play (a test dummy, hits counted), and write the
   comparison next to the numbers in `Config` (as Rowan's M1, E and R).
+- Every hero dances every emote (`Config.Emotes`, owner, 2026-11-03), also every hero built later and every emote
+  added later: the dances are lent to all heroes (`Motion.lend` in `Shared.Emote`), never made per hero, so a new hero
+  needs no emote work of his own, only an R15 pack rig that `Motion.new` finds every joint of (no "[Motion] no joint"
+  warning). Before a new hero is done, check in Play that he dances the emotes on the lobby's podium and in a match
+  (G), his weapon included, and fix what is off in `Motion` or `Emote` for all heroes at once, never with an exception
+  for one.
 - Abilities rank up with 1, 2 and 3. A shop at the own base (coins, 6 inventory slots). Own crosshair and cursor.
 - The scoreboard follows League of Legends, mixed with the game's own design (owner, 2026-10-27): held on Tab, both
   teams with every hero's portrait, level, items and kills / deaths / assists; the player's own KDA stays in his HUD.

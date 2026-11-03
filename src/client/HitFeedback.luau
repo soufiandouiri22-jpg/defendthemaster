@@ -120,10 +120,20 @@ local function tierOf(amount: number): Tier
 	return found
 end
 
+-- Where the flashes stand: beside the heroes, not in them, as what is put in a hero makes Roblox fit his layered
+-- clothing again.
+local flashes: Folder? = nil
+
 local function flash(target: Instance, tier: Tier)
 	local model = if target:IsA("BasePart") then MinionView.modelOf(target) else target
 	if not model then
 		return
+	end
+	if not flashes or not flashes.Parent then
+		local folder = Instance.new("Folder")
+		folder.Name = "HitFlashes"
+		folder.Parent = Workspace
+		flashes = folder
 	end
 	local highlight = flashing[model]
 	if not highlight then
@@ -132,7 +142,7 @@ local function flash(target: Instance, tier: Tier)
 		highlight.OutlineTransparency = 1
 		highlight.FillColor = Color3.new(1, 1, 1)
 		highlight.Adornee = model
-		highlight.Parent = model
+		highlight.Parent = flashes
 		flashing[model] = highlight
 	end
 	local h = highlight :: Highlight

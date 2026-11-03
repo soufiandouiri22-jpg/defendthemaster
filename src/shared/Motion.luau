@@ -14,6 +14,9 @@
 -- Cues (Motion.cues, per clip id: { Time = seconds into the clip, ... }) are handed to Motion.onCue as the clips'
 -- clocks pass them: the action's, and the base's while no action covers it.
 --
+-- A clip of another pack (Motion.lend: the emotes' dances) plays on any hero through that pack's player: every pack's
+-- rig is the same R15 rig, so its poses fit the hero's joints as his own pack's do.
+--
 -- The clips in Motion.mirrored play mirrored, left for right: the packs' rigs are symmetric (each left joint's frames
 -- the right one's reflected across the body's middle), so the left joint takes the right one's pose reflected, and the
 -- other way round. Only the body is mirrored, not the pack's weapons; a hero whose weapons are his own, held in a hand
@@ -44,6 +47,8 @@ type Pose = {
 	bones: { [string]: CFrame },
 	props: { [string]: Prop },
 	opacity: { [string]: number },
+	-- Sampled from a lending pack's clip (Motion.lend: a dance), which shows none of the hero's weapons.
+	lent: boolean?,
 }
 
 type Meta = {
@@ -69,6 +74,10 @@ type Clip = {
 	stopAt: number?,
 	-- Played left for right (Motion.mirrored).
 	mirror: boolean,
+	-- Played over and over until stopped, when it loops (Motion.keepPlaying).
+	repeating: boolean,
+	-- The pack player it is sampled from.
+	player: any,
 }
 
 export type Cue = { Time: number, [string]: any }
@@ -104,6 +113,9 @@ export type Motion = typeof(setmetatable(
 		breathing: number?,
 		-- Never standing taller than the base clip (Motion.keepLow).
 		low: boolean,
+		-- The pose last put on the body, and one being faded out of (Motion.crossfade).
+		applied: Pose?,
+		fading: { from: Pose, time: number, seconds: number }?,
 		cues: { [string]: { Cue } }?,
 		onCue: ((cue: Cue) -> ())?,
 		-- The clips played mirrored, by id.
@@ -128,6 +140,24 @@ end
 
 local function frame(values: { number }): CFrame
 	return CFrame.new(table.unpack(values))
+end
+
+-- The packs that lend their clips to every hero, by the start of their clips' ids.
+local lent: { [string]: string } = {}
+
+-- Lets every hero play the clips of `packName` whose ids start with `prefix`.
+function Motion.lend(prefix: string, packName: string)
+	lent[prefix] = packName
+end
+
+-- The player that samples clip `id` for `self`: a lending pack's, or the hero's own.
+local function playerOf(self: Motion, id: string): any
+	for prefix, name in lent do
+		if string.sub(id, 1, #prefix) == prefix then
+			return pack(name).player
+		end
+	end
+	return self.player
 end
 
 -- How far the character's root part stands from where the pack rig's would on the same ground, as a CFrame to put
@@ -213,6 +243,8 @@ function Motion.new(character: Model, packName: string): Motion
 		stepping = nil,
 		breathing = nil,
 		low = false,
+		applied = nil,
+		fading = nil,
 		cues = nil,
 		onCue = nil,
 		mirrored = nil,
@@ -277,7 +309,7 @@ local function clipTime(clip: Clip): number
 end
 
 function Motion.sample(self: Motion, clip: Clip): Pose
-	local sample = self.player.Sample(nil, clip.id, clipTime(clip))
+	local sample = clip.player.Sample(nil, clip.id, clipTime(clip))
 	local body, bones, props, opacity = sample.body, sample.bones or {}, sample.props or {}, sample.opacity
 	if not opacity then
 		-- The newest packs give each weapon its joint's transform, one scale, its own opacity and its mesh's place.
@@ -324,7 +356,7 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 		end
 		body = mirrored
 	end
-	return { body = body, bones = bones, props = props, opacity = opacity }
+	return { body = body, bones = bones, props = props, opacity = opacity, lent = clip.player ~= self.player }
 end
 
 local function mixProp(a: Prop, b: Prop, w: number): Prop
@@ -354,7 +386,13 @@ local function blend(a: Pose, b: Pose, w: number): Pose
 		local other = b.props[name]
 		props[name] = if other then mixProp(prop, other, w) else prop
 	end
-	return { body = body, bones = bones, props = props, opacity = if w < 0.5 then a.opacity else b.opacity }
+	return {
+		body = body,
+		bones = bones,
+		props = props,
+		opacity = if w < 0.5 then a.opacity else b.opacity,
+		lent = if w < 0.5 then a.lent else b.lent,
+	}
 end
 
 local function ease(x: number): number
@@ -387,12 +425,15 @@ local function stepped(from: Pose, to: Pose, w: number, feet: { [string]: number
 		local old = from.props[name]
 		props[name] = if old then mixProp(old, prop, w) else prop
 	end
-	return { body = body, bones = bones, props = props, opacity = to.opacity }
+	return { body = body, bones = bones, props = props, opacity = to.opacity, lent = to.lent }
 end
 
 local function newClip(self: Motion, id: string, speed: number, time: number?): Clip
-	local _, meta = self.player.Sample(nil, id, 0)
+	local player = playerOf(self, id)
+	local _, meta = player.Sample(nil, id, 0)
 	return {
+		player = player,
+		repeating = false,
 		id = id,
 		time = time or 0,
 		speed = speed,
@@ -482,6 +523,14 @@ function Motion.play(
 	return self.action.meta.duration / speed
 end
 
+-- Keeps the clip played over the base playing over and over, when it loops, until it is stopped or another is played
+-- (a dance).
+function Motion.keepPlaying(self: Motion)
+	if self.action then
+		self.action.repeating = self.action.meta.loop
+	end
+end
+
 -- Plays the clip played over the base on at `speed` from now (a held moment in it: Kit's `Hold`).
 function Motion.setSpeed(self: Motion, speed: number)
 	if self.action then
@@ -527,6 +576,14 @@ function Motion.stepInto(self: Motion, left: number, right: number)
 	self.lastAction = nil
 end
 
+-- Eases over `seconds` from the pose he stands in now into whatever is played from now on (a dance and back), instead
+-- of jumping to it.
+function Motion.crossfade(self: Motion, seconds: number)
+	if self.applied then
+		self.fading = { from = self.applied, time = 0, seconds = seconds }
+	end
+end
+
 -- Breathes from now on, the chest rising and falling over whatever pose he holds (the menu's podium).
 function Motion.breathe(self: Motion)
 	self.breathing = 0
@@ -561,7 +618,7 @@ function Motion.step(self: Motion, dt: number)
 			action.time = action.stopAt
 			action.speed = 0
 		end
-		if action.time >= action.meta.duration and not action.hold then
+		if action.time >= action.meta.duration and not action.hold and not action.repeating then
 			self:stop()
 		else
 			self.actionWeight = math.min(1, self.actionWeight + dt / ACTION_FADE_IN)
@@ -594,6 +651,15 @@ function Motion.step(self: Motion, dt: number)
 			pose.body[rootPart] = root - Vector3.new(0, root.Y - low, 0)
 		end
 	end
+	local fading = self.fading
+	if fading then
+		fading.time += dt
+		pose = blend(fading.from, pose, ease(fading.time / fading.seconds))
+		if fading.time >= fading.seconds then
+			self.fading = nil
+		end
+	end
+	self.applied = pose
 	self:apply(pose)
 	if lifts then
 		for side, w in lifts do
@@ -661,6 +727,16 @@ function Motion.apply(self: Motion, pose: Pose)
 		local opacity = pose.opacity[name] or 0
 		for _, mesh in meshes do
 			mesh.Transparency = 1 - opacity
+		end
+	end
+	-- His own weapon held in a hand (HeroLook's Held, Korrund's axe) is put away for a dance as the packs' weapons are.
+	local held = self.character:FindFirstChild("Held")
+	if held then
+		local away = if pose.lent then 1 else 0
+		for _, part in held:GetDescendants() do
+			if part:IsA("BasePart") and part.Transparency ~= away then
+				part.Transparency = away
+			end
 		end
 	end
 end

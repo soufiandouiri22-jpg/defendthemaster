@@ -316,6 +316,22 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 	player:SetAttribute("DeathsSinceKill", (player:GetAttribute("DeathsSinceKill") or 0) + 1)
 	local wait = respawnTime(player)
 	character:SetAttribute("RespawnAt", Workspace:GetServerTimeNow() + wait)
+	-- Whom his camera follows until he is back (the client's HeroCamera): the enemy hero who killed him, or the Master.
+	local follow: Instance? = if killer then Actors.character(killer) else nil
+	local masters = Workspace:FindFirstChild("Masters")
+	if byMaster and masters then
+		for _, model in masters:GetChildren() do
+			if model:GetAttribute("Team") == enemy then
+				follow = model
+			end
+		end
+	end
+	if follow then
+		local value = Instance.new("ObjectValue")
+		value.Name = "Killer"
+		value.Value = follow
+		value.Parent = character
+	end
 	return wait
 end
 

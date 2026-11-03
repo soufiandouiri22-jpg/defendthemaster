@@ -99,6 +99,10 @@ end
 
 local spawned: RemoteEvent? = nil
 local released = false
+-- Heroes brought in under the match's cards stand still on their pads until the match begins (HeroService.release
+-- with `hold`, HeroService.go): their root parts anchored, so nobody walks, leaps or shops while everyone loads them.
+local holding = false
+local held: { BasePart } = {}
 local spawnAll: () -> () = function() end
 -- The players and bots whose hero has been in the arena before.
 local appeared: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
@@ -107,6 +111,13 @@ local appeared: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: 
 -- and whether he came back after dying (the burst's sound is for that only, not for the start of the match).
 function HeroService.enlist(character: Model)
 	CollectionService:AddTag(character, "Combatant")
+	if holding then
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			root.Anchored = true
+			table.insert(held, root)
+		end
+	end
 	local actor = Actors.owner(character)
 	local again = actor ~= nil and appeared[actor] == true
 	if actor then
@@ -177,10 +188,35 @@ function HeroService.start(layout: Layout)
 	end
 end
 
--- Brings every player's hero into the arena, and from now on every player who comes in.
-function HeroService.release()
+-- Brings every player's hero into the arena, and from now on every player who comes in; with `hold` they (and the
+-- bots') stand still on their pads until HeroService.go.
+function HeroService.release(hold: boolean?)
+	holding = hold == true
 	released = true
 	spawnAll()
+end
+
+-- Lets the heroes held on their pads go, each body back with whoever moves it (its player, or the server for a bot).
+function HeroService.go()
+	holding = false
+	for _, root in held do
+		if root.Parent then
+			root.Anchored = false
+			pcall(root.SetNetworkOwner, root, Players:GetPlayerFromCharacter(root.Parent))
+		end
+	end
+	held = {}
+end
+
+-- How many heroes stand in the arena.
+function HeroService.count(): number
+	local count = 0
+	for _, model in CollectionService:GetTagged("Combatant") do
+		if model:GetAttribute("Hero") ~= nil then
+			count += 1
+		end
+	end
+	return count
 end
 
 return HeroService

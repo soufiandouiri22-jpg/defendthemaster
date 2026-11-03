@@ -9,7 +9,6 @@ local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
-local Pass = require(ReplicatedStorage.Shared.Pass)
 local Profile = require(ReplicatedStorage.Shared.Profile)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
 local ProfileClient = require(script.Parent.Parent.ProfileClient)
@@ -90,7 +89,8 @@ local function yourRank(page: Frame): (data: Profile.Data) -> ()
 			ends.Text = string.upper(why :: string)
 			ends.TextColor3 = W.Bad
 		else
-			local days = math.max(0, math.ceil((Pass.endsAt() - Workspace:GetServerTimeNow()) / 86400))
+			local endsAt = os.time(Config.Season.Ends :: any)
+			local days = math.max(0, math.ceil((endsAt - Workspace:GetServerTimeNow()) / 86400))
 			ends.Text = "SEASON "
 				.. Config.Season.Number
 				.. " ENDS IN "

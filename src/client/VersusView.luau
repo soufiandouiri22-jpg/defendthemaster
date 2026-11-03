@@ -12,6 +12,7 @@
 -- still loading; it stays until they all have everything in and then the server's "VersusUntil" (Config.Match.Versus
 -- seconds more), and goes with the loading screen under it. Only in a match without a draft (Config.Draft.Enabled off); a client coming in later skips it.
 
+local CollectionService = game:GetService("CollectionService")
 local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
@@ -77,6 +78,10 @@ local WAITING_AFTER = 1
 -- stands in the arena, at most HERO_WAIT seconds, so it never opens on the camera where it stood before he came (the
 -- arena's middle; owner, 2026-11-03).
 local HERO_WAIT = 5
+-- The heroes come into the arena under the cards, and the match waits until every client has loaded what they bring
+-- (loadHeroes; 2026-11-03: up to 18 things were still loading as the screen went). The longest a client waits for the
+-- heroes the server put in to reach it, before it loads those it has.
+local HEROES_ARRIVE = 5
 
 local TIPS = {
 	"An ability you can raise glows on your bar: spend your points before you forget them.",
@@ -497,6 +502,8 @@ end
 -- Builds the screen; returns its gui and its cards by team and place.
 local function build(): (ScreenGui, { [string]: Card })
 	local gui = UiStyle.screen("Versus", player:WaitForChild("PlayerGui"), 1001)
+	-- Its cards sound on the mouse and a click also with the match's loading screen still up under them (Widgets.feel).
+	gui:SetAttribute("OverLoading", true)
 	local back = Instance.new("ImageLabel")
 	back.Name = "Back"
 	back.Size = UDim2.fromScale(1, 1)
@@ -624,18 +631,23 @@ local function holding(cards: { [string]: Card }): boolean
 end
 
 -- While the server waits for players still loading (no "VersusUntil" yet), what the tip's line says instead: how many
--- of the players on the cards are in.
+-- of the players on the cards are in, and once the heroes stand in the arena ("HeroesOut"), how many have them loaded.
 local function waiting(cards: { [string]: Card }): string?
 	if typeof(Workspace:GetAttribute("VersusUntil")) == "number" then
 		return nil
 	end
+	local heroesOut = Workspace:GetAttribute("HeroesOut") ~= nil
 	local total, ready = 0, 0
 	for _, card in cards do
 		local entry = card.entry
 		if entry and entry.userId > 0 then
 			total += 1
 			local other = entry.player or Players:GetPlayerByUserId(entry.userId)
-			if other and other:GetAttribute("ClientReady") == true then
+			if
+				other
+				and other:GetAttribute("ClientReady") == true
+				and (not heroesOut or other:GetAttribute("HeroesLoaded") == true)
+			then
 				ready += 1
 			end
 		end
@@ -661,6 +673,50 @@ local function hideChat(): () -> ()
 	end
 end
 
+-- Whether the screen is up or on its way, for what may only show once the arena is in sight (BuyPhase).
+local covering = false
+
+-- Waits until the screen has gone, at most `limit` seconds; at once when it never came.
+function VersusView.waitGone(limit: number)
+	local since = os.clock()
+	while covering and os.clock() - since < limit do
+		task.wait(0.05)
+	end
+end
+
+-- The heroes standing in the arena.
+local function heroesIn(): { Instance }
+	local heroes: { Instance } = {}
+	for _, model in CollectionService:GetTagged("Combatant") do
+		if model:GetAttribute("Hero") ~= nil then
+			table.insert(heroes, model)
+		end
+	end
+	return heroes
+end
+
+-- Once the server has brought the heroes into the arena under the cards ("HeroesOut", how many), loads everything they
+-- bring (their clothing, weapons and effects) however long it takes, and tells the server (Net.HeroesLoaded), which
+-- begins the match once every player has (MatchSetup.awaitHeroesLoaded; owner, 2026-11-03).
+local function loadHeroes()
+	while typeof(Workspace:GetAttribute("HeroesOut")) ~= "number" do
+		Workspace:GetAttributeChangedSignal("HeroesOut"):Wait()
+	end
+	local started = os.clock()
+	while #heroesIn() < Workspace:GetAttribute("HeroesOut") and os.clock() - started < HEROES_ARRIVE do
+		task.wait(0.05)
+	end
+	local heroes = heroesIn()
+	pcall(ContentProvider.PreloadAsync, ContentProvider, heroes)
+	Trace.mark("versus.heroes", {
+		heroes = #heroes,
+		took = math.floor((os.clock() - started) * 100) / 100,
+		left = ContentProvider.RequestQueueSize,
+	})
+	local event = ReplicatedStorage:WaitForChild("Net"):WaitForChild("HeroesLoaded") :: RemoteEvent
+	event:FireServer()
+end
+
 -- Runs the screen in a match without a draft; `release` lets the loading screen go (it goes when the cards have been
 -- shown, or at once on the test ground and for a client coming in after the start).
 function VersusView.start(release: () -> (), waitReady: () -> ())
@@ -668,6 +724,10 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		release()
 		return
 	end
+	covering = true
+	task.spawn(loadHeroes)
+	-- The match's music starts once the cards have faded out, not as the loading screen under them goes.
+	local quiet = Music.hold()
 	task.spawn(ContentProvider.PreloadAsync, ContentProvider, { ARENA })
 	local event = ReplicatedStorage:WaitForChild("Net"):WaitForChild("Draft") :: RemoteEvent
 	local state: any = nil
@@ -695,7 +755,9 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		if arrived then
 			arrived:Destroy()
 		end
+		covering = false
 		release()
+		quiet()
 		return
 	end
 
@@ -727,7 +789,9 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 			if arrived then
 				arrived:Destroy()
 			end
+			covering = false
 			release()
+			quiet()
 			HeroCamera.setEnabled(true)
 			return
 		end
@@ -797,6 +861,10 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	if group then
 		Widgets.tween(group, 0.5, { GroupTransparency = 1 })
 	end
+	task.delay(0.5, function()
+		covering = false
+		quiet()
+	end)
 	task.delay(0.6, function()
 		frame:Disconnect()
 		gui:Destroy()

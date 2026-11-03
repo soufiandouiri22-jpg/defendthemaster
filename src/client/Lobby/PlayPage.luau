@@ -11,15 +11,19 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Account = require(ReplicatedStorage.Shared.Account)
+local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Lineup = require(ReplicatedStorage.Shared.Lineup)
 local Pass = require(ReplicatedStorage.Shared.Pass)
+local Profile = require(ReplicatedStorage.Shared.Profile)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
+local EmoteWheel = require(script.Parent.Parent.EmoteWheel)
 local ProfileClient = require(script.Parent.Parent.ProfileClient)
 local UiSound = require(script.Parent.Parent.UiSound)
 local UiStyle = require(script.Parent.Parent.UiStyle)
 local Widgets = require(script.Parent.Parent.Widgets)
 local Party = require(script.Parent.Party)
+local Showcase = require(script.Parent.Showcase)
 
 local PlayPage = {}
 
@@ -72,7 +76,7 @@ local function passCard(page: Frame, api: any)
 		UDim2.fromOffset(330, 290),
 		UDim2.new(1, -36, 0, 214),
 		Vector2.new(1, 0),
-		"SEASON " .. Config.Season.Number .. " PASS",
+		Pass.name((Pass.current(Workspace:GetServerTimeNow()))),
 		26
 	)
 	local level = Widgets.label(inner, "LEVEL 1", 26, C.Ink, "Left")
@@ -289,6 +293,80 @@ local function playArea(page: Frame, api: any)
 	refresh()
 end
 
+-- The EMOTE button under the podium: it opens the wheel of the player's emotes (EmoteWheel), whose pick his hero
+-- dances on the podium (Showcase.dance) until another is picked or the wheel's middle stops it, and whose EDIT changes
+-- what fills it (MenuService's EmoteSlot). It carries a NEW tag while he has an emote he has not seen; closing the
+-- wheel marks them seen. Hidden while his own avatar stands there.
+local function emoteButton(page: Frame)
+	local button = Widgets.button(
+		page,
+		"EMOTE",
+		"Dark",
+		UDim2.fromOffset(230, 70),
+		UDim2.new(0.5, 0, 1, -48),
+		Vector2.new(0.5, 1),
+		28
+	)
+	button.Name = "Emote"
+	local label = button:FindFirstChild("Label") :: TextLabel
+	label.Size = UDim2.new(1, -60, 1, 0)
+	label.Position = UDim2.fromOffset(60, 0)
+	local notes = Instance.new("ImageLabel")
+	notes.BackgroundTransparency = 1
+	notes.Image = Assets.MenuEmote
+	notes.ScaleType = Enum.ScaleType.Fit
+	notes.Size = UDim2.fromOffset(52, 52)
+	notes.Position = UDim2.new(0, 16, 0.5, 0)
+	notes.AnchorPoint = Vector2.new(0, 0.5)
+	notes.ZIndex = 2
+	notes.Parent = button
+	local fresh = EmoteWheel.newTag(button, 30)
+	local function anyNew(data: Profile.Data): boolean
+		for _, id in Profile.emotes(data) do
+			if Profile.newEmote(data, id) then
+				return true
+			end
+		end
+		return false
+	end
+	local editor: EmoteWheel.Editor = {
+		owned = function()
+			local data = ProfileClient.get()
+			return if data then Profile.emotes(data) else {}
+		end,
+		isNew = function(id)
+			local data = ProfileClient.get()
+			return data ~= nil and Profile.newEmote(data, id)
+		end,
+		place = function(slot, id)
+			local answer = ProfileClient.ask("EmoteSlot", slot, id)
+			return if answer.ok then answer.wheel else nil
+		end,
+		closed = function()
+			local data = ProfileClient.get()
+			if data and anyNew(data) then
+				ProfileClient.ask("EmotesSeen")
+			end
+		end,
+	}
+	local wheel = EmoteWheel.new()
+	button.Activated:Connect(function()
+		local data = ProfileClient.get()
+		if not data then
+			return
+		end
+		wheel.open(Profile.wheel(data), function(id)
+			Showcase.dance(id)
+		end, editor)
+	end)
+	Widgets.every(button, 0.25, function()
+		local hero = Showcase.current()
+		local data = ProfileClient.get()
+		button.Visible = hero ~= "" and hero ~= Showcase.Avatar
+		fresh.Visible = data ~= nil and anyNew(data)
+	end)
+end
+
 function PlayPage.build(page: Frame, api: any)
 	-- The player's card with his party 14 under it, the two in the middle of the room under the tab bar.
 	local column = Widgets.middle(page, 904)
@@ -296,6 +374,7 @@ function PlayPage.build(page: Frame, api: any)
 	Party.build(column, api)
 	passCard(page, api)
 	playArea(page, api)
+	emoteButton(page)
 	return nil
 end
 

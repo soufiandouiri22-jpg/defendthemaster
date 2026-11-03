@@ -35,6 +35,8 @@ local function describe(reward: Pass.Reward): string
 		return "+" .. UiStyle.thousands(r.Coins) .. " coins"
 	elseif r.Boost then
 		return "Double XP for " .. math.round(r.Boost / 60) .. " minutes"
+	elseif r.Emote then
+		return "New emote: " .. Config.Emotes.List[r.Emote].Name
 	end
 	return tostring(r.Hero)
 end
@@ -43,7 +45,7 @@ end
 local function seasonCard(page: Frame): (data: Profile.Data) -> ()
 	local _, inner =
 		UiStyle.panel(page, UDim2.fromOffset(410, 740), UDim2.new(0, 40, 0.5, MIDDLE), Vector2.new(0, 0.5), 14, 5)
-	local title = Widgets.label(inner, "SEASON " .. Config.Season.Number, 50, C.Ink)
+	local title = Widgets.label(inner, Pass.name((Pass.current(now()))), 50, C.Ink)
 	title.Size = UDim2.new(1, 0, 0, 56)
 	title.Position = UDim2.fromOffset(0, 22)
 	local ends = Widgets.label(inner, "", 28, C.Ink)
@@ -89,8 +91,9 @@ local function seasonCard(page: Frame): (data: Profile.Data) -> ()
 	Widgets.lock(premium, 40, UDim2.new(1, -14, 0, 12), Vector2.new(1, 0))
 
 	Widgets.every(ends, 30, function()
-		local days = math.max(0, math.ceil((Pass.endsAt() - now()) / 86400))
-		ends.Text = "ENDS IN " .. days .. (if days == 1 then " DAY" else " DAYS")
+		local which, _, endsAt = Pass.current(now())
+		title.Text = Pass.name(which)
+		ends.Text = if endsAt then "ENDS IN " .. Pass.left(endsAt - now()) else "UNTIL THE LAUNCH"
 	end)
 
 	return function(data: Profile.Data)

@@ -25,6 +25,7 @@ local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local Motion = require(ReplicatedStorage.Shared.Motion)
 local Actors = require(script.Parent.Actors)
 local Damage = require(script.Parent.Damage)
+local EmoteService = require(script.Parent.EmoteService)
 local MatchService = require(script.Parent.MatchService)
 local MinionService = require(script.Parent.MinionService)
 local ProgressService = require(script.Parent.ProgressService)
@@ -215,7 +216,11 @@ end
 
 -- A kit's `Guard` braces the hero `character`: he takes `guard.Share` less damage for `guard.Time` seconds
 -- (Damage.mitigated reads "Guard" and "GuardUntil"), a stronger brace outlasting a weaker one, with an iron sheen
--- round him meanwhile.
+-- round him meanwhile. The sheen stands beside him, not in him, as what is put in a hero makes Roblox fit his layered
+-- clothing again.
+local sheens: { [Model]: Highlight } = {}
+local sheenFolder: Folder? = nil
+
 local function brace(character: Model, guard: any)
 	local now = os.clock()
 	local active = (character:GetAttribute("GuardUntil") or 0) > now
@@ -223,8 +228,13 @@ local function brace(character: Model, guard: any)
 	local ends = math.max(if active then character:GetAttribute("GuardUntil") else 0, now + guard.Time)
 	character:SetAttribute("Guard", share)
 	character:SetAttribute("GuardUntil", ends)
-	local sheen = character:FindFirstChild("Guard")
-	if not sheen then
+	if not sheens[character] then
+		if not sheenFolder or not sheenFolder.Parent then
+			local folder = Instance.new("Folder")
+			folder.Name = "GuardSheens"
+			folder.Parent = Workspace
+			sheenFolder = folder
+		end
 		local highlight = Instance.new("Highlight")
 		highlight.Name = "Guard"
 		highlight.FillColor = Color3.fromRGB(205, 210, 220)
@@ -232,14 +242,23 @@ local function brace(character: Model, guard: any)
 		highlight.OutlineColor = Color3.fromRGB(255, 214, 110)
 		highlight.OutlineTransparency = 0.2
 		highlight.DepthMode = Enum.HighlightDepthMode.Occluded
-		highlight.Parent = character
+		highlight.Adornee = character
+		highlight.Parent = sheenFolder
+		sheens[character] = highlight
+		character.Destroying:Once(function()
+			if sheens[character] == highlight then
+				sheens[character] = nil
+			end
+			highlight:Destroy()
+		end)
 	end
 	task.delay(ends - now, function()
 		if (character:GetAttribute("GuardUntil") or 0) <= os.clock() then
 			character:SetAttribute("Guard", nil)
 			character:SetAttribute("GuardUntil", nil)
-			local left = character:FindFirstChild("Guard")
+			local left = sheens[character]
 			if left then
+				sheens[character] = nil
 				left:Destroy()
 			end
 		end
@@ -424,6 +443,7 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 	then
 		return refuse(player, key)
 	end
+	EmoteService.stop(character)
 	local team = character:GetAttribute("Team") or "Blue"
 	-- Round only, for where a dash goes; every swing, shot and throw goes up or down to the crosshair as well.
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)

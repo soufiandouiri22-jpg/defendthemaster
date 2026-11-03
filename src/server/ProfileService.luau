@@ -3,13 +3,17 @@
 -- sent from one place to the other. Without DataStore access (Studio without API access) ProfileStore keeps it in
 -- memory for the session. Only the server changes it (ProfileService.update), and every change goes to the player's
 -- client (Net.Profile). What other players see of him (his level and rank) he carries as attributes.
--- A new season (Config.Season) pays the rank's season reward, lowers his rank and starts a new pass when he comes in.
+-- A new ranked season (Config.Season) pays the rank's season reward and lowers his rank when he comes in; a new pass
+-- (Shared.Pass, every Config.Pass.Weeks weeks) starts his pass over when he comes in or the moment it begins.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local Account = require(ReplicatedStorage.Shared.Account)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Pass = require(ReplicatedStorage.Shared.Pass)
 local Places = require(ReplicatedStorage.Shared.Places)
 local Profile = require(ReplicatedStorage.Shared.Profile)
 local Ranks = require(ReplicatedStorage.Shared.Ranks)
@@ -20,6 +24,8 @@ local Remote = require(script.Parent.Remote)
 local ProfileService = {}
 
 local STORE = "Players_v1"
+-- How often the players here are checked for a new pass that began while they play.
+local PASS_CHECK = 30
 
 local store = ProfileStore.New(STORE, Profile.template())
 local sessions: { [Player]: any } = {}
@@ -62,7 +68,8 @@ local function publish(player: Player, data: Profile.Data)
 	end
 end
 
--- Pays the season reward of the best tier `data` reached, lowers its rank and starts the new season's pass.
+-- A new ranked season pays the season reward of the best tier `data` reached and lowers its rank; a new pass starts
+-- its pass over (Shared.Pass).
 local function newSeason(data: Profile.Data)
 	local season = Config.Season.Number
 	local rank = data.Rank
@@ -77,9 +84,7 @@ local function newSeason(data: Profile.Data)
 		Ranks.reset(rank)
 		rank.Season = season
 	end
-	if data.Pass.Season < season then
-		data.Pass = { Season = season, Xp = 0, Claimed = {}, BoostUntil = data.Pass.BoostUntil }
-	end
+	Pass.refresh(data)
 end
 
 -- A profile from before the welcome screen (Lobby.Welcome) has its favourite cleared once, so its player chooses his
@@ -91,6 +96,20 @@ local function welcome(player: Player, data: Profile.Data)
 	end
 	if Places.isLobby() and table.find(Config.Account.AlwaysWelcome, player.UserId) then
 		data.Favourite = ""
+	end
+end
+
+-- In Studio with the Workspace attribute TestEmotes, every player has every emote, none seen and his wheel as it
+-- fills by itself, to try the wheel and the collection.
+local function testEmotes(data: Profile.Data)
+	if RunService:IsStudio() and Workspace:GetAttribute("TestEmotes") == true then
+		for id, emote in Config.Emotes.List do
+			if not emote.Default then
+				data.Emotes[id] = true
+			end
+		end
+		data.SeenEmotes = {}
+		data.Wheel = {}
 	end
 end
 
@@ -120,6 +139,7 @@ local function load(player: Player)
 	end
 	newSeason(profile.Data)
 	welcome(player, profile.Data)
+	testEmotes(profile.Data)
 	sessions[player] = profile
 	player:SetAttribute("ProfileLoaded", true)
 	publish(player, profile.Data)
@@ -195,6 +215,17 @@ function ProfileService.start()
 	for _, player in Players:GetPlayers() do
 		task.spawn(load, player)
 	end
+	task.spawn(function()
+		while true do
+			task.wait(PASS_CHECK)
+			local number = Pass.current()
+			for player, profile in sessions do
+				if profile.Data.Pass.Number ~= number then
+					ProfileService.update(player, Pass.refresh)
+				end
+			end
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(player)
 		local profile = sessions[player]
 		if not profile then

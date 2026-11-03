@@ -1,7 +1,9 @@
 -- The camera over the hero's right shoulder (design 05): the mouse is held in the middle of the screen and turns the
 -- camera, the hero faces where the camera looks, and the crosshair in the middle (design 09) marks what he aims at.
 -- The scroll wheel zooms. HeroCamera.aim() is the point under the crosshair (far along the look at the sky), up and
--- down too, which every attack aims at (owner, 2026-10-29): a shot or swing hits what the crosshair is on.
+-- down too, which every attack aims at (owner, 2026-10-29): a shot or swing hits what the crosshair is on. While his
+-- hero is dead it follows his killer until he is back (watch), the mouse still turning it; once the one it follows falls
+-- too, a living enemy hero picked at random (owner, 2026-11-03).
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -31,6 +33,13 @@ local aimPoint = Vector3.zero
 local aimInstance: Instance? = nil
 local enabled = true
 local shakeStrength, shakeTime, shakeLeft = 0, 0, 0
+-- How far the camera has moved from where it was to the one it follows now (0 to 1), over FOLLOW_EASE seconds.
+local following = 0
+local FOLLOW_EASE = 0.6
+-- Whom the camera follows while his hero is dead, where it came from to him, and the point it was round last frame.
+local watched: Model? = nil
+local watchFrom = Vector3.zero
+local lastAround: Vector3? = nil
 
 local camRay = RaycastParams.new()
 camRay.FilterType = Enum.RaycastFilterType.Exclude
@@ -96,6 +105,72 @@ function HeroCamera.setEnabled(on: boolean)
 	enabled = on
 end
 
+-- Whether the camera has the mouse (no menu open).
+function HeroCamera.isEnabled(): boolean
+	return enabled
+end
+
+local function rootOf(model: Model): BasePart?
+	local part = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+	return if part and part:IsA("BasePart") then part else nil
+end
+
+-- Whether `model` is in the world, standing (a Master without a Humanoid always is) and has a root part.
+local function standing(model: Instance?): boolean
+	if not model or not model:IsA("Model") or not model:IsDescendantOf(Workspace) or not rootOf(model) then
+		return false
+	end
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	return humanoid == nil or humanoid.Health > 0
+end
+
+-- The enemy heroes of `character` standing, players' and bots'.
+local function enemies(character: Model): { Model }
+	local team = character:GetAttribute("Team")
+	local found: { Model } = {}
+	local seen: { [Model]: boolean } = {}
+	local function add(model: Instance?)
+		if
+			model
+			and model:IsA("Model")
+			and not seen[model]
+			and model:GetAttribute("Hero") ~= nil
+			and model:GetAttribute("Team") ~= nil
+			and model:GetAttribute("Team") ~= team
+			and standing(model)
+		then
+			seen[model] = true
+			table.insert(found, model)
+		end
+	end
+	for _, other in Players:GetPlayers() do
+		add(other.Character)
+	end
+	for _, model in CollectionService:GetTagged("Combatant") do
+		add(model)
+	end
+	return found
+end
+
+-- Dead, the camera follows whoever killed him (the "Killer" his body carries, ProgressService.heroDied: the enemy hero
+-- or the Master) until he is back; when that one falls or is gone, a standing enemy hero at random, and so on. Without
+-- a killer, or with no enemy standing, it stays on his own body.
+local function watch(character: Model): Model?
+	if standing(watched) then
+		return watched
+	end
+	local value = character:FindFirstChild("Killer")
+	local killer = if value and value:IsA("ObjectValue") then value.Value else nil
+	if not killer then
+		return nil
+	end
+	if standing(killer) then
+		return killer :: Model
+	end
+	local options = enemies(character)
+	return if #options > 0 then options[math.random(#options)] else nil
+end
+
 local function update(dt: number)
 	local camera = Workspace.CurrentCamera
 	local character = player.Character
@@ -112,12 +187,27 @@ local function update(dt: number)
 	end
 	camera.CameraType = Enum.CameraType.Scriptable
 
+	local target = if humanoid.Health <= 0 then watch(character) else nil
+	if target ~= watched then
+		watched = target
+		watchFrom = lastAround or root.Position
+		following = 0
+	end
+	local followed = if watched then rootOf(watched) else nil
+	following = if followed then math.min(1, following + dt / FOLLOW_EASE) else 0
+	local around = root.Position
+	if followed then
+		around = watchFrom:Lerp(followed.Position, following * following * (3 - 2 * following))
+	end
+	lastAround = around
 	local rotation = CFrame.Angles(0, math.rad(yaw), 0) * CFrame.Angles(math.rad(pitch), 0, 0)
-	local focus = root.Position
-		+ rotation:VectorToWorldSpace(Vector3.new(SHOULDER.X, 0, 0))
-		+ Vector3.new(0, SHOULDER.Y, 0)
+	local focus = around + rotation:VectorToWorldSpace(Vector3.new(SHOULDER.X, 0, 0)) + Vector3.new(0, SHOULDER.Y, 0)
 	local back = rotation.LookVector * -zoom
 	local exclude = HeroKit.leapIgnore()
+	if followed then
+		exclude = table.clone(exclude)
+		table.insert(exclude, followed.Parent :: Instance)
+	end
 	camRay.FilterDescendantsInstances = exclude
 	local hit = Workspace:Spherecast(focus, 0.6, back, camRay)
 	local distance = if hit then math.max(1.5, hit.Distance - 0.2) else zoom

@@ -1,6 +1,6 @@
 -- What the menu asks of the server (Net.Menu, a RemoteFunction answering { ok, error?, ... }): buying a hero for coins
--- (Shared.HeroShop), choosing the favourite for the podium, claiming a reward of the season pass (Shared.Pass), saving
--- the settings, and reading the ladder (Ladder). The server checks everything; the client only shows the answer and
+-- (Shared.HeroShop), choosing the favourite for the podium, claiming a reward of the season pass (Shared.Pass), filling
+-- the emote wheel's slots (Profile.wheel) and marking new emotes seen, saving the settings, and reading the ladder (Ladder). The server checks everything; the client only shows the answer and
 -- the new data (ProfileService). Settings are saved in a match too.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,18 +20,6 @@ type Answer = { ok: boolean, error: string?, [string]: any }
 
 local function fail(message: string): Answer
 	return { ok = false, error = message }
-end
-
--- Gives `data` the pass reward `reward`.
-function MenuService.grant(data: Profile.Data, reward: Pass.Reward)
-	local r = reward :: any
-	if r.Coins then
-		data.Coins += r.Coins
-	elseif r.Boost then
-		data.Pass.BoostUntil = math.max(os.time(), data.Pass.BoostUntil) + r.Boost
-	elseif r.Hero and Config.Heroes[r.Hero] then
-		data.Heroes[r.Hero] = true
-	end
 end
 
 local function buyHero(player: Player, hero: any): Answer
@@ -72,6 +60,9 @@ local function claim(player: Player, level: any, track: any): Answer
 		return fail("The premium pass is coming soon.")
 	end
 	return ProfileService.update(player, function(data): Answer
+		if Pass.refresh(data) then
+			return fail("A new pass has begun.")
+		end
 		local key = tostring(level)
 		if data.Pass.Claimed[key] then
 			return fail("Already claimed.")
@@ -79,7 +70,45 @@ local function claim(player: Player, level: any, track: any): Answer
 			return fail("Reach level " .. level .. " first.")
 		end
 		data.Pass.Claimed[key] = true
-		MenuService.grant(data, Pass.free(level))
+		Pass.grant(data, Pass.free(level, data.Pass.Number))
+		return { ok = true }
+	end) or fail("Your data is still loading.")
+end
+
+-- Puts emote `id` in the wheel's slot `slot` (one of Profile.wheel's: until they are all full every emote is in);
+-- one already in another slot trades places with what was there.
+local function emoteSlot(player: Player, slot: any, id: any): Answer
+	if typeof(slot) ~= "number" or slot % 1 ~= 0 or slot < 1 or slot > Config.Emotes.Slots then
+		return fail("Unknown slot.")
+	elseif typeof(id) ~= "string" then
+		return fail("Unknown emote.")
+	end
+	return ProfileService.update(player, function(data): Answer
+		if not Profile.hasEmote(data, id) then
+			return fail("You do not have this emote.")
+		end
+		local wheel = Profile.wheel(data)
+		if slot > #wheel then
+			return fail("Unknown slot.")
+		end
+		local was = table.find(wheel, id)
+		if was then
+			wheel[was] = wheel[slot]
+		end
+		wheel[slot] = id
+		data.Wheel = wheel
+		return { ok = true, wheel = table.clone(wheel) }
+	end) or fail("Your data is still loading.")
+end
+
+-- Marks every emote the player has as seen (Profile.newEmote), once he has looked at them in the lobby's wheel.
+local function emotesSeen(player: Player): Answer
+	return ProfileService.update(player, function(data): Answer
+		for _, id in Profile.emotes(data) do
+			if Profile.newEmote(data, id) then
+				data.SeenEmotes[id] = true
+			end
+		end
 		return { ok = true }
 	end) or fail("Your data is still loading.")
 end
@@ -117,6 +146,8 @@ local ACTIONS: { [string]: (player: Player, ...any) -> Answer } = {
 	BuyHero = buyHero,
 	Favourite = favourite,
 	Claim = claim,
+	EmoteSlot = emoteSlot,
+	EmotesSeen = emotesSeen,
 	Settings = settings,
 	Ladder = ladder,
 }

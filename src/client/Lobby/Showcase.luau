@@ -20,6 +20,7 @@ local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Emote = require(ReplicatedStorage.Shared.Emote)
 local LightningEffects = require(script.Parent.Parent.LightningEffects)
 local Motion = require(ReplicatedStorage.Shared.Motion)
 local Profile = require(ReplicatedStorage.Shared.Profile)
@@ -54,7 +55,15 @@ local STEP = 0.45
 -- The ribbons of light whirling round him.
 local STRANDS = 9
 
-type Entry = { hero: string, model: Model, motion: any?, pivot: CFrame, update: ((dt: number) -> ())? }
+type Entry = {
+	hero: string,
+	model: Model,
+	motion: any?,
+	pivot: CFrame,
+	update: ((dt: number) -> ())?,
+	-- The emote he dances (Showcase.dance).
+	dance: Emote.Dance?,
+}
 
 local current: Entry? = nil
 local wanted = ""
@@ -439,6 +448,49 @@ local function playEntrance(entry: Entry)
 			entry.update = nil
 		end
 	end
+end
+
+-- Eases `entry` from a dance back into his pose: the last frame of his entrance he keeps, or his showcase pose.
+local function rest(entry: Entry)
+	local settings = Config.Heroes[entry.hero]
+	local enter = entrance(entry.hero)
+	local motion = entry.motion
+	if not motion then
+		return
+	end
+	motion:crossfade(Emote.FADE)
+	if enter and enter.Then ~= "Pose" then
+		motion:play(enter.Motion, 1, enter.Until or Motion.meta(settings.Pack, enter.Motion).duration, true, true)
+		motion:setSpeed(0)
+	else
+		motion:stop()
+	end
+end
+
+-- Dances emote `id` (Config.Emotes) on the podium, or with nil ends the dance; only a hero who stands in his pose
+-- (his entrance played, no transformation under way). Whether he dances.
+function Showcase.dance(id: string?): boolean
+	local entry = current
+	if busy or not entry or not entry.motion or entry.update then
+		return false
+	end
+	if entry.dance then
+		entry.dance = nil
+		if not id then
+			rest(entry)
+			return false
+		end
+	end
+	if not id then
+		return false
+	end
+	entry.dance = Emote.dance(entry.motion, id)
+	return entry.dance ~= nil
+end
+
+-- Whether the hero on the podium dances an emote.
+function Showcase.dancing(): boolean
+	return current ~= nil and current.dance ~= nil
 end
 
 -- Puts `hero` on the podium, or keeps him there when he already stands on it.
@@ -955,6 +1007,10 @@ function Showcase.start()
 			c.motion:step(dt)
 			if c.update then
 				c.update(dt)
+			end
+			if c.dance and not Emote.going(c.dance) then
+				c.dance = nil
+				rest(c)
 			end
 		end
 	end)

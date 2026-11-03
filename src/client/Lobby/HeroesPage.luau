@@ -6,10 +6,12 @@
 -- season's next milestone and, from level Config.Mastery.Title, his title.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroShop = require(ReplicatedStorage.Shared.HeroShop)
 local Mastery = require(ReplicatedStorage.Shared.Mastery)
+local Pass = require(ReplicatedStorage.Shared.Pass)
 local Profile = require(ReplicatedStorage.Shared.Profile)
 local ProfileClient = require(script.Parent.Parent.ProfileClient)
 local UiSound = require(script.Parent.Parent.UiSound)
@@ -60,7 +62,7 @@ local function cardFoot(card: Frame, hero: string, data: Profile.Data)
 		text.Name = "Owned"
 	elseif settings.Exclusive then
 		UiStyle.gradient(foot, PURPLE[1], PURPLE[2])
-		Widgets.label(foot, "SEASON " .. Config.Season.Number .. " PASS", 22, C.Cream, nil, C.Edge)
+		Widgets.label(foot, Pass.name((Pass.current(Workspace:GetServerTimeNow()))), 22, C.Cream, nil, C.Edge)
 	elseif settings.Price then
 		UiStyle.gradient(foot, C.Cream, C.CreamDark)
 		UiStyle.stroke(foot, C.GoldDark, 1.5)
@@ -303,7 +305,7 @@ function HeroesPage.build(page: Frame, api: any)
 				HeroesPage.buy(api, selected)
 			end
 		elseif settings.Exclusive then
-			actionText.Text = "SEASON " .. Config.Season.Number .. " PASS"
+			actionText.Text = Pass.name((Pass.current(Workspace:GetServerTimeNow())))
 			actionKind = "Purple"
 			Widgets.enable(action, true, actionKind)
 			onAction = function()

@@ -1,7 +1,8 @@
 -- The player of a pack that comes as KeyframeSequences (the Elementalist), made by Tools/keyframe_pack.py into a
 -- ComponentPlayer as the newer packs have: its Sample gives Shared.Motion the same pose of a clip at a time, every body
 -- joint's Transform as on the pack's rig, and its weapon as a prop, always shown: the Transform of the joint it hangs
--- from in the pack, on a hand (its Configuration's `weapon`), where HeroLook binds it to the hero's own hand.
+-- from in the pack, on a hand (its Configuration's `weapon`), where HeroLook binds it to the hero's own hand. A pack
+-- without a weapon (the Dance Collection) gives the body alone.
 
 local HttpService = game:GetService("HttpService")
 
@@ -108,8 +109,11 @@ return function(module: ModuleScript)
 		for _, part in parts do
 			body[part] = pose[part] or CFrame.identity
 		end
-		local props = { [weapon.name] = { world = pose[weapon.name] or CFrame.identity, scale = Vector3.one } }
-		local opacity = { [weapon.name] = 1 }
+		local props, opacity = {}, {}
+		if weapon then
+			props[weapon.name] = { world = pose[weapon.name] or CFrame.identity, scale = Vector3.one }
+			opacity[weapon.name] = 1
+		end
 		return {
 			body = body,
 			props = props,

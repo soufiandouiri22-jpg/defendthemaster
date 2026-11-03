@@ -768,6 +768,10 @@ local function nearestStall(b: Bot, from: Vector3): Vector3?
 end
 
 local function think(b: Bot, now: number)
+	-- Under the match's cards, before the buy phase, the bots wait on their pads like everyone (HeroService.release).
+	if Workspace:GetAttribute("Phase") == "Waiting" then
+		return
+	end
 	if not alive(b) then
 		b.prey = nil
 		if SETTINGS.Buys then

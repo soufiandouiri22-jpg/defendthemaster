@@ -3,7 +3,7 @@
 Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack rig's joints in its Configuration, its
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
-    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard
+    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|DanceCollection
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
@@ -63,6 +63,11 @@ PACKS = {
             "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
             "c1": [0.32262, -1.00134, 0.00021, 1, 0, 0, 0, 1, 0, 0, 0, 1],
         },
+    },
+    # The Dance Collection (the emotes, Config.Emotes): body clips only, played on any hero (Motion.lend).
+    "DanceCollection": {
+        "clips": "Individual Animations",
+        "weapon": None,
     },
 }
 
@@ -226,11 +231,11 @@ def main() -> int:
     config = {
         "product": name,
         "body_joints": joints,
-        "weapon": {k: weapon[k] for k in ("name", "parent", "c0", "c1")},
+        "weapon": {k: weapon[k] for k in ("name", "parent", "c0", "c1")} if weapon else None,
     }
     (player / "Configuration.txt").write_text(json.dumps(config))
 
-    parts = {j["part1"] for j in joints} | {weapon["name"]}
+    parts = {j["part1"] for j in joints} | ({weapon["name"]} if weapon else set())
     clips = {}
     for path in sorted((source / pack["clips"]).rglob("*.rbxmx")):
         clip_id, data = clip(path, parts)

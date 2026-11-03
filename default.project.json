@@ -83,6 +83,16 @@
 					"$path": "Vendor/Wildguard/Animations/Included Rig.rbxmx"
 				}
 			},
+			"DanceCollection": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/DanceCollection/Build/ComponentPlayer"
+				},
+				"Rig": {
+					"$path": "Vendor/DanceCollection/Animations/Included Rig.rbxmx"
+				}
+			},
 			"GreataxeBerserker": {
 				"$className": "Folder",
 				"Rig": {
