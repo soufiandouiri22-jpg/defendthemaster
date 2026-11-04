@@ -2,6 +2,9 @@
 -- the server's attributes on the Player: "Level", "Xp" (into the current level), "Points" (unspent) and "Rank" .. key
 -- for every key of Config.Progress.Upgrades.
 
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
 local Boosts = require(script.Parent.Boosts)
 local Config = require(script.Parent.Config)
 local Items = require(script.Parent.Items)
@@ -46,8 +49,13 @@ function Leveling.power(player: Player, key: string): number
 end
 
 -- The cooldown of the hero's `key` ability, with his items' Haste and the Star Hourglass while his team carries it
--- (Boosts).
+-- (Boosts). In Studio the Workspace attribute "TestNoCooldown" (keys with commas between, as "R" or "M2,E,R") takes
+-- the cooldown off those keys, to try them over and over.
 function Leveling.cooldown(player: Player, key: string, base: number): number
+	local free = if RunService:IsStudio() then Workspace:GetAttribute("TestNoCooldown") else nil
+	if typeof(free) == "string" and table.find(string.split(free:gsub("%s", ""), ","), key) then
+		return 0
+	end
 	local rank = if table.find(SETTINGS.Upgrades, key) then math.max(1, Leveling.rank(player, key)) else 1
 	local haste = Items.stats(player).Haste
 	return base

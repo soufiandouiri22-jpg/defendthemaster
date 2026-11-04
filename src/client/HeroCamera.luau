@@ -1,6 +1,6 @@
 -- The camera over the hero's right shoulder (design 05): the mouse is held in the middle of the screen and turns the
 -- camera, the hero faces where the camera looks, and the crosshair in the middle (design 09) marks what he aims at.
--- The scroll wheel zooms. HeroCamera.aim() is the point under the crosshair (far along the look at the sky), up and
+-- The scroll wheel zooms; through a sniper's scope (HeroCamera.scope) it looks from his eyes, zoomed in. HeroCamera.aim() is the point under the crosshair (far along the look at the sky), up and
 -- down too, which every attack aims at (owner, 2026-10-29): a shot or swing hits what the crosshair is on. While his
 -- hero is dead it follows his killer until he is back (watch), the mouse still turning it; once the one it follows falls
 -- too, a living enemy hero picked at random (owner, 2026-11-03).
@@ -26,6 +26,14 @@ local SHOULDER = Vector3.new(2.2, 1.5, 0)
 local TURN = 0.35
 -- How far along the look the aim point sits when the crosshair points at the sky: past every kit's range.
 local AIM_ALONG = 200
+local AIM_REACH = 400
+-- Through a sniper's scope (HeroCamera.scope): the camera at his eyes, this high above the root part, easing in and
+-- out over SCOPE_EASE seconds; the crosshair sees across the whole arena; the view sways a little, by SWAY degrees.
+local EYE = 1.6
+local SCOPE_EASE = 0.22
+local SCOPE_REACH = 1200
+local SWAY = 0.12
+local NORMAL_FOV = 70
 
 local player = Players.LocalPlayer
 local yaw, pitch, zoom = 0, -12, 12
@@ -40,6 +48,12 @@ local FOLLOW_EASE = 0.6
 local watched: Model? = nil
 local watchFrom = Vector3.zero
 local lastAround: Vector3? = nil
+-- The scope's field of view while he looks through it, how far in it the camera is (0 to 1), and whether his own
+-- hero is hidden for it.
+local scopeFov: number? = nil
+local zoomFov = NORMAL_FOV
+local scoping = 0
+local hidden = false
 
 local camRay = RaycastParams.new()
 camRay.FilterType = Enum.RaycastFilterType.Exclude
@@ -98,6 +112,16 @@ end
 -- Shakes the camera for `duration` seconds, `strength` studs at first and fading out.
 function HeroCamera.shake(strength: number, duration: number)
 	shakeStrength, shakeTime, shakeLeft = strength, duration, duration
+end
+
+-- Looks through a sniper's scope zoomed to `fov` degrees, or (nil) back over the shoulder.
+function HeroCamera.scope(fov: number?)
+	scopeFov = fov
+end
+
+-- How far the camera is into the scope: 0 over the shoulder, 1 through it.
+function HeroCamera.scoping(): number
+	return scoping
 end
 
 -- Lets the mouse go (a menu is open) or takes it back.
@@ -200,7 +224,30 @@ local function update(dt: number)
 		around = watchFrom:Lerp(followed.Position, following * following * (3 - 2 * following))
 	end
 	lastAround = around
-	local rotation = CFrame.Angles(0, math.rad(yaw), 0) * CFrame.Angles(math.rad(pitch), 0, 0)
+	local inScope = if scopeFov and humanoid.Health > 0 then 1 else 0
+	local was = scoping
+	scoping = if inScope > scoping
+		then math.min(inScope, scoping + dt / SCOPE_EASE)
+		else math.max(inScope, scoping - dt / SCOPE_EASE)
+	local ease = scoping * scoping * (3 - 2 * scoping)
+	if scopeFov then
+		zoomFov = scopeFov
+	end
+	if scoping > 0 or was > 0 then
+		camera.FieldOfView = NORMAL_FOV + (zoomFov - NORMAL_FOV) * ease
+	end
+	if (ease > 0.5) ~= hidden then
+		hidden = ease > 0.5
+		for _, part in (character :: Model):GetDescendants() do
+			if part:IsA("BasePart") or part:IsA("Decal") then
+				part.LocalTransparencyModifier = if hidden then 1 else 0
+			end
+		end
+	end
+	local clock = os.clock()
+	local swayYaw = ease * SWAY * math.sin(clock * 1.3)
+	local swayPitch = ease * SWAY * math.sin(clock * 1.9 + 1)
+	local rotation = CFrame.Angles(0, math.rad(yaw + swayYaw), 0) * CFrame.Angles(math.rad(pitch + swayPitch), 0, 0)
 	local focus = around + rotation:VectorToWorldSpace(Vector3.new(SHOULDER.X, 0, 0)) + Vector3.new(0, SHOULDER.Y, 0)
 	local back = rotation.LookVector * -zoom
 	local exclude = HeroKit.leapIgnore()
@@ -217,7 +264,9 @@ local function update(dt: number)
 		local amount = shakeStrength * (shakeLeft / shakeTime) ^ 2
 		shake = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 2 * amount
 	end
-	camera.CFrame = CFrame.new(focus + rotation.LookVector * -distance + shake) * rotation
+	local shoulder = CFrame.new(focus + rotation.LookVector * -distance + shake) * rotation
+	local eyes = CFrame.new(around + Vector3.new(0, EYE, 0) + shake) * rotation
+	camera.CFrame = if ease > 0 then shoulder:Lerp(eyes, ease) else shoulder
 	camera.Focus = CFrame.new(focus)
 
 	if humanoid.Health > 0 and not humanoid.Sit then
@@ -235,17 +284,20 @@ local function update(dt: number)
 	-- The ray starts level with the hero, so nothing between the camera and him (a banner, a pillar's edge) is aimed at.
 	local start = math.max(0, (HeroKit.muzzle(root.Position) - ray.Origin):Dot(ray.Direction))
 	local from = ray.Origin + ray.Direction * start
-	local result = Workspace:Raycast(from, ray.Direction * 400, aimRay)
+	local scoped = scoping > 0.5
+	local result = Workspace:Raycast(from, ray.Direction * (if scoped then SCOPE_REACH else AIM_REACH), aimRay)
 	aimInstance = if result then result.Instance else nil
 	-- The point under the crosshair, else one far along the camera's line: the hero stands left of that line, so
 	-- aiming along the look from him would fly past what the crosshair is on.
-	aimPoint = if result then result.Position else from + ray.Direction * AIM_ALONG
+	aimPoint = if result then result.Position else from + ray.Direction * (if scoped then SCOPE_REACH else AIM_ALONG)
 end
 
 function HeroCamera.start()
 	UserInputService.InputChanged:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseMovement and enabled then
-			local speed = SENSITIVITY * Preferences.sensitivity()
+			-- Through a scope the mouse turns the view as much less as it is zoomed.
+			local zoomed = if scoping > 0 then Workspace.CurrentCamera.FieldOfView / NORMAL_FOV else 1
+			local speed = SENSITIVITY * Preferences.sensitivity() * zoomed
 			yaw -= input.Delta.X * speed
 			pitch = math.clamp(pitch - input.Delta.Y * speed, PITCH_MIN, PITCH_MAX)
 		elseif input.UserInputType == Enum.UserInputType.MouseWheel and not processed then

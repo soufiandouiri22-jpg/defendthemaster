@@ -256,6 +256,22 @@ function HeroAnimator.play(
 	return hero.motion:play(id, speed, startTime, inPlace)
 end
 
+-- Eases `character`'s hero over `seconds` from the pose he stands in now into what he plays next.
+function HeroAnimator.crossfade(character: Model, seconds: number)
+	local hero = heroes[character]
+	if hero and not hero.dead then
+		hero.motion:crossfade(seconds)
+	end
+end
+
+-- Lets the clip `character`'s hero plays over its base stand still `seconds` in (a sniper holding his aim).
+function HeroAnimator.stopAt(character: Model, seconds: number)
+	local hero = heroes[character]
+	if hero and not hero.dead then
+		hero.motion:stopAt(seconds)
+	end
+end
+
 -- Plays the clip `character`'s hero plays over its base on at `speed` from now.
 function HeroAnimator.setSpeed(character: Model, speed: number)
 	local hero = heroes[character]

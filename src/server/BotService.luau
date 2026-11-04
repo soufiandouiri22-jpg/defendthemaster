@@ -464,9 +464,9 @@ local function follow(b: Bot)
 	face(b, aim)
 end
 
--- Whether `key` of the kit flies at its target: a throw, or a flurry whose lightning does.
+-- Whether `key` of the kit flies at its target: a throw, a sniper's bullet, or a flurry whose lightning does.
 local function ranged(ability: any): boolean
-	return ability.Kind == "Throw" or (ability.Kind == "Flurry" and ability.Zap == true)
+	return ability.Kind == "Throw" or ability.Kind == "Snipe" or (ability.Kind == "Flurry" and ability.Zap == true)
 end
 
 -- Uses `key` of a close fighter's kit on `target` `gap` studs away when it reaches him, after its kind: a throw or a
@@ -589,7 +589,12 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 				crowd += 1
 			end
 		end
-		used = open and crowd >= 3 and gap <= kit.R.Range * SETTINGS.Fan and maybe(b, "R", target.position, now)
+		-- A sniper's one bullet is kept for heroes.
+		used = open
+			and crowd >= 3
+			and kit.R.Kind ~= "Snipe"
+			and gap <= kit.R.Range * SETTINGS.Fan
+			and maybe(b, "R", target.position, now)
 	end
 	local aim = aimAt(root.Position, target, gap, shot.ProjectileSpeed)
 	if not used and open and gap <= shot.Range - 0.5 and now >= b.swingAt and use(b, "M1", aim) then

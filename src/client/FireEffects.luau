@@ -1,5 +1,6 @@
 -- Mortael's fire on the client (Config.Heroes[hero].Effects = "Fire"), where Shadowren's shadow would be
--- (ShadowEffects): the trail of his dash, and the shockwave where he lands from a leap. A white-hot flash, two rings of fire racing out over the
+-- (ShadowEffects): the trail of his dash, the shockwave where he lands from a leap, and the burst of a fiery bomb
+-- (Corvin's heavy rounds). The shockwave: a white-hot flash, two rings of fire racing out over the
 -- ground, a fireball thrown up, flames rising round its edge, embers flung out and falling back, dark smoke climbing
 -- from the middle, and a scorch mark that glows and slowly cools.
 
@@ -275,6 +276,96 @@ function FireEffects.shockwave(ground: Vector3, radius: number)
 		glow:Destroy()
 		centre:Destroy()
 		edge:Destroy()
+	end)
+end
+
+-- A bomb bursting in the air at `at`, reaching `radius` studs (Corvin's heavy rounds): a white-hot flash, a fireball
+-- thrown out every way, embers flung out and falling, and dark smoke rolling out after it.
+function FireEffects.blast(at: Vector3, radius: number)
+	local centre = holder(at, Vector3.new(1, 1, 1))
+
+	local flash = Instance.new("ParticleEmitter")
+	flash.Texture = SPARK
+	flash.Color = ColorSequence.new(HOT)
+	flash.LightEmission = 1
+	flash.LightInfluence = 0
+	flash.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, radius * 1.4), NumberSequenceKeypoint.new(1, 0) })
+	flash.Lifetime = NumberRange.new(0.15)
+	flash.Speed = NumberRange.new(0)
+	flash.Enabled = false
+	flash.Parent = centre
+	flash:Emit(2)
+
+	local ball = Instance.new("ParticleEmitter")
+	ball.Texture = FIRE
+	ball.Color = flames()
+	ball.LightEmission = 1
+	ball.LightInfluence = 0
+	ball.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, radius * 0.35),
+		NumberSequenceKeypoint.new(0.35, radius * 0.6),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	ball.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	ball.Lifetime = NumberRange.new(0.35, 0.65)
+	ball.Speed = NumberRange.new(radius * 1.5, radius * 3)
+	ball.SpreadAngle = Vector2.new(180, 180)
+	ball.Drag = 5
+	ball.Acceleration = Vector3.new(0, 8, 0)
+	ball.RotSpeed = NumberRange.new(-200, 200)
+	ball.Rotation = NumberRange.new(0, 360)
+	ball.Enabled = false
+	ball.Parent = centre
+	ball:Emit(45)
+
+	local embers = Instance.new("ParticleEmitter")
+	embers.Texture = SPARK
+	embers.Color = ColorSequence.new(HOT, FLAME)
+	embers.LightEmission = 1
+	embers.LightInfluence = 0
+	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0) })
+	embers.Lifetime = NumberRange.new(0.6, 1.1)
+	embers.Speed = NumberRange.new(radius * 3, radius * 6)
+	embers.SpreadAngle = Vector2.new(180, 180)
+	embers.Drag = 2
+	embers.Acceleration = Vector3.new(0, -36, 0)
+	embers.Enabled = false
+	embers.Parent = centre
+	embers:Emit(50)
+
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Texture = SMOKE
+	smoke.Color = ColorSequence.new(Color3.fromRGB(60, 44, 36), Color3.fromRGB(14, 10, 8))
+	smoke.LightInfluence = 0.4
+	smoke.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, radius * 0.4),
+		NumberSequenceKeypoint.new(1, radius * 1.1),
+	})
+	smoke.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.15, 0.4),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	smoke.Lifetime = NumberRange.new(1, 1.6)
+	smoke.Speed = NumberRange.new(radius * 0.8, radius * 1.6)
+	smoke.SpreadAngle = Vector2.new(180, 180)
+	smoke.Drag = 3
+	smoke.Acceleration = Vector3.new(0, 3, 0)
+	smoke.RotSpeed = NumberRange.new(-40, 40)
+	smoke.Rotation = NumberRange.new(0, 360)
+	smoke.Enabled = false
+	smoke.Parent = centre
+	smoke:Emit(22)
+
+	local light = Instance.new("PointLight")
+	light.Color = FLAME
+	light.Range = radius * 2.5
+	light.Brightness = 6
+	light.Parent = centre
+	TweenService:Create(light, TweenInfo.new(0.6), { Brightness = 0 }):Play()
+
+	task.delay(2, function()
+		centre:Destroy()
 	end)
 end
 

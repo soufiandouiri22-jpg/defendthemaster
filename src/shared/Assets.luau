@@ -8,6 +8,16 @@ return {
 	CrosshairNeutral = "rbxassetid://128336196823656",
 	CrosshairEnemy = "rbxassetid://107422997181186",
 	CrosshairAlly = "rbxassetid://129075895576362",
+	-- The sniper's scope (client Scope, Tools/scope_textures.py): the eyepiece's housing round the lens and its
+	-- crosshair.
+	ScopeHousing = "rbxassetid://86077005689186",
+	ScopeReticle = "rbxassetid://86616302978212",
+	-- Corvin's shots (client GunEffects, Tools/gun_textures.py): the muzzle flash, a soft glow, a tracer's streak
+	-- and a spark, the last three white to be tinted.
+	GunFlash = "rbxassetid://79208491765154",
+	GunGlow = "rbxassetid://140221199714929",
+	GunStreak = "rbxassetid://104828619030557",
+	GunSpark = "rbxassetid://106607602154187",
 	-- The mouse pointer everywhere (client Pointer): a gold gauntlet pointing to the top-left, keyed from
 	-- Art/Icons/keyed/Pointer and cut close round it (Art/UI/Pointer/PointerGold_tight.png, 211 by 238).
 	Pointer = "rbxassetid://124420581695634",

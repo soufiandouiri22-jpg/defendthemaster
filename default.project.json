@@ -43,6 +43,15 @@
 					"$path": "Vendor/KatanaSwordsman/Animations/Included Rig.rbxmx"
 				}
 			},
+			"Gunslinger": {
+				"$className": "Folder",
+				"ComponentPlayer": {
+					"$path": "Vendor/Gunslinger/Animations/Component Playback.rbxm"
+				},
+				"Rig": {
+					"$path": "Vendor/Gunslinger/Animations/Included Rig.rbxmx"
+				}
+			},
 			"Elementalist": {
 				"$className": "Folder",
 				"$ignoreUnknownInstances": true,

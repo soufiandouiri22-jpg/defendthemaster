@@ -918,7 +918,8 @@ Config.Minions = {
 -- a combo hit's `Recover` is the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
 -- `Pierce` strikes everyone it passes once; with `ShotsFrom = "Hand"` they are seen leaving the hand that holds his weapon
--- rather than where his shots leave him (HeroControls). A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
+-- rather than where his shots leave him (HeroControls). Its `Turns` (degrees to his right, one a release) turn each
+-- release from the crosshair where its motion swings his weapon across, so they go where it points. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
 -- With a `Slash` those he passed are struck only when his weapon cuts, `Time` seconds into its motion (after `Move`),
 -- together with everyone within its `Range` of where he lands.
@@ -947,7 +948,12 @@ Config.Minions = {
 -- A "Vanish" makes him unseen by his enemies for `Duration` seconds (his "Hidden" attribute, the client's Vanish), and
 -- faint to his own team, till he attacks again; no hero's attack strikes him meanwhile. He stands still for its first `Cast`
 -- seconds, its motion cut off at `Stop`, and then runs `Haste` times as fast while he stays unseen.
--- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first.
+-- A "Snipe" brings up a rifle and looks through its scope; a click fires one bullet across the arena (Corvin's R).
+-- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first; with
+-- `From` seen leaving the far end of that weapon or part of his weapons as the clip holds it, or that bone of them (a
+-- kit's `ShotsFrom` may name another). With `Gun` they are a gun's
+-- rounds (GunEffects: "Revolver", "Bomb", "Rifle"), with a flash at the barrel and a strike where they stop; a kit's
+-- `Round` names its own.
 --
 -- In the armory his class's build is recommended (Config.ClassBuilds), or his own `Build` when he has one.
 --
@@ -955,7 +961,8 @@ Config.Minions = {
 -- hero is every player's from the start; one with a `Price` is sold for coins in the heroes' shop (Shared.HeroShop),
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
 -- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
--- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke.
+-- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke (none with
+-- `Aura = false`).
 -- Every hero gets one, a pose from his own pack as Shadowren's weapon pose. `Enter` is the move he makes when he lands
 -- on the podium after the transformation (owner, 2026-10-31, each chosen on the podium), facing the camera: its clip
 -- played at `Speed` `From` that many seconds in (its start without) `Until` that many (its end without), short so it
@@ -2192,6 +2199,192 @@ Config.Heroes = {
 				Start = 0.06,
 				Move = 0.34,
 				Stop = 0.6,
+			},
+		},
+	},
+	-- Corvin (owner, 2026-11-04): the sniper, an archer in a ghillie suit with the Gunslinger pack. His numbers set
+	-- against Rowan's, the other archer, key by key: a little less health (740 to his 760), as his ultimate reaches
+	-- across the whole arena; his shots about as strong a second (47 to his 48), slower but harder (35 every 0.74 s
+	-- to 30 every 0.62), faster in flight (150 to 110) and two studs longer; his seven quick shots swept across
+	-- before him stronger together (182 to his heavy shot's 120) but one or two on one enemy, as Mavorak's fanned orbs
+	-- (his heavy shot goes through everyone in its line); his bomb weaker on one (110 to his volley's 130) as it
+	-- bursts over everyone round it; his leaping kick a little weaker (30 to 35) as it may strike several. His
+	-- ultimate is one aimed bullet (Kind "Snipe"): the strongest single hit of any hero (240, 360 on the head,
+	-- against Kaeda's 260 and Shadowren's 264 up close in several blows), as it strikes one enemy only, flies so he
+	-- must lead a runner, slows him while he aims and shows a red line to where he aims.
+	-- M2 and E are the owner's choice from the Play showroom. The times below are his shots in the pack's clips: the
+	-- cracks in each clip's own recording (the sound pack's Sound Map, its "Effect" cues; the RA_Sound markers in
+	-- the clips are mostly footsteps), where the revolver kicks up a frame later.
+	Corvin = {
+		Role = "Archer",
+		Description = "Lies hidden in the grass and never misses twice.",
+		Starter = true,
+		Showcase = {
+			Motion = "RA-GSL-069",
+			Enter = { Motion = "RA-GSL-068", Then = "Breathe" },
+			Aura = false,
+		},
+		Health = 740,
+		Scales = "Attack",
+		Look = {
+			Shirt = 8909256466,
+			Pants = 13223051873,
+			-- 1.0 Ghillie Suit - Green Jungle (Cosplay Box Store) over his clothes, its hood over his head.
+			Layered = { { Id = 13905962208, Type = Enum.AccessoryType.Jacket } },
+			-- Evaeko's Intimidating Face - Nougat on a hidden head, so the default head's eyes do not show through.
+			FaceAccessory = "18150519164",
+			HideHead = true,
+			Skin = Color3.fromRGB(204, 142, 105),
+		},
+		Pack = "Gunslinger",
+		-- His heavy rounds and bomb burst in fire (FireEffects.blast).
+		Effects = "Fire",
+		-- The pack's gun on his arm and the device at his side in every clip; the multitool, the scattergun and the
+		-- rifle only in the clips that hold them (their opacity, Shared.Motion).
+		Weapons = { "Gun", "SidearmDevice", "MultiTool", "Scattergun", "Rifle" },
+		-- His bullets in flight (GunEffects, owner 2026-11-04): a revolver's round, seen leaving the gun's muzzle
+		-- (`From`: the far end of the gun as he holds it); his bomb round and his rifle's bullet have their own (their
+		-- kits' `Round`), each from the weapon its clip holds (their `ShotsFrom`).
+		Projectile = {
+			Gun = "Revolver",
+			From = "Gun",
+		},
+		Motions = {
+			Idle = "RA-GSL-015",
+			Run = "RA-GSL-005",
+			RunLeft = "RA-GSL-006",
+			RunRight = "RA-GSL-007",
+			Back = "RA-GSL-002",
+			Takeoff = "RA-GSL-011",
+			Air = "RA-GSL-012",
+			Land = "RA-GSL-013",
+			Death = "RA-GSL-030",
+		},
+		Kit = {
+			-- One shot (087) over and over, no combo (owner, 2026-11-04), at the first enemy in its way. At Speed 1
+			-- (0.65 s a shot) he fired faster than Rowan looses (0.62 s) and the clip looked hurried (owner,
+			-- 2026-11-04); at 0.85 a shot takes 0.74 s with the pause after it, and 35 a shot keeps him about as strong
+			-- a second as Rowan (47 against 48, both Ratio 0.5). Range 36, two more than Rowan's 34, for thinner shots
+			-- (Width 1.2 to 1.5); his bullets fly at 150 as Jestrel's bolts do (Rowan's arrows 110).
+			-- Held, he keeps his revolver up (owner, 2026-11-04): a shot within `Reset` seconds of the last one's
+			-- start, before he lowers it, starts `Follow` seconds into the clip, where it is aimed, so it is not drawn
+			-- again and its draw does not sound; the first shot is held back as long as the others come sooner, so
+			-- they all follow 0.74 s apart.
+			M1 = {
+				Kind = "Combo",
+				Speed = 0.85,
+				Ratio = 0.5,
+				Reset = 1.2,
+				Follow = 0.27,
+				Hits = {
+					{
+						Motion = "RA-GSL-087",
+						Hit = 0.38,
+						Recover = 0.15,
+						Damage = 35,
+						Range = 36,
+						ProjectileSpeed = 150,
+						Width = 1.2,
+					},
+				},
+			},
+			-- Seven quick shots off the multitool (033, owner 2026-11-04) as he swings it from his right across to his
+			-- left, each from its muzzle and where it points then (owner, 2026-11-04): `Turns` is the bearing of its
+			-- length at each release, measured on him in a match (its bone 011 poses it), 29° right to 82° left. So
+			-- it sweeps a group rather than one enemy: 182 over all seven (Ratio 1.4), and one enemy before him takes
+			-- one or two (26 to 52), as Mavorak's three orbs fanned over 30° (E: 240 over all, mostly one of 80 on
+			-- one enemy, Ratio 1.5, Cooldown 10, against 8 here).
+			M2 = {
+				Kind = "Throw",
+				Motion = "RA-GSL-033",
+				Indicator = "Cone",
+				Cooldown = 8,
+				Releases = { 0.748, 0.81, 0.856, 0.966, 1.07, 1.162, 1.23 },
+				Turns = { 29, 2, -13, -46, -65, -75, -82 },
+				ShotsFrom = "MultiTool",
+				ProjectileSpeed = 150,
+				Range = 40,
+				Width = 1.5,
+				Damage = 26,
+				Ratio = 0.2,
+			},
+			-- A bomb round (045, owner 2026-11-04): one great slow round that bursts in fire where it hits, over
+			-- everyone within 8 studs. As much as Shadowren's dagger on one enemy (110), but over several, so a
+			-- lower Ratio (0.9 to 1.1) and 2 s longer to come back (10 to 8); it flies as slowly as that dagger and
+			-- Mavorak's orbs (90), so it can be stepped away from.
+			E = {
+				Kind = "Throw",
+				Motion = "RA-GSL-045",
+				Round = "Bomb",
+				ShotsFrom = "Scattergun",
+				Indicator = "Arrow",
+				Cooldown = 10,
+				Release = 0.99,
+				ProjectileSpeed = 90,
+				Range = 40,
+				Width = 2.5,
+				OrbScale = 2.2,
+				Blast = 8,
+				Damage = 110,
+				Ratio = 0.9,
+			},
+			-- The sniper shot (owner, 2026-11-04): R brings up the rifle (065, at `Raise` times its pace: in the clip
+			-- it lies in his shoulder from 0.7 s) and he looks through its scope (HeroControls, Scope), the clip held
+			-- `AimAt` seconds in. From `Ready` seconds, as soon as the rifle is up, a click fires (owner, 2026-11-04:
+			-- at once, not after 0.9 s); `Hold`
+			-- seconds after that it fires itself (a bot's after `BotHold`). The clip goes on from its kick (`Kick`) as
+			-- he fires, and `Recover` seconds later he may act again. Meanwhile he walks at `WalkSpeed`, the camera
+			-- zoomed to `Zoom` degrees, and everyone else sees a thin red line from him to where he aims. The bullet
+			-- (`OrbScale` times his usual one, from the rifle) flies across the whole arena till it meets an enemy, a
+			-- wall or the floor, and strikes `Headshot` times as hard on a hero's head (HeroKit.headshot). As much as
+			-- Mortael's leap on one enemy (240, Ratio 1.3 as his), against Rowan's 160 to everyone in his fan and
+			-- Mavorak's 320 round where his falls: one bullet, on one enemy, but from across the arena; a head takes
+			-- 360, half a mage's health. Tried at 340 and 680 on the head, all but a kill from level 4, and back to
+			-- this as unfair (owner, 2026-11-04): it grows with his level, rank and items, so later in a match a head
+			-- may take all or nearly all. The red line everyone sees while he aims, the slow walk and the long
+			-- cooldown are its price.
+			R = {
+				Kind = "Snipe",
+				Motion = "RA-GSL-065",
+				Round = "Rifle",
+				Cooldown = 40,
+				Raise = 3,
+				Ready = 0.25,
+				AimAt = 1.0,
+				Hold = 4,
+				BotHold = 1.2,
+				Kick = 1.4,
+				Recover = 0.6,
+				WalkSpeed = 4,
+				Zoom = 14,
+				ProjectileSpeed = 320,
+				Range = 1000,
+				Width = 1,
+				OrbScale = 1.6,
+				ShotsFrom = "Rifle",
+				Damage = 240,
+				Ratio = 1.3,
+				Headshot = 1.5,
+			},
+			-- A leaping kick to where he aims (Shift, 043, owner 2026-11-04): off the ground at 0.33 s of the clip, his
+			-- right leg over and down at 0.83 s (the clip's loud strike, his foot furthest forward), down at 1.0 (at
+			-- Speed 1.2 from 0.28 to 0.83 s), cut off before he spins his revolver. The kick strikes everyone he
+			-- passed and within 6 studs of where he lands, as the Scythe Wielder's dash does (25 within 7): 30, a
+			-- little less than the shot it had (35, one enemy), as it may strike several.
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-GSL-043",
+				Speed = 1.2,
+				Cooldown = 6,
+				Range = 14,
+				Width = 3,
+				Trail = false,
+				Damage = 30,
+				Ratio = 0.4,
+				Start = 0.28,
+				Move = 0.83,
+				Stop = 1.1,
+				Slash = { Time = 0.83, Range = 6 },
 			},
 		},
 	},

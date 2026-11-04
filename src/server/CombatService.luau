@@ -1,11 +1,12 @@
 -- The heroes' attacks (Config.Heroes[hero].Kit). A client asks for an attack through ReplicatedStorage.Net.HeroAction
--- (key, a point far along where he looks; while an attack plays, "Aim" and where he looks now); the server
+-- (key, a point far along where he looks; while an attack plays, "Aim" and where he looks now, and through a Snipe's
+-- scope "Fire" as he clicks); the server
 -- checks the hero can (alive, not mid-motion, off cooldown), tells every client to play the motion (Net.HeroMotion:
 -- character, key, combo step, landing spot) and lands each hit at its time in the motion on the enemies there: the
 -- other team's minions and Combatants (heroes, Masters). A refused attack is sent back to its client
 -- (Net.HeroRefused), which stops the motion it already began. Thrown daggers and shot arrows fly on the server
 -- (Net.HeroProjectile: id, origin, direction, speed, range, its size and blast; Net.HeroProjectileEnd: id, where it
--- stopped, hit or not); one stops at the first enemy in its way, a piercing one strikes everyone it passes once, and
+-- stopped, hit or not, on the head or not); one stops at the first enemy in its way, a piercing one strikes everyone it passes once, and
 -- every one at the first wall or floor; one with a blast then bursts there over everyone round it. Every swing, shot and throw of every hero goes where the crosshair points, upwards and
 -- downwards as well, to the point under it (HeroKit.aimDirection, owner 2026-10-29), and strikes an enemy only at the heights his body
 -- reaches; a leap lands on the spot aimed at and a dash keeps to the ground.
@@ -52,6 +53,8 @@ type State = {
 	eclipse: boolean,
 	-- Where his crosshair points now, sent by his client while an attack plays (Net.HeroAction "Aim").
 	aim: Vector3?,
+	-- A Snipe he aims now: from when he may fire (Net.HeroAction "Fire"), and what fires it.
+	snipe: { ready: number, fire: () -> () }?,
 }
 
 -- An enemy in reach: a minion's root part or a Combatant model, standing from the height `bottom` to `top`.
@@ -82,6 +85,8 @@ type Projectile = {
 	basic: boolean,
 	-- How far round where it stops it bursts, striking everyone there it did not strike yet.
 	blast: number?,
+	-- How many times as hard it strikes a hero's head (a Snipe's bullet).
+	headshot: number?,
 }
 
 local states: { [Instance]: State } = {}
@@ -323,6 +328,7 @@ local function launch(
 		struck = struck or {},
 		basic = basic == true,
 		blast = shot.Blast,
+		headshot = shot.Headshot,
 	}
 	table.insert(projectiles, projectile)
 	projectileEvent:FireAllClients(
@@ -384,9 +390,20 @@ local function stepProjectiles(dt: number)
 		if best then
 			local at = from:Lerp(to, bestAlong)
 			p.struck[best.instance] = true
-			damage(p.player, p.character, best, p.damage, p.magic, p.basic)
+			local head = p.headshot ~= nil
+				and best.instance:IsA("Model")
+				and best.instance:GetAttribute("Hero") ~= nil
+				and HeroKit.headshot(at.Y, best)
+			damage(
+				p.player,
+				p.character,
+				best,
+				if head then p.damage * (p.headshot :: number) else p.damage,
+				p.magic,
+				p.basic
+			)
 			burst(p, at)
-			projectileEndEvent:FireAllClients(p.id, at, true)
+			projectileEndEvent:FireAllClients(p.id, at, true, head)
 			table.remove(projectiles, i)
 			continue
 		end
@@ -480,19 +497,23 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 	character:SetAttribute("Hidden", nil)
 
 	if kit.Kind == "Combo" then
-		local step = if now <= state.comboUntil then state.combo % #kit.Hits + 1 else 1
+		local following = now <= state.comboUntil
+		local step = if following then state.combo % #kit.Hits + 1 else 1
 		local hit = kit.Hits[step]
 		-- A hit may play faster or slower than the rest of the combo (its own Speed).
 		local speed = kit.Speed * (hit.Speed or 1) * Items.attackSpeed(player)
-		local length = Motion.meta(settings.Pack, hit.Motion).duration / speed
+		-- Following on, it may start part-way into its clip (the kit's `Follow`, the weapon still up); the first is
+		-- held back as long, so the hits keep their pace.
+		local start = if following and kit.Follow then kit.Follow else 0
+		local length = (Motion.meta(settings.Pack, hit.Motion).duration - start) / speed
 		local eclipse = if state.eclipse then 1 + (Items.effect(player, "Eclipse") or 0) else 1
 		state.eclipse = false
 		state.combo = step
-		state.comboUntil = now + kit.Reset
-		state.busyUntil = now + (hit.Hit + (hit.Recover or 0)) / speed + RECOVER
-		motionEvent:FireAllClients(character, key, step)
+		state.comboUntil = now + kit.Reset - start / speed
+		state.busyUntil = now + (hit.Hit + (hit.Recover or 0) + (kit.Follow or 0) - start) / speed + RECOVER
+		motionEvent:FireAllClients(character, key, step, nil, start)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
-		later(state, hit.Hit / speed, function()
+		later(state, (hit.Hit - start) / speed, function()
 			local amount = strength(hit.Damage) * eclipse
 			if hit.ProjectileSpeed then
 				launch(player, state, team, aimedNow(), hit, amount, magic, nil, true)
@@ -612,15 +633,16 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		return true, landing
 	elseif kit.Kind == "Throw" then
 		-- One release (a dagger, a shot) or several in turn (a volley), each sending Count projectiles fanned over
-		-- Spread degrees, each where the crosshair points as it goes. A fan strikes each enemy once, however close.
+		-- Spread degrees, each where the crosshair points as it goes (turned by its Turns where his weapon swings
+		-- across). A fan strikes each enemy once, however close.
 		local releases = HeroKit.releases(kit)
 		state.busyUntil = now + releases[#releases] + RECOVER
 		motionEvent:FireAllClients(character, key, 0)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
-		for _, time in releases do
+		for n, time in releases do
 			later(state, time, function()
 				local struck = {}
-				for _, way in HeroKit.fan(aimedNow(), kit.Count or 1, kit.Spread or 0) do
+				for _, way in HeroKit.fan(HeroKit.turned(kit, n, aimedNow()), kit.Count or 1, kit.Spread or 0) do
 					launch(player, state, team, way, kit, strength(kit.Damage), magic, struck)
 				end
 			end)
@@ -698,6 +720,29 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		later(state, kit.Release, function()
 			launch(player, state, team, aimedNow(), kit, strength(kit.Damage), magic)
 		end)
+	elseif kit.Kind == "Snipe" then
+		-- He looks through his rifle's scope (his client), slowed, while everyone else sees where he aims (his "Scope"
+		-- attribute, Scope); from Ready he may fire (Net.HeroAction "Fire"), and Hold seconds after that it fires
+		-- itself, a bot's after BotHold. Firing goes on with the motion (combo step 1 for the clients).
+		local hold = if player:IsA("Player") then kit.Hold else kit.BotHold
+		state.busyUntil = now + kit.Ready + hold + RECOVER
+		motionEvent:FireAllClients(character, key, 0)
+		slow(state, kit.Ready + hold, kit.WalkSpeed)
+		character:SetAttribute("Scope", aim)
+		local snipe = { ready = now + kit.Ready, fire = function() end }
+		snipe.fire = function()
+			if state.snipe ~= snipe or not alive(character) then
+				return
+			end
+			state.snipe = nil
+			character:SetAttribute("Scope", nil)
+			state.busyUntil = os.clock() + kit.Recover
+			motionEvent:FireAllClients(character, key, 1)
+			slow(state, kit.Recover, Config.Combat.AttackWalkSpeed)
+			launch(player, state, team, aimedNow(), kit, strength(kit.Damage), magic)
+		end
+		state.snipe = snipe
+		later(state, kit.Ready + hold, snipe.fire)
 	elseif kit.Kind == "Flurry" then
 		state.busyUntil = now + length
 		motionEvent:FireAllClients(character, key, 0)
@@ -784,13 +829,21 @@ function CombatService.ready(player: Instance, key: string): boolean
 		and now >= (state.cooldowns[key] or 0)
 end
 
+-- Points the attack under way of `state`'s hero at `aim`; a Snipe's red line goes there too.
+local function aimTo(state: State, aim: Vector3)
+	state.aim = aim
+	if state.snipe then
+		state.character:SetAttribute("Scope", aim)
+	end
+end
+
 -- Points a bot's attack under way at `aim`, as a player's client does with "Aim"; false once no attack plays.
 function CombatService.aim(actor: Instance, aim: Vector3): boolean
 	local state = states[actor]
 	if not state or os.clock() >= state.busyUntil then
 		return false
 	end
-	state.aim = aim
+	aimTo(state, aim)
 	return true
 end
 
@@ -816,7 +869,17 @@ function CombatService.start()
 		if key == "Aim" then
 			local state = states[player]
 			if state and os.clock() < state.busyUntil then
-				state.aim = aim
+				aimTo(state, aim)
+			end
+			return
+		end
+		-- A click through a Snipe's scope, once it may fire.
+		if key == "Fire" then
+			local state = states[player]
+			local snipe = state and state.snipe
+			if state and snipe and os.clock() + EARLY >= snipe.ready then
+				aimTo(state, aim)
+				snipe.fire()
 			end
 			return
 		end

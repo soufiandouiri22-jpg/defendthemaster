@@ -99,6 +99,13 @@ local function colourOf(hero: string): Color3
 	local showcase = settings and settings.Showcase
 	return if showcase and showcase.Aura then showcase.Aura else DEFAULT_AURA
 end
+
+-- Whether `hero` stands in an aura on the podium: not with `Aura = false` (the Gunslinger, owner 2026-11-04).
+local function glows(hero: string): boolean
+	local settings = Config.Heroes[hero]
+	local showcase = settings and settings.Showcase
+	return not (showcase and showcase.Aura == false)
+end
 -- The podium pad's rune circle, light and motes, made once and coloured `colour`.
 local function lightPlate(at: CFrame, colour: Color3)
 	if not plate then
@@ -514,7 +521,9 @@ function Showcase.show(hero: string)
 	animate(entry)
 	local colour = colourOf(hero)
 	if hero ~= Showcase.Avatar then
-		aura(entry.model, colour, podium(), burns(hero))
+		if glows(hero) then
+			aura(entry.model, colour, podium(), burns(hero))
+		end
 		LightningEffects.crackle(entry.model)
 	end
 	lightPlate(podium(), colour)
@@ -935,7 +944,9 @@ function Showcase.transform(hero: string)
 	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0) })
 	embers:Emit(60)
 
-	aura(after.model, colour, at, burns(hero))
+	if glows(hero) then
+		aura(after.model, colour, at, burns(hero))
+	end
 	LightningEffects.crackle(after.model)
 	lightPlate(at, colour)
 	tween(runeTurn, 1.6, { Value = RUNE_TURN })

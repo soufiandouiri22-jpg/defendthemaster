@@ -175,6 +175,14 @@ function HeroKit.shotTouch(from: Vector3, to: Vector3, width: number, body: Body
 	return nil
 end
 
+-- How far below the top of a hero's body his head reaches.
+HeroKit.HEAD = 1.4
+
+-- Whether a shot touching the hero `body` at `height` strikes his head (a Snipe's `Headshot`).
+function HeroKit.headshot(height: number, body: Body): boolean
+	return height >= body.top - HeroKit.HEAD
+end
+
 -- Whether `hit`, one of a hero's combo hits (Kit.M1.Hits), struck from a hero whose root part is at `root` towards
 -- `aim` (`facing` when he aims at himself), reaches `body`: a swing as CombatService's strikeCone measures it, a shot
 -- anywhere on the way it flies as its stepProjectiles does. Walls in a shot's way are left to the caller.
@@ -244,6 +252,15 @@ function HeroKit.fan(direction: Vector3, count: number, spread: number): { Vecto
 	return directions
 end
 
+-- Where a Throw's (`kit`) `n`th release goes, aimed along `direction`: turned round the vertical by its `Turns` (degrees
+-- to his right) where its motion swings his weapon across as it lets go.
+function HeroKit.turned(kit: any, n: number, direction: Vector3): Vector3
+	local turn = kit.Turns and kit.Turns[n]
+	return if turn
+		then CFrame.fromAxisAngle(Vector3.yAxis, math.rad(-turn)):VectorToWorldSpace(direction)
+		else direction
+end
+
 -- What one strike of a Flurry (`kit`) at `time` seconds into it reaches: a sweep along the crosshair (Range, Angle),
 -- or from its Slam on the slam all round him (SlamRadius); and whether it is the slam.
 function HeroKit.flurryStrike(kit: any, time: number): (number, number, boolean)
@@ -280,16 +297,19 @@ export type Shot = { from: Vector3, to: Vector3 }
 
 -- The ways of the projectiles of a Throw or an Ascend (`kit`) cast by a hero whose root part is at `root` towards `aim`
 -- (`facing` when he aims at himself): each fan's projectiles from where he lets them go (an Ascend's from where it has
--- lifted him), as far as they fly.
+-- lifted him), as far as they fly; of one whose releases turn (`Turns`), each release's.
 function HeroKit.shots(kit: any, root: Vector3, aim: Vector3, facing: Vector3): { Shot }
 	if kit.Kind == "Ascend" then
 		root += Vector3.new(0, HeroKit.lift(kit, kit.Release), 0)
 	end
 	local muzzle = HeroKit.muzzle(root)
+	local aimed = HeroKit.aimDirection(muzzle, aim, facing)
 	local ways = {}
-	for _, direction in HeroKit.fan(HeroKit.aimDirection(muzzle, aim, facing), kit.Count or 1, kit.Spread or 0) do
-		local from = HeroKit.shotOrigin(muzzle, direction)
-		table.insert(ways, { from = from, to = from + direction * kit.Range })
+	for n = 1, if kit.Turns then #kit.Turns else 1 do
+		for _, direction in HeroKit.fan(HeroKit.turned(kit, n, aimed), kit.Count or 1, kit.Spread or 0) do
+			local from = HeroKit.shotOrigin(muzzle, direction)
+			table.insert(ways, { from = from, to = from + direction * kit.Range })
+		end
 	end
 	return ways
 end

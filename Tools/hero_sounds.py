@@ -237,6 +237,58 @@ PACKS = {
         # they need no Slam.
         "events": {},
     },
+    "Gunslinger": {
+        "folder": ROOT / "Vendor/Gunslinger/Sounds",
+        "clips": [
+            # Corvin's attacks (Config.Heroes.Corvin.Kit) and the clips under them.
+            "RA-GSL-087", "RA-GSL-086", "RA-GSL-033", "RA-GSL-045", "RA-GSL-065", "RA-GSL-043",
+            "RA-GSL-005", "RA-GSL-006", "RA-GSL-007", "RA-GSL-002", "RA-GSL-011", "RA-GSL-013", "RA-GSL-030",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+            # The bomb round's recording: of its two takes only the first fires where the revolver kicks (0.99 s), as
+            # the kit's Release does.
+            "RA-GSL-045-S1cc3e3b326-Alternatives": lambda member, sound: member["soundId"] == "A1db15aab73d5",
+        },
+        # His sniper shot (065) stops at its aim (AimAt 1.0 s) until he fires, and plays on from its kick (Kick
+        # 1.4 s): its two recordings, which run through the shot at 1.35 s, are cut where he holds. The rifle raised
+        # (Sound 02, 0.17 s) and its click (Sound 01, 0.5 s) sound as he aims, the shot (both from just before their
+        # crack at 1.35 s) as he fires.
+        # His quick shots (087, 086) keep their own three recordings (owner, 2026-11-04): the short crack tried
+        # instead, the first shot of 086's Sound 01 without its rumble (`highpass`, Hz), sounded too light. It stays
+        # in the uploaded file where 087's cue had it (`keep_in`), unplayed. Both shots sound as the first (owner,
+        # 2026-11-04): 086 plays the same recordings, its main one 0.4 s later, and its revolver kicks when 087's does.
+        # Their first two recordings are the revolver drawn, at the clip's start: a shot held on starts after them
+        # (Config's `Follow`, 0.27 s), so only the first sounds them (owner, 2026-11-04). Their laser (Sound 02) sounds
+        # with every shot, just before the bullet leaves (Hit 0.38) instead of at its cue's 0.0667. Pixabay's pistol
+        # shot (Docs/Third_Party.md), from just before its crack (0.15 s in the download) to where it has died away,
+        # was tried in its place the same day; it stays in the uploaded file where 087's added cue had it
+        # (`keep_in`), unplayed.
+        "same_cues": {"RA-GSL-086": "RA-GSL-087"},
+        "files": {"PistolShot": (ROOT / "Vendor/Pixabay/universfield-pistol-shot-278821.mp3", 0.14, 1.0)},
+        "mute": ["RA-GSL-065", "RA-GSL-087"],
+        "mixes": {
+            "SnipeRaise": [("A91ac2edf0475", 0.0, 1.0)],
+            "SnipeClick": [("A814aa8cfd43e", 0.0, 0.4)],
+            "SnipeShot": [("A814aa8cfd43e", 0.83), ("A91ac2edf0475", 1.163)],
+            "RevolverShot": [("A795daf539aa1", 0.06, 0.42)],
+        },
+        "highpass": {"RevolverShot": 180},
+        "keep_in": {"RA-GSL-087": ["PistolShot", "RevolverShot"]},
+        "extra": {
+            "RA-GSL-065": [(0.167, ["SnipeRaise"], 0.8), (0.5, ["SnipeClick"], 0.76), (1.4, ["SnipeShot"], 0.8)],
+            "RA-GSL-087": [
+                (0.0, ["A795daf539aa1"], 0.855),
+                (0.0, ["Ab5c6cdc947da"], 0.2),
+                (0.28, ["Ab1f5b2934b4f"], 0.57),
+            ],
+        },
+        # Every other shot already sounds in its clip's own recording.
+        "events": {},
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no
@@ -324,11 +376,17 @@ def select(pack, sound_map):
             cues.append(entry)
         cues.sort(key=lambda c: c["time"])
         clips[key] = cues
-    # The added cues' recordings go in after all the pack's own, so adding them never moves those in the file.
-    for cues in clips.values():
+    # Clips that sound as another does, its cues at the same times.
+    for key, like in pack.get("same_cues", {}).items():
+        clips[key] = [dict(cue) for cue in clips[like]]
+    # The added cues' recordings go in after all the pack's own, so adding them never moves those in the file; a
+    # clip's `keep_in` stay where its added cues had them when they no longer play.
+    for key, cues in clips.items():
         for cue in cues:
             for s in cue.get("sounds", []) if not cue.get("bank") else []:
                 need(s)
+        for s in pack.get("keep_in", {}).get(key, []):
+            need(s)
     for s in pack.get("keep", []):
         need(s)
 
@@ -353,8 +411,16 @@ def recording(pack, sound_map, sound_id):
 
 
 def mix(layers):
-    """The layers (samples, from this many seconds on) laid over each other, with a short fade in against clicks."""
-    parts = [np.frombuffer(samples, np.int16)[int(start * RATE) :].astype(np.float64) for samples, start in layers]
+    """The layers (samples, from this many seconds on, up to that many when a third is given) laid over each other,
+    with a short fade in against clicks, and a fade out where a layer is cut short."""
+    parts = []
+    for samples, start, *end in layers:
+        part = np.frombuffer(samples, np.int16)[int(start * RATE) : int(end[0] * RATE) if end else None]
+        part = part.astype(np.float64)
+        if end:
+            tail = min(int(0.04 * RATE), len(part))
+            part[len(part) - tail :] *= np.linspace(1, 0, tail)
+        parts.append(part)
     out = np.zeros(max(len(p) for p in parts))
     for p in parts:
         out[: len(p)] += p
@@ -364,6 +430,18 @@ def mix(layers):
     if peak > 32000:
         out *= 32000 / peak
     return out.astype(np.int16).tobytes()
+
+
+def thin(samples, cutoff):
+    """The samples with what lies below `cutoff` Hz taken away (two one-pole high-passes, 12 dB an octave)."""
+    x = np.frombuffer(samples, np.int16).astype(np.float64)
+    a = 1 / (1 + 2 * np.pi * cutoff / RATE)
+    for _ in range(2):
+        y = np.zeros_like(x)
+        for i in range(1, len(x)):
+            y[i] = a * (y[i - 1] + x[i] - x[i - 1])
+        x = y
+    return np.clip(x, -32000, 32000).astype(np.int16).tobytes()
 
 
 def build(name):
@@ -376,8 +454,13 @@ def build(name):
     data = bytearray()
     silence = bytes(int(GAP * RATE) * 2)
     for sound_id in needed:
-        if sound_id in pack.get("mixes", {}):
-            samples = mix([(recording(pack, sound_map, layer), start) for layer, start in pack["mixes"][sound_id]])
+        if sound_id in pack.get("files", {}):
+            path, *cut = pack["files"][sound_id]
+            samples = mix([(decode(path), *cut)])
+        elif sound_id in pack.get("mixes", {}):
+            samples = mix([(recording(pack, sound_map, layer), *cut) for layer, *cut in pack["mixes"][sound_id]])
+            if sound_id in pack.get("highpass", {}):
+                samples = thin(samples, pack["highpass"][sound_id])
         else:
             samples = recording(pack, sound_map, sound_id)
         start = len(data) / 2 / RATE

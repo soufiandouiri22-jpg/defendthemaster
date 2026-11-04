@@ -117,7 +117,7 @@ task.spawn(function()
 		while HeroService.count() < #slots and os.clock() - since < HEROES_OUT do
 			task.wait(0.1)
 		end
-		Workspace:SetAttribute("HeroesOut", HeroService.count())
+		Workspace:SetAttribute("HeroesOut", true)
 		MatchSetup.awaitHeroesLoaded()
 		local untilAt = math.max(shownUntil, Workspace:GetServerTimeNow())
 		Workspace:SetAttribute("VersusUntil", untilAt)

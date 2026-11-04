@@ -1,5 +1,6 @@
 -- The player's attacks (Config.Heroes[hero].Kit, server: CombatService). Left mouse swings the combo (held, it keeps
--- swinging); right mouse, E and R are held to aim with their indicator on the ground (design 06) and cast when let go.
+-- swinging); right mouse, E and R are held to aim with their indicator on the ground (design 06) and cast when let go;
+-- a sniper's R (Kind "Snipe") brings up his scope at once (Scope), and a click through it fires.
 -- Everything aims where the player looks (HeroCamera.aim), up and down too. The client plays its own motion at once and asks the server
 -- (Net.HeroAction), which decides the hits; a refused attack is undone. The leap moves the hero itself, from takeoff
 -- to landing, to the spot the server works out the same way (HeroKit.leapLanding), and lands in a shockwave of shadow
@@ -24,6 +25,7 @@ local AbilityBar = require(script.Parent.AbilityBar)
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local FireEffects = require(script.Parent.FireEffects)
+local GunEffects = require(script.Parent.GunEffects)
 local HeroAnimator = require(script.Parent.HeroAnimator)
 local HeroCamera = require(script.Parent.HeroCamera)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
@@ -32,12 +34,15 @@ local Indicators = require(script.Parent.Indicators)
 local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local LightningEffects = require(script.Parent.LightningEffects)
+local Scope = require(script.Parent.Scope)
 local ShadowEffects = require(script.Parent.ShadowEffects)
 local UiSound = require(script.Parent.UiSound)
 
 local HeroControls = {}
 
 local RECOVER = 0.12
+-- Seconds a combo's hit that starts part-way in (its kit's `Follow`) is eased into from the last one's pose.
+local FOLLOW_FADE = 0.1
 local THUNDER_CRACK = 0.6
 -- How often an attack that follows the crosshair (HeroKit.follows) tells the server where it points while it plays.
 local AIM_EVERY = 0.05
@@ -91,6 +96,8 @@ local indicator: Indicators.Indicator? = nil
 local leap: Leap? = nil
 local flight: Flight? = nil
 local following, aimSentAt = false, 0
+-- A Snipe he looks through the scope of now (Scope), and from when a click fires it.
+local sniping: { kit: any, readyAt: number }? = nil
 
 type Flying = {
 	dagger: BasePart,
@@ -110,6 +117,9 @@ type Flying = {
 	-- How far it bursts round where it stops, and whose it is.
 	blast: number?,
 	character: Model,
+	-- A gun's round (GunEffects) and where it was first seen.
+	round: string?,
+	start: Vector3,
 }
 local flying: { [number]: Flying } = {}
 
@@ -291,11 +301,51 @@ local function weaponPoint(character: Model, root: BasePart): Vector3
 	return (longest.CFrame * CFrame.new(0, longest.Size.Y / 2, 0)).Position
 end
 
--- Where on `character` a shot is seen leaving: his weapon's `Point` (weaponPoint), or the `Hand` holding it (what his
--- weapon is bound to), his chest without one.
+local FACES = { Vector3.xAxis, -Vector3.xAxis, Vector3.yAxis, -Vector3.yAxis, Vector3.zAxis, -Vector3.zAxis }
+
+-- The first by name of the bones among `instances`.
+local function firstBone(instances: { Instance }): Bone?
+	local first: Bone? = nil
+	for _, d in instances do
+		if d:IsA("Bone") and (not first or d.Name < first.Name) then
+			first = d
+		end
+	end
+	return first
+end
+
+-- The far end from `root` of the parts of `weapon` he shows, as the clip poses them now: a part skinned to bones stays
+-- where it was bound and is seen moved as its first bone moves, its own or else its weapon's (the multitool's are on
+-- a part of their own); a gun he holds moves as one. Nil when none shows.
+local function weaponTip(root: BasePart, weapon: Instance): Vector3?
+	local best, far = nil, -1
+	local holder = if weapon:IsA("BasePart") then weapon.Parent else weapon
+	local shared = if holder then firstBone(holder:GetDescendants()) else nil
+	for _, part in if weapon:IsA("BasePart") then { weapon } else weapon:GetDescendants() do
+		if not part:IsA("BasePart") or part.Transparency >= 0.5 then
+			continue
+		end
+		local first = firstBone(part:GetChildren()) or shared
+		local posed = if first
+			then first.TransformedWorldCFrame * first.WorldCFrame:Inverse() * part.CFrame
+			else part.CFrame
+		for _, face in FACES do
+			local point = posed * (face * part.Size / 2)
+			local distance = (point - root.Position).Magnitude
+			if distance > far then
+				best, far = point, distance
+			end
+		end
+	end
+	return best
+end
+
+-- Where on `character` a shot is seen leaving: his weapon's `Point` (weaponPoint), the `Hand` holding it (what his
+-- weapon is bound to), the bone of his weapons by that name, or the far end of what he shows of the part, or else the
+-- weapon, of his weapons by that name (weaponTip: a gun's barrel); his chest without one.
 local function weaponFrom(character: Model, root: BasePart, from: string): Vector3
+	local weapons = character:FindFirstChild("Weapons")
 	if from == "Hand" then
-		local weapons = character:FindFirstChild("Weapons")
 		for _, d in if weapons then weapons:GetDescendants() else {} do
 			if d:IsA("Motor6D") and d.Name == "ComponentBinding" and d.Part0 then
 				return d.Part0.Position
@@ -303,7 +353,19 @@ local function weaponFrom(character: Model, root: BasePart, from: string): Vecto
 		end
 		return HeroKit.muzzle(root.Position)
 	end
-	return weaponPoint(character, root)
+	local found: Instance? = nil
+	for _, d in if from ~= "Point" and weapons then weapons:GetDescendants() else {} do
+		if d.Name == from and (d:IsA("BasePart") or d:IsA("Bone")) then
+			found = d
+			break
+		end
+	end
+	found = found or (if from ~= "Point" and weapons then weapons:FindFirstChild(from, true) else nil)
+	if found and found:IsA("Bone") then
+		return found.TransformedWorldCFrame.Position
+	end
+	local tip = if found then weaponTip(root, found) else nil
+	return tip or weaponPoint(character, root)
 end
 
 -- `kit.Zap`'s lightning at each of the flurry's hits: from his weapon's point to the enemy that shock strikes
@@ -577,8 +639,8 @@ local function shedCards(part: BasePart, colour: Color3)
 	end)
 end
 
--- Takes a flown beam away: one shedding sparkles and cards (shedCards) is hidden at once and goes once they have
--- faded, so they do not vanish with it.
+-- Takes a flown beam away: one shedding sparkles and cards (shedCards), or a round's sparks and smoke, is hidden at
+-- once and goes once they have faded (CARD_LIFE, or its "Linger" seconds), so they do not vanish with it.
 local function retire(part: BasePart)
 	local sheds = false
 	for _, d in part:GetChildren() do
@@ -594,7 +656,7 @@ local function retire(part: BasePart)
 		return
 	end
 	part.Transparency = 1
-	task.delay(CARD_LIFE, part.Destroy, part)
+	task.delay(part:GetAttribute("Linger") or CARD_LIFE, part.Destroy, part)
 end
 
 -- A Rain's beams (`kit`, Kind "Rain") on the spot `spot` (at a hero's root height, HeroKit.leapLanding): its circle
@@ -769,12 +831,17 @@ local function cast(key: string)
 	AbilityBar.used(key)
 
 	if kit.Kind == "Combo" then
-		local step = if now <= comboUntil then combo % #kit.Hits + 1 else 1
+		local continuing = now <= comboUntil
+		local step = if continuing then combo % #kit.Hits + 1 else 1
 		local hit = kit.Hits[step]
-		combo, comboUntil = step, now + kit.Reset
 		local speed = kit.Speed * (hit.Speed or 1) * Items.attackSpeed(player)
-		busyUntil = now + (hit.Hit + (hit.Recover or 0)) / speed + RECOVER
-		local length = HeroAnimator.play(character, hit.Motion, speed)
+		local start = if continuing and kit.Follow then kit.Follow else 0
+		combo, comboUntil = step, now + kit.Reset - start / speed
+		busyUntil = now + (hit.Hit + (hit.Recover or 0) + (kit.Follow or 0) - start) / speed + RECOVER
+		if start > 0 then
+			HeroAnimator.crossfade(character, FOLLOW_FADE)
+		end
+		local length = HeroAnimator.play(character, hit.Motion, speed, start)
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
 		return
 	end
@@ -831,6 +898,15 @@ local function cast(key: string)
 		thenLater(character, kit, length)
 		rainLater(character, spot, kit)
 		return
+	elseif kit.Kind == "Snipe" then
+		-- The rifle comes up and he holds its aim, looking through its scope, till he clicks or it fires itself.
+		busyUntil = now + kit.Ready + kit.Hold + RECOVER
+		HeroAnimator.play(character, kit.Motion, kit.Raise or 1)
+		HeroAnimator.stopAt(character, kit.AimAt)
+		slow(humanoid, kit.Ready + kit.Hold, kit.WalkSpeed)
+		sniping = { kit = kit, readyAt = now + kit.Ready }
+		Scope.enter(kit)
+		return
 	end
 	local length = HeroAnimator.play(character, kit.Motion, 1, nil, kit.InPlace)
 	if kit.Kind == "Leap" then
@@ -876,6 +952,31 @@ local function cast(key: string)
 			beamLater(character, kit)
 		end
 	end
+end
+
+-- His Snipe fired (his click, or the server when its Hold ran out): the scope comes from his eye and the rifle kicks.
+local function fired()
+	local s = sniping
+	sniping = nil
+	Scope.leave()
+	local character, _, humanoid = hero()
+	if not s or not character or not humanoid then
+		return
+	end
+	busyUntil = os.clock() + s.kit.Recover
+	HeroAnimator.play(character, s.kit.Motion, 1, s.kit.Kick)
+	slow(humanoid, s.kit.Recover, Config.Combat.AttackWalkSpeed)
+	HeroCamera.shake(0.3, 0.25)
+end
+
+-- A click through the scope fires, once it may.
+local function fire()
+	local s = sniping
+	if not s or os.clock() < s.readyAt then
+		return
+	end
+	actionEvent:FireServer("Fire", HeroCamera.aim())
+	fired()
 end
 
 local function startAiming(key: string)
@@ -1048,6 +1149,10 @@ end
 
 local function undo(key: string)
 	local character, _, humanoid = hero()
+	if sniping then
+		sniping = nil
+		Scope.leave()
+	end
 	busyUntil = 0
 	cooldowns[key] = 0
 	AbilityBar.cooldown(key, 0)
@@ -1059,8 +1164,17 @@ local function undo(key: string)
 	end
 end
 
-local function onMotion(character: Model, key: string, step: number, landing: Vector3?)
-	if character == player.Character or not character.Parent then
+local function onMotion(character: Model, key: string, step: number, landing: Vector3?, startTime: number?)
+	if character == player.Character then
+		-- The server fired his Snipe itself (its Hold ran out).
+		local s = sniping
+		local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+		if step == 1 and s and settings and settings.Kit[key] == s.kit then
+			fired()
+		end
+		return
+	end
+	if not character.Parent then
 		return
 	end
 	local name = character:GetAttribute("Hero")
@@ -1071,10 +1185,15 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	end
 	if kit.Kind == "Combo" then
 		local hit = kit.Hits[step]
+		-- A hit following on from the last may start part-way in (the kit's `Follow`), eased into.
+		if startTime and startTime > 0 then
+			HeroAnimator.crossfade(character, FOLLOW_FADE)
+		end
 		HeroAnimator.play(
 			character,
 			hit.Motion,
-			kit.Speed * (hit.Speed or 1) * (character:GetAttribute("AttackSpeed") or 1)
+			kit.Speed * (hit.Speed or 1) * (character:GetAttribute("AttackSpeed") or 1),
+			startTime
 		)
 	elseif kit.Kind == "Dash" then
 		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -1089,6 +1208,15 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 		return
 	elseif kit.Kind == "Vanish" then
 		vanishMotion(character, kit)
+		return
+	elseif kit.Kind == "Snipe" then
+		-- He holds his aim (step 0) till he fires, and the rifle kicks (step 1).
+		if step == 1 then
+			HeroAnimator.play(character, kit.Motion, 1, kit.Kick)
+		else
+			HeroAnimator.play(character, kit.Motion, kit.Raise or 1)
+			HeroAnimator.stopAt(character, kit.AimAt)
+		end
 		return
 	elseif kit.Kind == "Rain" then
 		thenLater(character, kit, HeroAnimator.play(character, kit.Motion, 1, nil, "Grounded"))
@@ -1268,61 +1396,97 @@ local function onProjectile(
 	if not settings.Projectile then
 		return
 	end
-	-- The ability he shoots it with may have it leave him elsewhere than his shots do (its `ShotsFrom`).
+	-- The ability he shoots it with may have it leave him elsewhere than his shots do (its `ShotsFrom`), and a gun's
+	-- ability its own round (its `Round`).
 	local playing = HeroAnimator.playing(character)
-	local from = if settings.Projectile.FromWeapon then "Point" else nil
+	local from = if settings.Projectile.FromWeapon then "Point" else settings.Projectile.From
+	local round = settings.Projectile.Gun
 	for _, kit in settings.Kit do
-		if kit.Motion and kit.Motion == playing and kit.ShotsFrom then
-			from = kit.ShotsFrom
+		if kit.Motion and kit.Motion == playing then
+			from = kit.ShotsFrom or from
+			round = if round then kit.Round or round else nil
 		end
 	end
+	local model, spin
+	if round then
+		model, spin = GunEffects.round(round, scale or 1)
+		model.Parent = effects()
+	else
+		model, spin = projectileModel(settings, scale or 1), settings.Projectile.Spin or 0
+	end
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local start = if from and root then weaponFrom(character, root, from) else origin
 	flying[id] = {
-		dagger = projectileModel(settings, scale or 1),
+		dagger = model,
 		origin = origin,
 		from = from,
 		direction = direction,
 		speed = speed,
 		range = range,
 		started = os.clock(),
-		spin = settings.Projectile.Spin or 0,
-		turn = settings.Projectile.Turn or CFrame.identity,
+		spin = spin,
+		turn = if round then CFrame.identity else settings.Projectile.Turn or CFrame.identity,
 		burst = settings.Projectile.Burst == true,
 		blast = blast,
 		character = character,
+		round = round,
+		start = start,
 	}
 	-- Where it is first drawn, should this frame be drawn before it moves.
 	local f = flying[id]
-	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local start = if f.from and root then weaponFrom(character, root, f.from) else origin
 	f.dagger.CFrame = CFrame.lookAt(start, start + direction) * f.turn
+	if round then
+		GunEffects.muzzle(start, direction, round)
+	end
 	HeroSounds.event(character, settings.Pack, "Release")
 end
 
--- A great orb bursting at `at` over `radius` studs: a blast of dark magic in the air there and, when the ground is
--- near enough below to be reached, the slam's shockwaves over it.
+-- A great orb bursting at `at` over `radius` studs: a blast of dark magic in the air there (of fire for a hero with
+-- Effects "Fire") and, when the ground is near enough below to be reached, the slam's shockwaves over it.
 local function blastAt(character: Model, at: Vector3, radius: number)
-	ShadowEffects.blast(at, radius)
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	local fiery = settings and settings.Effects == "Fire"
+	if fiery then
+		FireEffects.blast(at, radius)
+	else
+		ShadowEffects.blast(at, radius)
+	end
 	groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
 	local below = Workspace:Raycast(at + Vector3.new(0, 1, 0), Vector3.new(0, -(radius + 1), 0), groundRay)
 	if below then
-		ShadowEffects.slam(below.Position, radius)
+		if fiery then
+			FireEffects.shockwave(below.Position, radius)
+		else
+			ShadowEffects.slam(below.Position, radius)
+		end
 	end
 	shakeNear(at, 0.9)
-	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
 	if settings and settings.Pack and character.Parent then
 		HeroSounds.event(character, settings.Pack, "Blast")
 	end
 end
 
-local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
+local function onProjectileEnd(id: number, at: Vector3, hit: boolean, headshot: boolean?)
 	local f = flying[id]
 	if f then
 		retire(f.dagger)
 		flying[id] = nil
+		if headshot and f.character == player.Character then
+			Scope.headshot()
+		end
 		if f.blast then
 			blastAt(f.character, at, f.blast)
 		elseif hit and f.burst then
 			ShadowEffects.burst(at)
+		end
+		-- A round strikes where it stopped short of its reach (an enemy, a wall, the floor).
+		if f.round and (hit or (at - f.origin).Magnitude < f.range - 1) then
+			if not f.blast then
+				GunEffects.strike(at, f.direction, f.round)
+			end
+			if f.round == "Rifle" then
+				GunEffects.line(f.start, at)
+			end
 		end
 	end
 end
@@ -1474,12 +1638,17 @@ function HeroControls.start()
 	(net:WaitForChild("HeroRefused") :: RemoteEvent).OnClientEvent:Connect(undo);
 	(net:WaitForChild("HeroProjectile") :: RemoteEvent).OnClientEvent:Connect(onProjectile);
 	(net:WaitForChild("HeroProjectileEnd") :: RemoteEvent).OnClientEvent:Connect(onProjectileEnd)
+	Scope.start()
 
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then
 			return
 		end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if sniping then
+				fire()
+				return
+			end
 			holdingM1 = true
 			cast("M1")
 			return
@@ -1489,7 +1658,15 @@ function HeroControls.start()
 			return
 		end
 		local key = KEY_OF[input.KeyCode] or KEY_OF[input.UserInputType]
-		if key then
+		if not key then
+			return
+		end
+		-- A Snipe has nothing to aim on the ground: the scope comes up at once.
+		local _, _, _, settings = hero()
+		local kit = settings and settings.Kit[key]
+		if kit and kit.Kind == "Snipe" then
+			cast(key)
+		else
 			startAiming(key)
 		end
 	end)
@@ -1508,6 +1685,7 @@ function HeroControls.start()
 	player.CharacterAdded:Connect(function()
 		stopAiming()
 		endFlight()
+		sniping = nil
 		busyUntil, combo, comboUntil, leap = 0, 0, 0, nil
 		table.clear(cooldowns)
 		for _, key in { "M1", "M2", "E", "R", "Dash" } do
@@ -1518,10 +1696,15 @@ function HeroControls.start()
 	local cross = crosshair()
 	RunService.PreSimulation:Connect(updateLeap)
 	RunService.RenderStepped:Connect(function()
-		if holdingM1 and not aiming then
+		local now = os.clock()
+		-- A scope he no longer looks through: he died, or no word came that it fired.
+		if sniping and (not hero() or now > busyUntil) then
+			sniping = nil
+			Scope.leave()
+		end
+		if holdingM1 and not aiming and not sniping then
 			cast("M1")
 		end
-		local now = os.clock()
 		if following and now < busyUntil and now - aimSentAt >= AIM_EVERY then
 			aimSentAt = now
 			actionEvent:FireServer("Aim", HeroCamera.aim())
@@ -1538,6 +1721,8 @@ function HeroControls.start()
 			then Assets.CrosshairEnemy
 			elseif target and team == own then Assets.CrosshairAlly
 			else Assets.CrosshairNeutral
+		-- The scope has its own crosshair.
+		cross.Visible = HeroCamera.scoping() < 0.5
 	end)
 end
 
