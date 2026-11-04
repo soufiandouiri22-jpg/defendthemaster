@@ -21,8 +21,12 @@ local NAME = 18
 -- The bar floats this many studs over the hero's root; while he carries a boost, `BOOSTED` over the top of the boost
 -- (counted from the top of his head).
 local OVER, BOOSTED = 4.4, 4.2
+-- Only the heroes near enough to matter show their bars: further ones would crowd the screen. Through a sniper's scope
+-- (Scope) every hero in sight shows his, so the shooter sees whose side the far ones are on (owner, 2026-11-04).
+local NEAR, SCOPED = 75, 1000
 
 local bars: { [Model]: BillboardGui } = {}
+local reach = NEAR
 
 local function levelOf(model: Model): number
 	local owner = Players:GetPlayerFromCharacter(model)
@@ -51,8 +55,7 @@ local function build(model: Model)
 	-- The bar stays where it was before the name came over it.
 	gui.SizeOffset = Vector2.new(0, NAME / 2 / (KNOB + NAME))
 	gui.LightInfluence = 0
-	-- Only the heroes near enough to matter: further bars would crowd the screen.
-	gui.MaxDistance = 75
+	gui.MaxDistance = reach
 	gui.Adornee = root
 
 	local bar = UiStyle.bar(
@@ -113,6 +116,14 @@ local function remove(instance: Instance)
 	if gui then
 		gui:Destroy()
 		bars[instance :: Model] = nil
+	end
+end
+
+-- Whether he looks through a sniper's scope now.
+function HeroBars.scoped(on: boolean)
+	reach = if on then SCOPED else NEAR
+	for _, gui in bars do
+		gui.MaxDistance = reach
 	end
 end
 

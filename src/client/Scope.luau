@@ -14,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Assets = require(ReplicatedStorage.Shared.Assets)
+local HeroBars = require(script.Parent.HeroBars)
 local HeroCamera = require(script.Parent.HeroCamera)
 local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local UiSound = require(script.Parent.UiSound)
@@ -250,6 +251,7 @@ function Scope.enter(kit: any)
 	(zoom :: TextLabel).Text =
 		string.format("%.1fx ZOOM", math.tan(math.rad(wide / 2)) / math.tan(math.rad(kit.Zoom / 2)))
 	HeroCamera.scope(kit.Zoom)
+	HeroBars.scoped(true)
 	UiSound.play("ScopeIn")
 	local holder, grow, dim = lens :: Frame, scale :: UIScale, shade :: UIStroke
 	holder.Visible = true
@@ -271,6 +273,7 @@ function Scope.leave()
 	end
 	open = false
 	HeroCamera.scope(nil)
+	HeroBars.scoped(false)
 	if lens then
 		lens.Visible = false
 	end

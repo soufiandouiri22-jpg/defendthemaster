@@ -175,12 +175,17 @@ function HeroKit.shotTouch(from: Vector3, to: Vector3, width: number, body: Body
 	return nil
 end
 
--- How far below the top of a hero's body his head reaches.
-HeroKit.HEAD = 1.4
+-- Whether a bullet flying from `from` to `to` goes through the part `head` (a Snipe's `Headshot`): the head itself,
+-- not a height on the body, so a hat, a hood or a weapon held up does not count (owner, 2026-11-04). Asked on the
+-- shooter's client, where the head is where it is drawn (CombatService's headChecks). The bullet's own line, not its
+-- Width: that wide (a stud) it would graze the chin from the upper chest, while the rifle's round is a thin streak
+-- (GunEffects).
+local headRay = RaycastParams.new()
+headRay.FilterType = Enum.RaycastFilterType.Include
 
--- Whether a shot touching the hero `body` at `height` strikes his head (a Snipe's `Headshot`).
-function HeroKit.headshot(height: number, body: Body): boolean
-	return height >= body.top - HeroKit.HEAD
+function HeroKit.headshot(from: Vector3, to: Vector3, head: BasePart): boolean
+	headRay.FilterDescendantsInstances = { head }
+	return Workspace:Raycast(from, to - from, headRay) ~= nil
 end
 
 -- Whether `hit`, one of a hero's combo hits (Kit.M1.Hits), struck from a hero whose root part is at `root` towards

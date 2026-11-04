@@ -1466,14 +1466,11 @@ local function blastAt(character: Model, at: Vector3, radius: number)
 	end
 end
 
-local function onProjectileEnd(id: number, at: Vector3, hit: boolean, headshot: boolean?)
+local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
 	local f = flying[id]
 	if f then
 		retire(f.dagger)
 		flying[id] = nil
-		if headshot and f.character == player.Character then
-			Scope.headshot()
-		end
 		if f.blast then
 			blastAt(f.character, at, f.blast)
 		elseif hit and f.burst then
@@ -1638,6 +1635,16 @@ function HeroControls.start()
 	(net:WaitForChild("HeroRefused") :: RemoteEvent).OnClientEvent:Connect(undo);
 	(net:WaitForChild("HeroProjectile") :: RemoteEvent).OnClientEvent:Connect(onProjectile);
 	(net:WaitForChild("HeroProjectileEnd") :: RemoteEvent).OnClientEvent:Connect(onProjectileEnd)
+	-- His sniper bullet struck `target`: whether its line, from `from` to `to`, went through the head as this screen
+	-- draws him, which only the clients know (CombatService's headChecks).
+	local headCheck = net:WaitForChild("HeroHeadCheck") :: RemoteEvent
+	headCheck.OnClientEvent:Connect(function(id: number, target: Instance, from: Vector3, to: Vector3)
+		local head = target and target:FindFirstChild("Head")
+		if head and head:IsA("BasePart") and HeroKit.headshot(from, to, head) then
+			headCheck:FireServer(id)
+		end
+	end);
+	(net:WaitForChild("HeroHeadshot") :: RemoteEvent).OnClientEvent:Connect(Scope.headshot)
 	Scope.start()
 
 	UserInputService.InputBegan:Connect(function(input, processed)

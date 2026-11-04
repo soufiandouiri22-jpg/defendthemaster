@@ -6,7 +6,8 @@
 -- other team's minions and Combatants (heroes, Masters). A refused attack is sent back to its client
 -- (Net.HeroRefused), which stops the motion it already began. Thrown daggers and shot arrows fly on the server
 -- (Net.HeroProjectile: id, origin, direction, speed, range, its size and blast; Net.HeroProjectileEnd: id, where it
--- stopped, hit or not, on the head or not); one stops at the first enemy in its way, a piercing one strikes everyone it passes once, and
+-- stopped, hit or not); a Snipe's bullet on a hero asks its shooter's client about the head first (Net.HeroHeadCheck,
+-- Net.HeroHeadshot); one stops at the first enemy in its way, a piercing one strikes everyone it passes once, and
 -- every one at the first wall or floor; one with a blast then bursts there over everyone round it. Every swing, shot and throw of every hero goes where the crosshair points, upwards and
 -- downwards as well, to the point under it (HeroKit.aimDirection, owner 2026-10-29), and strikes an enemy only at the heights his body
 -- reaches; a leap lands on the spot aimed at and a dash keeps to the ground.
@@ -30,6 +31,7 @@ local EmoteService = require(script.Parent.EmoteService)
 local MatchService = require(script.Parent.MatchService)
 local MinionService = require(script.Parent.MinionService)
 local ProgressService = require(script.Parent.ProgressService)
+local TraceService = require(script.Parent.TraceService)
 
 local CombatService = {}
 
@@ -87,10 +89,32 @@ type Projectile = {
 	blast: number?,
 	-- How many times as hard it strikes a hero's head (a Snipe's bullet).
 	headshot: number?,
+	-- Where it was let go.
+	origin: Vector3,
 }
+
+-- A Snipe's bullet that struck a hero, held till its shooter's client says whether it went through the head as that
+-- client draws him (Net.HeroHeadCheck), or as long as HEAD_WAIT_MIN to HEAD_WAIT_MAX: the server never sees the heroes' animations, which play on
+-- the clients only (Motion), so his head stands up to 1.5 studs higher and 2.6 aside of where it is seen (measured in a
+-- match, 2026-11-04). His client is believed only for a hit the server found too, within HEAD_SLACK studs of where the
+-- server has the head (the bullet's line, his whole way through the hero).
+type HeadCheck = {
+	player: Player,
+	character: Model,
+	enemy: Enemy,
+	damage: number,
+	magic: boolean,
+	headshot: number,
+	from: Vector3,
+	to: Vector3,
+}
+local HEAD_SLACK = 3
+-- How long it waits for his client, by his ping (there and back, and a frame to draw).
+local HEAD_WAIT_MIN, HEAD_WAIT_MAX = 0.3, 1
 
 local states: { [Instance]: State } = {}
 local projectiles: { Projectile } = {}
+local headChecks: { [number]: HeadCheck } = {}
 local nextProjectile = 0
 local net: Folder
 local motionEvent: RemoteEvent
@@ -98,6 +122,8 @@ local refusedEvent: RemoteEvent
 local projectileEvent: RemoteEvent
 local projectileEndEvent: RemoteEvent
 local hitEvent: RemoteEvent
+local headCheckEvent: RemoteEvent
+local headshotEvent: RemoteEvent
 
 local function alive(character: Model): boolean
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -329,6 +355,7 @@ local function launch(
 		basic = basic == true,
 		blast = shot.Blast,
 		headshot = shot.Headshot,
+		origin = origin,
 	}
 	table.insert(projectiles, projectile)
 	projectileEvent:FireAllClients(
@@ -355,6 +382,47 @@ local function burst(p: Projectile, at: Vector3)
 			damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
 		end
 	end
+end
+
+-- The Snipe's bullet `id` held in headChecks strikes, on the head when `head`; its shooter sees HEADSHOT.
+local function settleHead(id: number, head: boolean)
+	local check = headChecks[id]
+	if not check then
+		return
+	end
+	headChecks[id] = nil
+	local target = check.enemy.instance
+	TraceService.mark("snipe.hit", { hero = target:GetAttribute("Hero") or target.Name, head = head }, check.player)
+	if not alive(target :: Model) then
+		return
+	end
+	damage(
+		check.player,
+		check.character,
+		check.enemy,
+		if head then check.damage * check.headshot else check.damage,
+		check.magic
+	)
+	if head then
+		headshotEvent:FireClient(check.player)
+	end
+end
+
+-- His client's word that the bullet `id` went through the head as it draws him (Net.HeroHeadCheck), believed when
+-- the server's head is within HEAD_SLACK studs of the bullet's line.
+local function claimHead(player: Player, id: unknown)
+	local check = if type(id) == "number" then headChecks[id] else nil
+	if not check or check.player ~= player then
+		return
+	end
+	local head = check.enemy.instance:FindFirstChild("Head")
+	local near = false
+	if head and head:IsA("BasePart") then
+		local way = check.to - check.from
+		local along = math.clamp((head.Position - check.from):Dot(way) / way:Dot(way), 0, 1)
+		near = (check.from + way * along - head.Position).Magnitude <= HEAD_SLACK
+	end
+	settleHead(id :: number, near)
 end
 
 -- A projectile flies where it was aimed, up or down too, strikes an enemy whose height it passes at, and stops at the
@@ -390,20 +458,47 @@ local function stepProjectiles(dt: number)
 		if best then
 			local at = from:Lerp(to, bestAlong)
 			p.struck[best.instance] = true
-			local head = p.headshot ~= nil
+			local onHero = p.headshot ~= nil
 				and best.instance:IsA("Model")
 				and best.instance:GetAttribute("Hero") ~= nil
-				and HeroKit.headshot(at.Y, best)
-			damage(
-				p.player,
-				p.character,
-				best,
-				if head then p.damage * (p.headshot :: number) else p.damage,
-				p.magic,
-				p.basic
-			)
+			local shooter = p.player
+			if onHero and shooter:IsA("Player") then
+				headChecks[p.id] = {
+					player = shooter,
+					character = p.character,
+					enemy = best,
+					damage = p.damage,
+					magic = p.magic,
+					headshot = p.headshot :: number,
+					from = p.origin,
+					-- On beyond him, so the line goes through the whole of him.
+					to = at + p.direction * (best.radius + p.width) * 2,
+				}
+				local check = headChecks[p.id]
+				headCheckEvent:FireClient(shooter, p.id, best.instance, check.from, check.to)
+				local id = p.id
+				task.delay(math.clamp(shooter:GetNetworkPing() * 3 + 0.2, HEAD_WAIT_MIN, HEAD_WAIT_MAX), function()
+					settleHead(id, false)
+				end)
+			else
+				-- A bot's bullet goes by the head where the server has it: no client draws for him.
+				local head = best.instance:FindFirstChild("Head")
+				local through = (best.radius + p.width) * 2
+				local onHead = onHero
+					and head ~= nil
+					and head:IsA("BasePart")
+					and HeroKit.headshot(at - p.direction * through, at + p.direction * through, head :: BasePart)
+				damage(
+					p.player,
+					p.character,
+					best,
+					if onHead then p.damage * (p.headshot :: number) else p.damage,
+					p.magic,
+					p.basic
+				)
+			end
 			burst(p, at)
-			projectileEndEvent:FireAllClients(p.id, at, true, head)
+			projectileEndEvent:FireAllClients(p.id, at, true)
 			table.remove(projectiles, i)
 			continue
 		end
@@ -861,6 +956,9 @@ function CombatService.start()
 	projectileEvent = remote("HeroProjectile")
 	projectileEndEvent = remote("HeroProjectileEnd")
 	hitEvent = remote("HeroHit")
+	headCheckEvent = remote("HeroHeadCheck")
+	headshotEvent = remote("HeroHeadshot")
+	headCheckEvent.OnServerEvent:Connect(claimHead)
 
 	actionEvent.OnServerEvent:Connect(function(player, key, aim)
 		if typeof(aim) ~= "Vector3" or aim ~= aim then
