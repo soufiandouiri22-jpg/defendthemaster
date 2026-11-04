@@ -29,6 +29,8 @@ return {
 		["SnipeRaise"] = { 36.4872, 1.0 },
 		["SnipeClick"] = { 37.7872, 0.4 },
 		["SnipeShot"] = { 38.4872, 4.2567 },
+		["LaserHum"] = { 7.774, 0.755 },
+		["LaserBlast"] = { 8.529, 1.0468 },
 	},
 	["Cues"] = {
 		["RA-GSL-087"] = {
@@ -43,9 +45,14 @@ return {
 				["Sounds"] = { "Ab5c6cdc947da" },
 			},
 			{
-				["Time"] = 0.28,
+				["Time"] = 0.0667,
 				["Volume"] = 0.57,
-				["Sounds"] = { "Ab1f5b2934b4f" },
+				["Sounds"] = { "LaserHum" },
+			},
+			{
+				["Time"] = 0.38,
+				["Volume"] = 0.57,
+				["Sounds"] = { "LaserBlast" },
 			},
 		},
 		["RA-GSL-086"] = {
@@ -60,9 +67,14 @@ return {
 				["Sounds"] = { "Ab5c6cdc947da" },
 			},
 			{
-				["Time"] = 0.28,
+				["Time"] = 0.0667,
 				["Volume"] = 0.57,
-				["Sounds"] = { "Ab1f5b2934b4f" },
+				["Sounds"] = { "LaserHum" },
+			},
+			{
+				["Time"] = 0.38,
+				["Volume"] = 0.57,
+				["Sounds"] = { "LaserBlast" },
 			},
 		},
 		["RA-GSL-033"] = {

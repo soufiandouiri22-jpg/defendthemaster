@@ -97,7 +97,10 @@ end
 local function colourOf(hero: string): Color3
 	local settings = Config.Heroes[hero]
 	local showcase = settings and settings.Showcase
-	return if showcase and showcase.Aura then showcase.Aura else DEFAULT_AURA
+	return if showcase and showcase.Aura
+		then showcase.Aura
+		elseif showcase and showcase.Colour then showcase.Colour
+		else DEFAULT_AURA
 end
 
 -- Whether `hero` stands in an aura on the podium: not with `Aura = false` (the Gunslinger, owner 2026-11-04).

@@ -262,11 +262,13 @@ PACKS = {
         # in the uploaded file where 087's cue had it (`keep_in`), unplayed. Both shots sound as the first (owner,
         # 2026-11-04): 086 plays the same recordings, its main one 0.4 s later, and its revolver kicks when 087's does.
         # Their first two recordings are the revolver drawn, at the clip's start: a shot held on starts after them
-        # (Config's `Follow`, 0.27 s), so only the first sounds them (owner, 2026-11-04). Their laser (Sound 02) sounds
-        # with every shot, just before the bullet leaves (Hit 0.38) instead of at its cue's 0.0667. Pixabay's pistol
-        # shot (Docs/Third_Party.md), from just before its crack (0.15 s in the download) to where it has died away,
-        # was tried in its place the same day; it stays in the uploaded file where 087's added cue had it
-        # (`keep_in`), unplayed.
+        # (Config's `Follow`, 0.27 s), so only the first sounds them (owner, 2026-11-04). Their laser (Sound 02) has
+        # two parts, a soft one from its start and its loud blast from 0.77 s: played whole with every shot, the
+        # blast came as the next shot left and once more after the last. Its parts play from the uploaded file
+        # (`parts`, from and to seconds in its recording, cut where it is quietest): the soft one with the draw, the
+        # blast with every shot as the bullet leaves (Hit 0.38). Pixabay's pistol shot (Docs/Third_Party.md), from
+        # just before its crack (0.15 s in the download) to where it has died away, was tried in its place the same
+        # day; it stays in the uploaded file where 087's added cue had it (`keep_in`), unplayed.
         "same_cues": {"RA-GSL-086": "RA-GSL-087"},
         "files": {"PistolShot": (ROOT / "Vendor/Pixabay/universfield-pistol-shot-278821.mp3", 0.14, 1.0)},
         "mute": ["RA-GSL-065", "RA-GSL-087"],
@@ -278,12 +280,14 @@ PACKS = {
         },
         "highpass": {"RevolverShot": 180},
         "keep_in": {"RA-GSL-087": ["PistolShot", "RevolverShot"]},
+        "parts": {"LaserHum": ("Ab1f5b2934b4f", 0.0, 0.755), "LaserBlast": ("Ab1f5b2934b4f", 0.755, 1.8018)},
         "extra": {
             "RA-GSL-065": [(0.167, ["SnipeRaise"], 0.8), (0.5, ["SnipeClick"], 0.76), (1.4, ["SnipeShot"], 0.8)],
             "RA-GSL-087": [
                 (0.0, ["A795daf539aa1"], 0.855),
                 (0.0, ["Ab5c6cdc947da"], 0.2),
-                (0.28, ["Ab1f5b2934b4f"], 0.57),
+                (0.0667, ["LaserHum"], 0.57),
+                (0.38, ["LaserBlast"], 0.57),
             ],
         },
         # Every other shot already sounds in its clip's own recording.
@@ -327,7 +331,9 @@ def select(pack, sound_map):
     needed = []
 
     def need(sound_id):
-        if sound_id not in needed:
+        if sound_id in pack.get("parts", {}):
+            need(pack["parts"][sound_id][0])
+        elif sound_id not in needed:
             needed.append(sound_id)
         return sound_id
 
@@ -466,6 +472,8 @@ def build(name):
         start = len(data) / 2 / RATE
         regions[sound_id] = [round(start, 4), round(len(samples) / 2 / RATE, 4)]
         data += samples + silence
+    for part, (sound_id, start, end) in pack.get("parts", {}).items():
+        regions[part] = [round(regions[sound_id][0] + start, 4), round(end - start, 4)]
     with wave.open(str(out / f"{name}_Sounds.wav"), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -540,10 +548,15 @@ def write(name):
     asset = next(line.split('"')[3] for line in module.read_text().splitlines() if '["Asset"]' in line)
     if not asset.startswith("rbxassetid://"):
         sys.exit(f"No uploaded asset in {module.relative_to(ROOT)}: upload the file instead.")
-    uploaded = {k: float(v) for k, v in re.findall(r'\["(\w+)"\] = \{ ([\d.]+), [\d.]+ \}', module.read_text())}
+    parts = PACKS[name].get("parts", {})
+    uploaded = {
+        k: float(v)
+        for k, v in re.findall(r'\["(\w+)"\] = \{ ([\d.]+), [\d.]+ \}', module.read_text())
+        if k not in parts
+    }
     build(name)
     layout = json.loads((ROOT / f"Vendor/Build/{name}_Sounds.json").read_text())
-    if {k: v[0] for k, v in layout["regions"].items()} != uploaded:
+    if {k: v[0] for k, v in layout["regions"].items() if k not in parts} != uploaded:
         sys.exit("The recordings changed: upload the file again instead.")
     write_module(name, asset, layout)
 

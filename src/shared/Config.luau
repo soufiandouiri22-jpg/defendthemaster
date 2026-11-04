@@ -962,7 +962,7 @@ Config.Minions = {
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
 -- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
 -- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke (none with
--- `Aura = false`).
+-- `Aura = false`, when `Colour` is his transformation's).
 -- Every hero gets one, a pose from his own pack as Shadowren's weapon pose. `Enter` is the move he makes when he lands
 -- on the podium after the transformation (owner, 2026-10-31, each chosen on the podium), facing the camera: its clip
 -- played at `Speed` `From` that many seconds in (its start without) `Until` that many (its end without), short so it
@@ -2222,7 +2222,10 @@ Config.Heroes = {
 		Showcase = {
 			Motion = "RA-GSL-069",
 			Enter = { Motion = "RA-GSL-068", Then = "Breathe" },
+			-- No aura round him on the podium (owner, 2026-11-04); his transformation flashes in his ghillie's moss green,
+			-- yellower than Rowan's.
 			Aura = false,
+			Colour = Color3.fromRGB(150, 190, 60),
 		},
 		Health = 740,
 		Scales = "Attack",
@@ -2235,6 +2238,23 @@ Config.Heroes = {
 			FaceAccessory = "18150519164",
 			HideHead = true,
 			Skin = Color3.fromRGB(204, 142, 105),
+		},
+		-- Painted from a sheet of Play views of him and his weapons (Art/Portraits/concepts/corvin_sheet.png) with
+		-- his face from a still doll in Edit, where no idle sinks it into his collar (owner, 2026-11-04: the first
+		-- portraits' faces, corvin_v1 and v2, were wrong): his rifle on his shoulder, a glint on its scope
+		-- (Art/Portraits/corvin.png = concepts/corvin_v3.png).
+		Portrait = { Image = "rbxassetid://137323534490492", Face = { 185, 25, 700 } },
+		-- The ability bar's icons per key (Art/Icons/Corvin, each a GenerateImage drawing on magenta in
+		-- Art/Icons/keyed/Corvin from his weapons in Play, Art/Icons/concepts/Corvin, keyed by Tools/key_icons.py with
+		-- --glow): his shots in gold as in a match, his bomb in fire; his dash shows him kicking. M1 is the pack's gun
+		-- itself, drawn from its side in Edit (concepts/Corvin/gun_side_gold.png) and keyed without --glow, which ate
+		-- its pinkish brass (owner, 2026-11-04: the first, keyed/Corvin/M1_revolver_old.jpg, was a revolver).
+		Icons = {
+			M1 = "rbxassetid://99910037025819",
+			M2 = "rbxassetid://86034349121807",
+			E = "rbxassetid://120191399955023",
+			R = "rbxassetid://106343107467501",
+			Dash = "rbxassetid://119322775683805",
 		},
 		Pack = "Gunslinger",
 		-- His heavy rounds and bomb burst in fire (FireEffects.blast).
@@ -2555,7 +2575,7 @@ Config.Bots = {
 	Hero = "Shadowren",
 	-- Every hero at most once a team, the bots' at random (owner, 2026-11-01): each bot takes the first of these, shuffled
 	-- per match and team (Shared.Lineup.botOrder), that its team does not play yet.
-	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel", "Korrund", "Kaeda" },
+	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel", "Korrund", "Kaeda", "Corvin" },
 	Sight = 25,
 	Taken = 20,
 	Reaction = { Min = 1.3, Max = 2.6 },

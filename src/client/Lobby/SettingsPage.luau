@@ -41,6 +41,15 @@ local KEYS = {
 -- where the item's description gives one; keep it in step with the looks.
 local OUTFITS = {
 	{
+		"CORVIN",
+		{
+			"1.0 Ghillie Suit - Green Jungle: Cosplay Box Store",
+			"Intimidating Face - Nougat: Evaeko",
+			"Suspenders grey: ff0066spooky",
+			"Black cargo pants w/ boots: Naizulo's Uploads",
+		},
+	},
+	{
 		"KORRUND",
 		{ "Iron Eradicator set and Handheld Iron Chainsaw Axe: RosariaDev and Scylen, Nexus Exchange" },
 	},
