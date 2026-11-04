@@ -1,5 +1,6 @@
 -- The game's log, to see from outside how a published game goes (owner, 2026-11-01): this server's marks
--- (TraceService.mark: who joins and leaves, phases, teleports, heroes), its errors and warnings, and what every
+-- (TraceService.mark: who joins and leaves, phases, teleports, heroes), its errors and warnings, every STATS seconds
+-- what its memory is spent on and every other time what its world holds (Memory), and what every
 -- player's client marks (ReplicatedFirst.Trace, over Net.Trace), each with the server's clock. Every FLUSH seconds,
 -- and as the server closes, what came in since goes as one entry into the DataStore STORE, keyed by the time, the
 -- server and a count ("20261101-012345_1a2b3c4d_007"), which Tools/trace.py reads through Open Cloud and lays out
@@ -9,12 +10,14 @@ local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
 local LogService = game:GetService("LogService")
 local Players = game:GetService("Players")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ScriptContext = game:GetService("ScriptContext")
 local TeleportService = game:GetService("TeleportService")
 local Workspace = game:GetService("Workspace")
 
+local Memory = require(ReplicatedFirst:WaitForChild("Memory"))
 local Places = require(ReplicatedStorage.Shared.Places)
 local Remote = require(script.Parent.Remote)
 
@@ -22,6 +25,8 @@ local TraceService = {}
 
 local STORE = "Trace_v1"
 local FLUSH = 60
+-- How often the server's memory is marked.
+local STATS = 30
 -- How many entries wait at most (the oldest go first), how many one player may send in all, and how many warnings
 -- this server marks.
 local MOST, PER_PLAYER, WARNINGS = 6000, 3000, 300
@@ -182,6 +187,19 @@ function TraceService.start()
 		while true do
 			task.wait(FLUSH)
 			flush()
+		end
+	end)
+	task.spawn(function()
+		local round = 0
+		while true do
+			task.wait(STATS)
+			local sample = Memory.sample()
+			sample.players = #Players:GetPlayers()
+			TraceService.mark("server.memory", sample)
+			round += 1
+			if round % 2 == 0 then
+				TraceService.mark("server.objects", Memory.objects(Workspace))
+			end
 		end
 	end)
 	game:BindToClose(function()

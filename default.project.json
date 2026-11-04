@@ -170,6 +170,9 @@
 			},
 			"Trace": {
 				"$path": "src/first/Trace.luau"
+			},
+			"Memory": {
+				"$path": "src/first/Memory.luau"
 			}
 		},
 		"StarterPlayer": {

@@ -2,7 +2,8 @@
 -- frame on. It lives in ReplicatedFirst so the loading screen can log too; what it marks waits here until the server's
 -- Net.Trace is there and then goes over every SEND seconds, stamped with the server's clock. On its own it marks the
 -- client's errors and warnings, the screen and device, every click on a free mouse (where it went), the mouse's
--- behaviour as it changes, and every STATS seconds the frame rate, ping and memory.
+-- behaviour as it changes, every STATS seconds the frame rate, ping and memory and what the memory is spent on (Memory),
+-- and every other time what the world and this player's screens hold.
 
 local GuiService = game:GetService("GuiService")
 local LogService = game:GetService("LogService")
@@ -14,6 +15,8 @@ local Stats = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+
+local Memory = require(script.Parent:WaitForChild("Memory"))
 
 local Trace = {}
 
@@ -126,6 +129,7 @@ function Trace.start()
 		RunService.RenderStepped:Connect(function()
 			frames += 1
 		end)
+		local round = 0
 		while true do
 			task.wait(STATS)
 			local fps = frames / (os.clock() - since)
@@ -135,6 +139,14 @@ function Trace.start()
 				ping = math.floor(Players.LocalPlayer:GetNetworkPing() * 1000),
 				memory = math.floor(Stats:GetTotalMemoryUsageMb()),
 			})
+			Trace.mark("client.memory", Memory.sample())
+			round += 1
+			if round % 2 == 0 then
+				local objects = Memory.objects(Workspace)
+				local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+				objects.screens = if playerGui then #playerGui:GetDescendants() else 0
+				Trace.mark("client.objects", objects)
+			end
 		end
 	end)
 

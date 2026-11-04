@@ -1,9 +1,7 @@
 -- The buy phase at the start of a match (Config.Match, the server's "FightAt" on Workspace): "PURCHASE YOUR ITEMS!"
 -- slams onto the screen in gold with an orchestral sting and a burst of coins, then sits small under the score board
 -- counting down while the heroes walk to their armory stalls; with the armory open (Shop) its own countdown shows
--- instead. The last three seconds count big in the middle, and "FIGHT!" opens the match with a deep boom. The entrance
--- waits until the match's cards have gone (VersusView) and SETTLE seconds more, so not everything comes at once: the
--- arena and the music fading in first, then the title with its sting (owner, 2026-11-03).
+-- instead. The last three seconds count big in the middle, and "FIGHT!" opens the match with a deep boom.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -16,8 +14,6 @@ local Assets = require(ReplicatedStorage.Shared.Assets)
 local Preferences = require(script.Parent.Preferences)
 local Shop = require(script.Parent.Shop)
 local UiStyle = require(script.Parent.UiStyle)
-local VersusView = require(script.Parent.VersusView)
-
 local BuyPhase = {}
 
 local C = UiStyle.Colors
@@ -25,8 +21,6 @@ local C = UiStyle.Colors
 local INTRO = 4
 -- How long the big banner stands before it moves up under the score board.
 local HOLD = 2.6
--- The longest the entrance waits for the match's cards to go, and how long after they went it comes.
-local CARDS, SETTLE = 15, 1.2
 -- Where the banner stands, as a share of the screen's height, and where it shrinks to (pixels from the top).
 local MIDDLE = 0.36
 local TOP = 205
@@ -289,10 +283,6 @@ function BuyPhase.start()
 			return
 		end
 		running = true
-		VersusView.waitGone(CARDS)
-		if left() > INTRO + SETTLE then
-			task.wait(SETTLE)
-		end
 		gui.Enabled = true
 		setAlpha(big, 1)
 		setAlpha(fight, 1)

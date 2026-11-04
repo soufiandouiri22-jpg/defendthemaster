@@ -673,17 +673,6 @@ local function hideChat(): () -> ()
 	end
 end
 
--- Whether the screen is up or on its way, for what may only show once the arena is in sight (BuyPhase).
-local covering = false
-
--- Waits until the screen has gone, at most `limit` seconds; at once when it never came.
-function VersusView.waitGone(limit: number)
-	local since = os.clock()
-	while covering and os.clock() - since < limit do
-		task.wait(0.05)
-	end
-end
-
 -- The heroes standing in the arena.
 local function heroesIn(): { Instance }
 	local heroes: { Instance } = {}
@@ -724,7 +713,6 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		release()
 		return
 	end
-	covering = true
 	task.spawn(loadHeroes)
 	-- The match's music starts once the cards have faded out, not as the loading screen under them goes.
 	local quiet = Music.hold()
@@ -755,7 +743,6 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		if arrived then
 			arrived:Destroy()
 		end
-		covering = false
 		release()
 		quiet()
 		return
@@ -789,7 +776,6 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 			if arrived then
 				arrived:Destroy()
 			end
-			covering = false
 			release()
 			quiet()
 			HeroCamera.setEnabled(true)
@@ -861,10 +847,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	if group then
 		Widgets.tween(group, 0.5, { GroupTransparency = 1 })
 	end
-	task.delay(0.5, function()
-		covering = false
-		quiet()
-	end)
+	task.delay(0.5, quiet)
 	task.delay(0.6, function()
 		frame:Disconnect()
 		gui:Destroy()
