@@ -567,6 +567,12 @@ function QueueService.start(given: Parties)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		prepared[player.UserId] = nil
+		-- A party sent to its match is done here; its leader coming back into this lobby searches anew instead of
+		-- finding his old match "Found" for good (2026-11-04).
+		local s = searching[player.UserId]
+		if s and s.found then
+			searching[player.UserId] = nil
+		end
 		QueueService.cancel(player.UserId)
 	end)
 	TeleportService.TeleportInitFailed:Connect(function(player)
