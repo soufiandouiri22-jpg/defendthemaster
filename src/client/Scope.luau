@@ -56,6 +56,8 @@ local zoom: TextLabel? = nil
 local fill: Frame? = nil
 local prompt: TextLabel? = nil
 local banner: TextLabel? = nil
+local bannerEdge: UIStroke? = nil
+local bannerShown = 0
 local readyAt, endsAt = 0, 0
 local open = false
 
@@ -234,7 +236,7 @@ local function build()
 
 	gui, lens, scale, shade = screen, holder, grow, dim
 	fade = { housing, reticle }
-	distance, zoom, fill, prompt, banner = reading, power, bar, hint, headshot
+	distance, zoom, fill, prompt, banner, bannerEdge = reading, power, bar, hint, headshot, edge
 end
 
 -- Looks through the scope of `kit` (a Snipe): it comes to his eye as the camera zooms in, ready to fire `kit.Ready`
@@ -289,15 +291,19 @@ function Scope.headshot()
 	if not gui then
 		build()
 	end
-	local text = banner :: TextLabel
+	local text, edge = banner :: TextLabel, bannerEdge :: UIStroke
 	text.Visible = true
 	text.TextTransparency = 0
+	edge.Transparency = 0.2
 	UiSound.play("Headshot")
-	TweenService:Create(text, TweenInfo.new(HEADSHOT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		TextTransparency = 1,
-	}):Play()
-	task.delay(HEADSHOT_TIME, function()
-		if text.TextTransparency >= 1 then
+	local info = TweenInfo.new(HEADSHOT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	TweenService:Create(text, info, { TextTransparency = 1 }):Play()
+	TweenService:Create(edge, info, { Transparency = 1 }):Play()
+	-- A later headshot shows it afresh; only the last one hides it.
+	bannerShown += 1
+	local shown = bannerShown
+	task.delay(HEADSHOT_TIME + 0.1, function()
+		if shown == bannerShown then
 			text.Visible = false
 		end
 	end)
