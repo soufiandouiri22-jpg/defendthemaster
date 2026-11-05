@@ -7,6 +7,7 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local PhysicsService = game:GetService("PhysicsService")
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -38,6 +39,16 @@ local STATUE_HEIGHT = 21 * THRONE_ROOM
 local SEATED_ROOT = 1.1
 -- The pad model's height, and its top as a fraction of that.
 local PAD_HEIGHT, PAD_TOP = 2.2, 0.915
+-- The Masters' collision group (MasterService puts them in it), and the group, also a pathfinding label, of the walls
+-- only they meet: everything else, heroes and minions, their rays and their paths, goes through.
+local MASTER, MASTER_BLOCK = "Master", "MasterBlock"
+if not PhysicsService:IsCollisionGroupRegistered(MASTER) then
+	PhysicsService:RegisterCollisionGroup(MASTER)
+end
+if not PhysicsService:IsCollisionGroupRegistered(MASTER_BLOCK) then
+	PhysicsService:RegisterCollisionGroup(MASTER_BLOCK)
+end
+PhysicsService:CollisionGroupSetCollidable(MASTER_BLOCK, "Default", false)
 
 local LIGHT = Config.Lighting.Presets[Config.Lighting.Preset]
 
@@ -617,6 +628,42 @@ local function buildBase(map: Folder, team: string): Base
 		kit(area, "shrub", at(side * 19 * s, 0, 16 * s), byHeight("shrub", 3.5 * s))
 		kit(area, "shrub", at(side * 30 * s, 0, 4 * s), byHeight("shrub", 3 * s))
 	end
+
+	-- The gap between the dais and each statue and the room behind the statue, up to the backwall: a hero fits
+	-- through, the Master would wedge himself in, so walls only he meets close it.
+	local daisHalf = kitSize("dais" .. suffix).X * daisScale / 2
+	local statueSize = kitSize("statue") * byHeight("statue", STATUE_HEIGHT)
+	local turn = math.rad(8)
+	local statueHalfX = statueSize.X / 2 * math.cos(turn) + statueSize.Z / 2 * math.sin(turn)
+	local statueHalfZ = statueSize.X / 2 * math.sin(turn) + statueSize.Z / 2 * math.cos(turn)
+	local blockFront = 9 * s - statueHalfZ - 1
+	local blockInner, blockOuter = daisHalf - 0.5, 14.5 * s + statueHalfX + 1
+	local function masterBlock(fromX: number, toX: number, fromBack: number)
+		local block = Instance.new("Part")
+		block.Name = "MasterBlock"
+		block.Anchored = true
+		block.Transparency = 1
+		block.CastShadow = false
+		block.CanTouch = false
+		block.CollisionGroup = MASTER_BLOCK
+		block.Size = Vector3.new(toX - fromX, 40, backFront - fromBack)
+		block.CFrame = at((fromX + toX) / 2, 20, (fromBack + backFront) / 2)
+		local modifier = Instance.new("PathfindingModifier")
+		modifier.Label = MASTER_BLOCK
+		modifier.PassThrough = true
+		modifier.Parent = block
+		block.Parent = area
+	end
+	for _, side in { -1, 1 } do
+		masterBlock(
+			math.min(side * blockInner, side * blockOuter),
+			math.max(side * blockInner, side * blockOuter),
+			blockFront
+		)
+	end
+	-- And the dais beside and behind the throne, from its front back: he would wedge himself in there too. He
+	-- stands up in front of it and sits down on it without walking (MasterService).
+	masterBlock(-blockInner, blockInner, throneBack - throneDepth / 2)
 
 	-- The four spawn pads, two either side of the throne room along the arena's curve.
 	local pads = {}

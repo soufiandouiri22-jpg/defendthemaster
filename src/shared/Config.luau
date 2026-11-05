@@ -1128,7 +1128,10 @@ Config.Heroes = {
 			Mood = 14618207727,
 			Skin = Color3.fromRGB(232, 196, 168),
 		},
-		Portrait = { Image = "rbxassetid://96167601016805", Face = { 200, 40, 620 } },
+		-- His bow drawn at the viewer in a sunset field, green wind round the arrow, his face from Play shots
+		-- (Art/Portraits/concepts/rowan_face_sheet.png; Art/Portraits/rowan.png = concepts/rowan_v8_green.png,
+		-- owner 2026-11-05).
+		Portrait = { Image = "rbxassetid://87114919963570", Face = { 180, 20, 620 } },
 		Icons = {
 			M1 = "rbxassetid://74397042098977",
 			M2 = "rbxassetid://94119815193611",
@@ -2498,27 +2501,22 @@ Config.Heroes = {
 				Range = 8,
 				Angle = 150,
 			},
-			-- A charge (073, owner 2026-11-05): he crouches (to 0.4 s), storms ahead to where he aims with his sword
-			-- swinging up (0.4 to 0.95 s) and comes up again. Everyone he runs into, heroes and minions, is held against
-			-- his front, `Ahead` studs past its own size before his middle, and goes along, till his sword strikes (Carry's Time, its fastest swing
-			-- in the clip, Tools/clip_hits.py): then all take the blow and are thrown away from him to clear the way
-			-- (owner 2026-11-05; Knockback: a little shorter than a jump pad's throw, 62 to 85 studs, but higher, 18
-			-- over the ground against its 13). He stands till he is up (Busy).
+			-- The blow of his charge (073) without the charge (owner, 2026-11-05): he stays where he stands, and his
+			-- sword swinging up strikes everyone before him (0.92 s, its fastest swing in the clip, Tools/clip_hits.py),
+			-- heroes and minions, and throws them away from him (Knockback: a little shorter than a jump pad's throw,
+			-- 62 to 85 studs, but higher, 18 over the ground against its 13). Only the blow sounds (PackSounds'
+			-- ChargeBlow).
 			E = {
-				Kind = "Dash",
+				Kind = "Flurry",
 				Motion = "RA-ARF-073",
-				Grounded = true,
-				Indicator = "Arrow",
+				InPlace = true,
+				Indicator = "Cone",
 				Cooldown = 10,
-				Range = 16,
-				Width = 6,
+				Hits = { 0.92 },
 				Damage = 70,
 				Ratio = 0.45,
-				Start = 0.4,
-				Move = 0.95,
-				Busy = 1.25,
-				Stop = 2.0,
-				Carry = { Time = 0.92, Ahead = 1.5 },
+				Range = 9,
+				Angle = 120,
 				Knockback = { Distance = 44, Height = 18, Time = 1.15 },
 			},
 			R = {

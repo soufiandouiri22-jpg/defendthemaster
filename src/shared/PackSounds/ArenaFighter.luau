@@ -4,7 +4,7 @@
 -- one), or a footstep on the arena's floor.
 -- Footsteps: the recordings per foot contact, alternating. Events: sounds the game plays on its own events.
 return {
-	["Asset"] = "rbxassetid://132886934125959",
+	["Asset"] = "rbxassetid://103711285030679",
 	["Regions"] = {
 		["A71849bc6957b"] = { 0.0, 0.4294 },
 		["A52c8b099fb37"] = { 0.7294, 0.4692 },
@@ -23,8 +23,9 @@ return {
 		["A1fe7fbf5cd09"] = { 17.7324, 0.7098 },
 		["Af3065edadcc9"] = { 18.7423, 0.6984 },
 		["Af2d53416ac23"] = { 19.7407, 0.5849 },
-		["A4177c480f3bc"] = { 20.6255, 4.4302 },
-		["Aa8921b2db493"] = { 25.3558, 3.4368 },
+		["ChargeBlow"] = { 20.6255, 1.2398 },
+		["A4177c480f3bc"] = { 22.1653, 4.4302 },
+		["Aa8921b2db493"] = { 26.8955, 3.4368 },
 	},
 	["Cues"] = {
 		["RA-ARF-027"] = {
@@ -150,53 +151,11 @@ return {
 				["Footstep"] = true,
 			},
 		},
-		["RA-ARF-073"] = {
-			{
-				["Time"] = 0.0,
-				["Volume"] = 0.2,
-				["Sounds"] = { "Ab5c6cdc947da" },
-			},
-			{
-				["Time"] = 0.4333,
-				["Volume"] = 0.76,
-				["Sounds"] = { "Aeadea363a141" },
-			},
-			{
-				["Time"] = 0.4667,
-				["Volume"] = 0.684,
-				["Sounds"] = { "A923567fe6b05" },
-			},
-			{
-				["Time"] = 0.6333,
-				["Volume"] = 0.35,
-				["Footstep"] = true,
-			},
-			{
-				["Time"] = 0.7333,
-				["Volume"] = 0.35,
-				["Footstep"] = true,
-			},
-			{
-				["Time"] = 0.9333,
-				["Volume"] = 0.35,
-				["Footstep"] = true,
-			},
-			{
-				["Time"] = 1.2333,
-				["Volume"] = 0.35,
-				["Footstep"] = true,
-			},
-			{
-				["Time"] = 1.9333,
-				["Volume"] = 0.35,
-				["Footstep"] = true,
-			},
-			{
-				["Time"] = 2.2,
-				["Volume"] = 0.35,
-				["Footstep"] = true,
-			},
-		},
+		["RA-ARF-073"] = { {
+			["Time"] = 0.4667,
+			["Volume"] = 0.684,
+			["Sounds"] = { "A923567fe6b05" },
+		} },
 		["RA-ARF-042"] = {
 			{
 				["Time"] = 0.0,

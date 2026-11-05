@@ -193,6 +193,7 @@ local function paletteOf(settings: any): ShadowEffects.Palette?
 		elseif kind == "Red" then ShadowEffects.Red
 		elseif kind == "Blue" then ShadowEffects.Blue
 		elseif kind == "Dust" then ShadowEffects.Dust
+		elseif kind == "Wind" then ShadowEffects.Wind
 		else nil
 end
 

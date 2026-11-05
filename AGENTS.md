@@ -43,6 +43,11 @@ shop (08), cursors (09). Talk to the owner in Dutch.
   warning). Before a new hero is done, check in Play that he dances the emotes on the lobby's podium and in a match
   (G), his weapon included, and fix what is off in `Motion` or `Emote` for all heroes at once, never with an exception
   for one.
+- A hero with an aura has one colour everywhere (owner, 2026-11-05): his aura (`Showcase.Aura`), his attacks'
+  effects, his icons and his portrait share it, as Rowan's green and Kaeda's blue. A hero without one (Haldrek,
+  Corvin; more to come) has `Aura = false`: on the podium he transforms in white over the runes' plain gold, his
+  icons and portrait stay neutral, and his effects take what his blows throw up (Haldrek's dust, `Effects = "Dust"`)
+  or plain white wind (`Effects = "Wind"`, `ShadowEffects.Wind`).
 - Abilities rank up with 1, 2 and 3. A shop at the own base (coins, 6 inventory slots). Own crosshair and cursor.
 - The scoreboard follows League of Legends, mixed with the game's own design (owner, 2026-10-27): held on Tab, both
   teams with every hero's portrait, level, items and kills / deaths / assists; the player's own KDA stays in his HUD.

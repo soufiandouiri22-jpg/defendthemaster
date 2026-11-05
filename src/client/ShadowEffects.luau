@@ -19,7 +19,8 @@ local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
 -- flash, and the `sparks` it throws up (their textures, taken in turn). Shadow by default; Light is Jestrel's white
 -- magic (Config's Effects "Light"), throwing up the twinkles and card suits his beams shed (owner, 2026-11-01); Red is
 -- Korrund's (Effects "Red", owner 2026-11-03: no violet on him); Blue is the samurai's, her blue aura (Effects "Blue");
--- Dust is Haldrek's, who has no aura (Effects "Dust", owner 2026-11-05): sand and dust thrown up, nothing violet.
+-- Dust is Haldrek's, who has no aura (Effects "Dust", owner 2026-11-05): sand and dust thrown up, nothing violet;
+-- Wind is plain white wind, for a hero without an aura (Effects "Wind", owner 2026-11-05).
 export type Palette = { main: Color3, deep: Color3, bright: Color3, sparks: { string }? }
 local SHADOWS: Palette = { main = SHADOW, deep = DEEP, bright = BRIGHT }
 local SPARK = "rbxasset://textures/particles/sparkles_main.dds"
@@ -43,6 +44,12 @@ ShadowEffects.Dust = {
 	main = Color3.fromRGB(190, 158, 112),
 	deep = Color3.fromRGB(96, 74, 48),
 	bright = Color3.fromRGB(238, 222, 186),
+} :: Palette
+-- Its shade a cool grey, so the white rings still show on the pale sand.
+ShadowEffects.Wind = {
+	main = Color3.fromRGB(228, 232, 238),
+	deep = Color3.fromRGB(118, 126, 140),
+	bright = Color3.fromRGB(255, 255, 255),
 } :: Palette
 
 local function effects(): Folder

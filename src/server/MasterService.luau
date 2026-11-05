@@ -43,12 +43,17 @@ local WEAPON = "Greataxe"
 -- once his goal moved `MOVED` studs; he has passed a waypoint `WAYPOINT` studs from it.
 local KNEE, BODY = 3.5, 3
 local REPATH, MOVED, WAYPOINT = 0.6, 4, 3
+-- The paths do not climb his dais's steps: when the map stands between him and his throne he first walks round it to
+-- the sand `FOOT` studs before the middle of his dais's front.
+local FOOT = 6
 local AGENT = {
 	AgentRadius = 3.5,
 	AgentHeight = 16,
 	AgentCanJump = false,
 	AgentCanClimb = false,
 	WaypointSpacing = 6,
+	-- The walls only Masters meet (ColosseumBuilder's MasterBlock): heroes' paths go through, his never.
+	Costs = { MasterBlock = math.huge },
 }
 
 type Foe = {
@@ -83,6 +88,7 @@ type Master = {
 local masters: { Master } = {}
 local mapRay = RaycastParams.new()
 mapRay.FilterType = Enum.RaycastFilterType.Include
+mapRay.CollisionGroup = "Master"
 local actionEvent: RemoteEvent
 local hitEvent: RemoteEvent
 
@@ -331,6 +337,18 @@ local function walk(m: Master, goal: Vector3, now: number)
 	m.humanoid:MoveTo(path[m.pathStep])
 end
 
+-- Where `m` walks to go home: the spot before his throne when nothing of the map stands between, at the height he
+-- walks on his dais so its steps do not count; else the sand before his dais.
+local function homeward(m: Master): Vector3
+	local home = m.stand.Position
+	local from = Vector3.new(m.root.Position.X, home.Y + KNEE, m.root.Position.Z)
+	local line = home + Vector3.new(0, KNEE, 0) - from
+	if line.Magnitude < 0.5 or not Workspace:Raycast(from, line, mapRay) then
+		return home
+	end
+	return m.front + HeroKit.flat(m.front - home).Unit * FOOT
+end
+
 local function update(m: Master, dt: number, now: number)
 	if
 		m.humanoid.Health <= 0
@@ -375,7 +393,7 @@ local function update(m: Master, dt: number, now: number)
 				end
 			end)
 		else
-			walk(m, home, now)
+			walk(m, homeward(m), now)
 		end
 		return
 	end
@@ -548,6 +566,16 @@ local function create(team: string, layout: Layout): Master
 	model:SetAttribute("Master", true)
 	model:SetAttribute("Team", team)
 	model:SetAttribute("Radius", 1.5 * SETTINGS.Scale)
+	-- In ColosseumBuilder's group of Masters, so the walls only they meet stop him.
+	local function group(d: Instance)
+		if d:IsA("BasePart") then
+			d.CollisionGroup = "Master"
+		end
+	end
+	for _, d in model:GetDescendants() do
+		group(d)
+	end
+	model.DescendantAdded:Connect(group)
 
 	local m: Master = {
 		team = team,

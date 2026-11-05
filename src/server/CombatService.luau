@@ -352,7 +352,8 @@ local function strikeCone(
 	angle: number,
 	amount: number,
 	magic: boolean,
-	basic: boolean?
+	basic: boolean?,
+	knockback: any?
 )
 	local root = rootOf(state.character)
 	if not root then
@@ -362,6 +363,9 @@ local function strikeCone(
 	for _, enemy in enemiesNear(team, origin, range) do
 		if HeroKit.swingStrikes(origin, direction, range, angle, enemy) then
 			damage(player, state.character, enemy, amount, magic, basic)
+			if knockback then
+				knock(state.character, enemy, knockback)
+			end
 		end
 	end
 end
@@ -948,7 +952,7 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				local reach, angle, slam = HeroKit.flurryStrike(kit, time)
 				local amount = if slam then strength(kit.SlamDamage, kit.SlamRatio) else strength(kit.Damage)
 				if not kit.Zap then
-					strikeCone(player, state, team, facing, reach, angle, amount, magic)
+					strikeCone(player, state, team, facing, reach, angle, amount, magic, nil, kit.Knockback)
 					return
 				end
 				-- A shock strikes one of those the sweep reaches (HeroKit.zapTarget), as his client draws it.

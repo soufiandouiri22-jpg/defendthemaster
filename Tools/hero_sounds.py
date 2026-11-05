@@ -309,9 +309,19 @@ PACKS = {
         # His flurry (042) has only footsteps in its clip: the pack plays its recordings as the move begins (its
         # additionalSounds, CustomEvent), the shared start as 073's and 074's do, and its two takes from there, whose
         # loudest blow (1.4 s) is the slam (Hit 1.38). His sprint (008) has only footsteps: the same start as a whoosh.
+        # His E strikes in place since 2026-11-05 (owner: only the blow and its sound, no charge): 073's own recordings
+        # are his cry and his run (Sound 02) and his spin into the blow (Sound 01: its whoosh, then the blow 0.48 s
+        # into it, 0.95 s into the clip, the sword's strike at 0.92). Only Sound 01 plays, whole at its own time (the
+        # owner: the spin is heard with it), without the clip's footsteps (`still`). ChargeBlow, the blow alone that
+        # played before, stays in the uploaded file (`keep_in`).
+        "mute": ["RA-ARF-073"],
+        "still": ["RA-ARF-073"],
+        "mixes": {"ChargeBlow": [("A923567fe6b05", 0.48)]},
+        "keep_in": {"RA-ARF-073": ["ChargeBlow"]},
         "extra": {
             "RA-ARF-042": [(0.0, ["Ab5c6cdc947da"], 0.2), (0.0, ["A4177c480f3bc"], 0.95), (0.0, ["Aa8921b2db493"], 0.76)],
             "RA-ARF-008": [(0.0, ["Ab5c6cdc947da"], 0.35)],
+            "RA-ARF-073": [(0.4667, ["A923567fe6b05"], 0.684)],
         },
         # Both slams (074 at 1.48 s, 042 at 1.38 s) already sound in their recordings, so they need no Slam.
         "events": {},
@@ -395,6 +405,9 @@ def select(pack, sound_map):
                     continue
                 # A muted clip's own recordings stay in the file, so the uploaded one still matches its regions.
                 if clip_id in pack.get("mute", []) and not entry.get("footstep"):
+                    continue
+                # A clip played in place (`still`) has no footsteps.
+                if clip_id in pack.get("still", []) and entry.get("footstep"):
                     continue
                 cues.append(entry)
         # An added cue may play another pack's recordings (its fourth value), from that pack's uploaded file.
