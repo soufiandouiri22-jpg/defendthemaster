@@ -15,6 +15,7 @@
 -- (Actors, BotService) attack through CombatService.act, with the same checks; they move through their leaps and
 -- dashes on the server (CombatService.act gives where they land), as a player's client moves him.
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -225,21 +226,17 @@ local function damage(player: Instance, character: Model, enemy: Enemy, amount: 
 	end
 end
 
--- A kit's `Knockback` throws the enemy hero or minion struck by `character` away from him: `Distance` studs over the
--- ground (less where a wall stops it), in an arc `Height` studs high, in `Time` seconds. A player's own client carries
--- him (Net.HeroKnock, HeroControls), BotService a bot, MinionService a minion; the Masters stand fast.
-local function knock(character: Model, enemy: Enemy, knockback: any)
-	local target = enemy.instance
-	local from = if target:IsA("BasePart") then target elseif target:IsA("Model") then rootOf(target) else nil
-	local by = rootOf(character)
-	if not from or not by then
-		return
-	end
-	local away = HeroKit.flat(from.Position - by.Position)
-	away = if away.Magnitude > 0.1 then away.Unit else HeroKit.flat(by.CFrame.LookVector).Unit
-	local to = HeroKit.dashEnd(from.Position, away, knockback.Distance, HeroKit.leapIgnore())
+-- The part an enemy hero or minion stands on the ground by (a minion is its root).
+local function partOf(target: Instance): BasePart?
+	return if target:IsA("BasePart") then target elseif target:IsA("Model") then rootOf(target) else nil
+end
+
+-- Carries the enemy hero or minion `target` from where it is to `to` (over the ground), in an arc `height` studs high,
+-- in `length` seconds. A player's own client carries him (Net.HeroKnock, HeroControls), BotService a bot,
+-- MinionService a minion; the Masters stand fast.
+local function carry(target: Instance, to: Vector3, height: number, length: number)
 	if target:IsA("BasePart") then
-		MinionService.knock(target, to, knockback.Height, knockback.Time)
+		MinionService.knock(target, to, height, length)
 		return
 	end
 	if not target:GetAttribute("Hero") or not alive(target :: Model) then
@@ -247,10 +244,28 @@ local function knock(character: Model, enemy: Enemy, knockback: any)
 	end
 	local owner = Actors.owner(target :: Model)
 	if owner and owner:IsA("Player") then
-		knockEvent:FireClient(owner, to, knockback.Height, knockback.Time)
+		knockEvent:FireClient(owner, to, height, length)
 	elseif owner and CombatService.carryBot then
-		CombatService.carryBot(owner, to, knockback.Height, knockback.Time)
+		CombatService.carryBot(owner, to, height, length)
 	end
+end
+
+-- A kit's `Knockback` throws the enemy hero or minion struck by `character` away from him: `Distance` studs over the
+-- ground (less where a wall stops it), in an arc `Height` studs high, in `Time` seconds.
+local function knock(character: Model, enemy: Enemy, knockback: any)
+	local from = partOf(enemy.instance)
+	local by = rootOf(character)
+	if not from or not by then
+		return
+	end
+	local away = HeroKit.flat(from.Position - by.Position)
+	away = if away.Magnitude > 0.1 then away.Unit else HeroKit.flat(by.CFrame.LookVector).Unit
+	carry(
+		enemy.instance,
+		HeroKit.dashEnd(from.Position, away, knockback.Distance, HeroKit.leapIgnore()),
+		knockback.Height,
+		knockback.Time
+	)
 end
 
 -- Runs `hit` `delay` seconds from now if the motion it belongs to is still the hero's and the hero still lives.
@@ -709,6 +724,38 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		local struck: { [Instance]: boolean } = {}
 		-- With a Slash those he passed take the blow only when his weapon strikes, at its time in the motion.
 		local slashed: { Enemy } = {}
+		-- With a Carry those he runs into are held against his front, `Ahead` studs past their own size before his
+		-- middle, till his weapon strikes (its Time in the motion): then all take the blow at once, and its
+		-- Knockback. A "Held" ObjectValue in each says by whom (HeroKit.heldAt): every client draws a minion there
+		-- (MinionView), a player's client holds his hero there (HeroControls), BotService a bot, MinionService the
+		-- minion itself; the Masters stand fast.
+		local hold = kit.Carry
+		local strikes = if hold then hold.Time / (kit.Speed or 1) else math.huge
+		local carried: { { enemy: Enemy, tag: ObjectValue } } = {}
+		local struckAll = false
+		local function strike(enemy: Enemy)
+			damage(player, character, enemy, strength(kit.Damage), magic)
+			if kit.Knockback then
+				knock(character, enemy, kit.Knockback)
+			end
+		end
+		local function grab(enemy: Enemy, at: Vector3)
+			local target = enemy.instance
+			if target:IsA("Model") and not target:GetAttribute("Hero") then
+				strike(enemy)
+				return
+			end
+			local side = HeroKit.flat(enemy.position - at):Dot(direction:Cross(Vector3.yAxis))
+			local tag = Instance.new("ObjectValue")
+			tag.Name = "Held"
+			tag.Value = character
+			tag:SetAttribute("Ahead", hold.Ahead + enemy.radius)
+			tag:SetAttribute("Side", math.clamp(side, -kit.Width / 2, kit.Width / 2))
+			tag.Parent = target
+			-- Let go of also when the charge is cut short.
+			Debris:AddItem(tag, strikes)
+			table.insert(carried, { enemy = enemy, tag = tag })
+		end
 		local covered = 0
 		local steps = math.ceil((kit.Move - kit.Start) / DASH_STEP)
 		for i = 1, steps do
@@ -721,19 +768,32 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 					return
 				end
 				for _, enemy in enemiesNear(team, a:Lerp(b, 0.5), HeroKit.flat(b - a).Magnitude / 2 + kit.Width) do
+					-- A charge that carries takes only those before him in his way, not who stands behind or beside him.
+					local before = not hold or HeroKit.flat(enemy.position - a):Dot(direction) >= 0
 					if
-						not struck[enemy.instance]
+						before
+						and not struck[enemy.instance]
 						and HeroKit.segmentDistance(a, b, enemy.position) <= enemy.radius + kit.Width / 2
 					then
 						struck[enemy.instance] = true
-						if kit.Slash then
+						if hold and not struckAll then
+							grab(enemy, b)
+						elseif kit.Slash then
 							table.insert(slashed, enemy)
 						else
-							damage(player, character, enemy, strength(kit.Damage), magic)
-							if kit.Knockback then
-								knock(character, enemy, kit.Knockback)
-							end
+							strike(enemy)
 						end
+					end
+				end
+			end)
+		end
+		if hold and kit.Damage then
+			later(state, strikes, function()
+				struckAll = true
+				for _, held in carried do
+					held.tag:Destroy()
+					if held.enemy.instance.Parent then
+						strike(held.enemy)
 					end
 				end
 			end)

@@ -57,6 +57,8 @@ local groundRay = RaycastParams.new()
 groundRay.FilterType = Enum.RaycastFilterType.Exclude
 -- How far down a hero in the air looks for the ground under him.
 local AIR_DEPTH = 200
+-- How far along the camera's look a charge's aim point lies (aimOf): past every charge's range.
+local CHARGE_AIM = 100
 
 type Leap = {
 	started: number,
@@ -814,6 +816,19 @@ local function stopAiming()
 	aiming = nil
 end
 
+-- Where `kit` aims from `root`: the point under the crosshair, but a charge aimed with an arrow goes straight along
+-- the camera's look, as the crosshair does: the camera over his right shoulder looks past him, so towards the point
+-- it would run off to the right, the more the nearer that point lies (owner, 2026-11-05).
+local function aimOf(kit: any, root: BasePart): Vector3
+	if kit.Kind == "Dash" and kit.Indicator == "Arrow" then
+		local look = HeroKit.flat(Workspace.CurrentCamera.CFrame.LookVector)
+		if look.Magnitude > 0.01 then
+			return root.Position + look.Unit * CHARGE_AIM
+		end
+	end
+	return HeroCamera.aim()
+end
+
 local function cast(key: string)
 	local character, root, humanoid, settings = hero()
 	if not character or not root or not humanoid then
@@ -824,7 +839,7 @@ local function cast(key: string)
 	if not kit or not canAct(key, now) then
 		return
 	end
-	local aim = HeroCamera.aim()
+	local aim = aimOf(kit, root)
 	local direction = HeroKit.direction(root.Position, aim, root.CFrame.LookVector)
 	root.CFrame = CFrame.lookAt(root.Position, root.Position + direction)
 	actionEvent:FireServer(key, aim)
@@ -1010,7 +1025,7 @@ local function updateIndicator()
 		return
 	end
 	local kit = settings.Kit[aiming]
-	local aim = HeroCamera.aim()
+	local aim = aimOf(kit, root)
 	local height = heightOf(root, humanoid)
 	groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
 	local below = Workspace:Raycast(root.Position, Vector3.new(0, -(height + 2), 0), groundRay)
@@ -1080,9 +1095,26 @@ local function updateFlight(root: BasePart)
 	end
 end
 
+-- Held against an enemy's charge (HeroKit.heldAt): he goes along at its front as this screen shows the enemy, his
+-- own leap or flight cut short, till it lets go and its blow throws him (Net.HeroKnock). Whether he is held.
+local function updateHeld(character: Model, root: BasePart): boolean
+	local at = HeroKit.heldAt(character, root.Position.Y)
+	if not at then
+		return false
+	end
+	leap = nil
+	endFlight()
+	root.CFrame = CFrame.new(at) * root.CFrame.Rotation
+	root.AssemblyLinearVelocity = Vector3.zero
+	return true
+end
+
 local function updateLeap()
 	local l = leap
 	local character, root, humanoid = hero()
+	if character and root and updateHeld(character, root) then
+		return
+	end
 	if not character or not root then
 		leap = nil
 		endFlight()
@@ -1592,7 +1624,7 @@ local function abilityStrikes(key: string): boolean
 	if not character or not root or not humanoid or not kit then
 		return false
 	end
-	local aim = HeroCamera.aim()
+	local aim = aimOf(kit, root)
 	local facing = root.CFrame.LookVector
 	local landing, shots =
 		HeroKit.aimed(kit, root.Position, aim, facing, heightOf(root, humanoid), HeroKit.leapIgnore())

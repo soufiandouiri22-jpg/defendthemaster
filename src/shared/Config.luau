@@ -2502,10 +2502,11 @@ Config.Heroes = {
 				Angle = 150,
 			},
 			-- A charge (073, owner 2026-11-05): he crouches (to 0.4 s), storms ahead to where he aims with his sword
-			-- swinging up (0.4 to 0.95 s) and comes up again. Everyone he runs into is struck the moment he reaches him
-			-- and thrown away from him, heroes and minions, to clear the way (Knockback, owner 2026-11-05: a little
-			-- shorter than a jump pad's throw, 62 to 85 studs, but higher, 18 over the ground against its 13). He stands
-			-- till he is up (Busy).
+			-- swinging up (0.4 to 0.95 s) and comes up again. Everyone he runs into, heroes and minions, is held against
+			-- his front, `Ahead` studs past its own size before his middle, and goes along, till his sword strikes (Carry's Time, its fastest swing
+			-- in the clip, Tools/clip_hits.py): then all take the blow and are thrown away from him to clear the way
+			-- (owner 2026-11-05; Knockback: a little shorter than a jump pad's throw, 62 to 85 studs, but higher, 18
+			-- over the ground against its 13). He stands till he is up (Busy).
 			E = {
 				Kind = "Dash",
 				Motion = "RA-ARF-073",
@@ -2520,6 +2521,7 @@ Config.Heroes = {
 				Move = 0.95,
 				Busy = 1.25,
 				Stop = 2.0,
+				Carry = { Time = 0.92, Ahead = 1.5 },
 				Knockback = { Distance = 44, Height = 18, Time = 1.15 },
 			},
 			R = {

@@ -293,6 +293,29 @@ PACKS = {
         # Every other shot already sounds in its clip's own recording.
         "events": {},
     },
+    "ArenaFighter": {
+        "folder": ROOT / "Vendor/ArenaFighter/Sounds",
+        "clips": [
+            # Haldrek's attacks (Config.Heroes.Haldrek.Kit) and the clips under them.
+            "RA-ARF-027", "RA-ARF-028", "RA-ARF-029", "RA-ARF-074", "RA-ARF-073", "RA-ARF-042", "RA-ARF-008",
+            "RA-ARF-005", "RA-ARF-006", "RA-ARF-007", "RA-ARF-002", "RA-ARF-011", "RA-ARF-013", "RA-ARF-038",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # His flurry (042) has only footsteps in its clip: the pack plays its recordings as the move begins (its
+        # additionalSounds, CustomEvent), the shared start as 073's and 074's do, and its two takes from there, whose
+        # loudest blow (1.4 s) is the slam (Hit 1.38). His sprint (008) has only footsteps: the same start as a whoosh.
+        "extra": {
+            "RA-ARF-042": [(0.0, ["Ab5c6cdc947da"], 0.2), (0.0, ["A4177c480f3bc"], 0.95), (0.0, ["Aa8921b2db493"], 0.76)],
+            "RA-ARF-008": [(0.0, ["Ab5c6cdc947da"], 0.35)],
+        },
+        # Both slams (074 at 1.48 s, 042 at 1.38 s) already sound in their recordings, so they need no Slam.
+        "events": {},
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no

@@ -13,6 +13,28 @@ function HeroKit.flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
 end
 
+-- Where an enemy hero or minion `target` held against a charging hero stands (a kit's Carry, CombatService): its
+-- "Held" ObjectValue names the hero, its Ahead attribute how far before his middle it is held and its Side how far
+-- to his right, short of any wall between (the arena's invisible bounds too). The point over the ground (at
+-- `height`) and the hero's facing, or nil when it is not held.
+function HeroKit.heldAt(target: Instance, height: number): (Vector3?, Vector3?)
+	local tag = target:FindFirstChild("Held")
+	local by = tag and tag:IsA("ObjectValue") and tag.Value
+	local root = by and by:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not tag or not root then
+		return nil, nil
+	end
+	local look = HeroKit.flat(root.CFrame.LookVector)
+	look = if look.Magnitude > 0.01 then look.Unit else Vector3.zAxis
+	local side = tag:GetAttribute("Side") or 0
+	local ignore = HeroKit.leapIgnore()
+	local at = HeroKit.dashEnd(root.Position, look, tag:GetAttribute("Ahead") or 3, ignore)
+	if math.abs(side) > 0.05 then
+		at = HeroKit.dashEnd(at, look:Cross(Vector3.yAxis) * math.sign(side), math.abs(side), ignore)
+	end
+	return Vector3.new(at.X, height, at.Z), look
+end
+
 -- The times a Throw lets go, in order: its `Releases`, or its one `Release`.
 function HeroKit.releases(kit: any): { number }
 	return kit.Releases or { kit.Release }

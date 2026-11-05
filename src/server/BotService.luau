@@ -828,6 +828,17 @@ end
 
 -- Carries a leaping or dashing bot along, or holds an ascending one up, as HeroControls does the player's hero.
 local function carry(b: Bot, now: number)
+	-- Held against an enemy's charge (HeroKit.heldAt) it goes along at his front, its own move cut short.
+	local body, character = b.root, b.character
+	local at = body and character and alive(b) and HeroKit.heldAt(character, body.Position.Y)
+	if body and at then
+		letGo(body)
+		b.move = { started = now, from = at, to = at, takeoff = 0, land = 0.05 }
+		b.path, b.aiming = {}, nil
+		body.CFrame = CFrame.new(at) * body.CFrame.Rotation
+		body.AssemblyLinearVelocity = Vector3.zero
+		return
+	end
 	local m = b.move
 	if not m then
 		return

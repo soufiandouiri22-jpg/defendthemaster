@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local HeroSounds = require(script.Parent.HeroSounds)
 local Side = require(script.Parent.Side)
 local UiSound = require(script.Parent.UiSound)
@@ -472,7 +473,10 @@ local function step(dt: number)
 		end
 		local goal = root.CFrame * CFrame.new(0, -HEIGHT / 2, 0)
 		local before = view.cframe.Position
-		view.cframe = view.cframe:Lerp(goal, smoothing)
+		-- Held against a charging hero it goes along at his front as this screen shows him, not after the server's
+		-- steps.
+		local held, look = HeroKit.heldAt(root, goal.Position.Y)
+		view.cframe = if held and look then CFrame.lookAt(held, held - look) else view.cframe:Lerp(goal, smoothing)
 		local speed = (view.cframe.Position - before).Magnitude / math.max(dt, 1e-3)
 		local hops = math.floor(view.phase / math.pi)
 		if speed > 1.5 then

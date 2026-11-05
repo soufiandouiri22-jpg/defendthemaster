@@ -20,6 +20,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local HeroKit = require(ReplicatedStorage.Shared.HeroKit)
 local Actors = require(script.Parent.Actors)
 local Damage = require(script.Parent.Damage)
 local Economy = require(script.Parent.Economy)
@@ -434,6 +435,17 @@ local function fly(m: Minion, now: number): boolean
 	return true
 end
 
+-- A minion held against a charging hero (HeroKit.heldAt) goes along before him, facing him. Whether it is held.
+local function held(m: Minion): boolean
+	local at, look = HeroKit.heldAt(m.root, m.position.Y)
+	if not at or not look then
+		return false
+	end
+	m.knock, m.lift = nil, 0
+	m.position, m.facing = at, -look
+	return true
+end
+
 local function tick(now: number)
 	local combatants = {}
 	for _, tagged in CollectionService:GetTagged("Combatant") do
@@ -442,7 +454,7 @@ local function tick(now: number)
 		end
 	end
 	for _, m in table.clone(minions) do
-		if not m.dead and not fly(m, now) then
+		if not m.dead and not held(m) and not fly(m, now) then
 			think(m, combatants, now)
 		end
 	end
