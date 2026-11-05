@@ -1,6 +1,6 @@
 -- The settings (design 17, Preferences) over the whole screen: the SETTINGS ribbon with a close button, the five
 -- sections on the left (Audio: the volumes and the menu's music; Controls: the mouse's speed and the keys; Graphics:
--- the shadows; Interface: the damage numbers; Credits: who made the heroes' outfits, their motions and the music) and
+-- the shadows; Interface: the damage numbers; Credits: who made the heroes' outfits and the music) and
 -- the chosen one on the right, with RESET TO DEFAULT and SAVE under it.
 -- Every change is heard and seen at once (Preferences.preview); SAVE keeps it in the profile (MenuService's Settings),
 -- closing without saving goes back to what was saved.
@@ -346,13 +346,8 @@ function SettingsPage.open(gui: Instance, api: any)
 			textLine(pages.Credits, text, nextOrder())
 		end
 	end
+	-- The animation and sound packs go unnamed (owner, 2026-11-05): their licence asks no credit.
 	rule(pages.Credits, nextOrder())
-	heading(pages.Credits, "MOTIONS AND SOUNDS", nextOrder(), 40)
-	textLine(
-		pages.Credits,
-		"The heroes' and Masters' animation and sound packs: RobloxAnimations, KitsBlox",
-		nextOrder()
-	)
 	heading(pages.Credits, "MUSIC", nextOrder(), 40)
 	textLine(pages.Credits, 'Menu music: "Ancient God" by Gary Boudreaux, licensed under CC BY 4.0.', nextOrder())
 

@@ -94,13 +94,12 @@ local function podium(): CFrame
 	return Workspace:GetAttribute("ShowcaseAt") :: CFrame
 end
 
+-- `hero`'s colour on the podium, in his aura, his transformation and the runes under him: his aura's, the plain gold
+-- without one (owner, 2026-11-05: one rule for every hero).
 local function colourOf(hero: string): Color3
 	local settings = Config.Heroes[hero]
 	local showcase = settings and settings.Showcase
-	return if showcase and showcase.Aura
-		then showcase.Aura
-		elseif showcase and showcase.Colour then showcase.Colour
-		else DEFAULT_AURA
+	return if showcase and typeof(showcase.Aura) == "Color3" then showcase.Aura else DEFAULT_AURA
 end
 
 -- Whether `hero` stands in an aura on the podium: not with `Aura = false` (the Gunslinger, owner 2026-11-04).

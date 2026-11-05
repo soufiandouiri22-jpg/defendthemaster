@@ -961,8 +961,8 @@ Config.Minions = {
 -- hero is every player's from the start; one with a `Price` is sold for coins in the heroes' shop (Shared.HeroShop),
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
 -- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
--- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke (none with
--- `Aura = false`, when `Colour` is his transformation's).
+-- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke; his transformation
+-- and the podium's runes take the same colour, or the podium's plain gold with `Aura = false` (owner, 2026-11-05).
 -- Every hero gets one, a pose from his own pack as Shadowren's weapon pose. `Enter` is the move he makes when he lands
 -- on the podium after the transformation (owner, 2026-10-31, each chosen on the podium), facing the camera: its clip
 -- played at `Speed` `From` that many seconds in (its start without) `Until` that many (its end without), short so it
@@ -2222,10 +2222,8 @@ Config.Heroes = {
 		Showcase = {
 			Motion = "RA-GSL-069",
 			Enter = { Motion = "RA-GSL-068", Then = "Breathe" },
-			-- No aura round him on the podium (owner, 2026-11-04); his transformation flashes in his ghillie's moss green,
-			-- yellower than Rowan's.
+			-- No aura round him on the podium (owner, 2026-11-04).
 			Aura = false,
-			Colour = Color3.fromRGB(150, 190, 60),
 		},
 		Health = 740,
 		Scales = "Attack",
@@ -2415,13 +2413,11 @@ Config.Heroes = {
 		Description = "A beast of the north who shrugs off blows and stamps his foes flat.",
 		Starter = true,
 		-- His entrance: the pack's weapon pose, sword and shield raised, played a little faster so it ends soon
-		-- after the transformation. No aura round him on the podium (owner, 2026-11-05: no aura); his
-		-- transformation flashes in the sand of his slams (ShadowEffects.Dust).
+		-- after the transformation. No aura round him on the podium (owner, 2026-11-05: no aura).
 		Showcase = {
 			Motion = "RA-ARF-056",
 			Enter = { Motion = "RA-ARF-055", Speed = 1.3, Then = "Breathe" },
 			Aura = false,
-			Colour = Color3.fromRGB(205, 160, 100),
 		},
 		Health = 1500,
 		Scales = "Attack",
