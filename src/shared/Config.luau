@@ -2442,7 +2442,7 @@ Config.Heroes = {
 		-- Meshy's painting from his Edit sheet (Art/Portraits/concepts/haldrek_sheet.png): his thin striped horns,
 		-- the sword upright before his plank shield (Art/Portraits/haldrek.png = concepts/haldrek_v1.png; v2's goat
 		-- horns and round shield were not his).
-		Portrait = { Image = "rbxassetid://120577193513027", Face = { 190, 0, 660 } },
+		Portrait = { Image = "rbxassetid://120577193513027", Face = { 190, 45, 660 } },
 		-- The ability bar's icons per key (Art/Icons/Haldrek, each a GenerateImage drawing on magenta in
 		-- Art/Icons/keyed/Haldrek from his sword and shield in Edit, Art/Icons/concepts/Haldrek, keyed by
 		-- Tools/key_icons.py --glow): his blows in sandy dust; his dash shows him.
