@@ -92,6 +92,16 @@
 					"$path": "Vendor/Wildguard/Animations/Included Rig.rbxmx"
 				}
 			},
+			"ArenaFighter": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/ArenaFighter/Build/ComponentPlayer"
+				},
+				"Rig": {
+					"$path": "Vendor/ArenaFighter/Animations/Included Rig.rbxmx"
+				}
+			},
 			"DanceCollection": {
 				"$className": "Folder",
 				"$ignoreUnknownInstances": true,

@@ -85,6 +85,9 @@ type Minion = {
 	-- The player or bot (Actors) who hit it last.
 	lastHitBy: Instance?,
 	dead: boolean,
+	-- Thrown away by a blow (MinionService.knock) and how high it is above the ground meanwhile.
+	knock: { started: number, from: Vector3, to: Vector3, height: number, length: number }?,
+	lift: number,
 }
 
 -- An enemy: a tagged Combatant of the other team (a Model with a Humanoid, or with a "Health" attribute).
@@ -408,8 +411,27 @@ local function think(m: Minion, combatants: { Model }, now: number)
 end
 
 local function place(m: Minion)
-	local centre = m.position + Vector3.new(0, SETTINGS.Height / 2, 0)
+	local centre = m.position + Vector3.new(0, SETTINGS.Height / 2 + m.lift, 0)
 	m.root.CFrame = CFrame.lookAt(centre, centre + m.facing)
+end
+
+-- A knocked minion flies over the ground, fast and slowing, in its arc; down, it takes up its way again. Whether it
+-- is flying still.
+local function fly(m: Minion, now: number): boolean
+	local k = m.knock
+	if not k then
+		return false
+	end
+	local s = math.clamp((now - k.started) / k.length, 0, 1)
+	m.position = k.from:Lerp(k.to, 1 - (1 - s) ^ 2)
+	m.lift = k.height * 4 * s * (1 - s)
+	if s >= 1 then
+		m.knock, m.lift = nil, 0
+		if not m.arrived and not m.target then
+			m.waypoint = rejoin(m)
+		end
+	end
+	return true
 end
 
 local function tick(now: number)
@@ -420,7 +442,7 @@ local function tick(now: number)
 		end
 	end
 	for _, m in table.clone(minions) do
-		if not m.dead then
+		if not m.dead and not fly(m, now) then
 			think(m, combatants, now)
 		end
 	end
@@ -482,6 +504,7 @@ local function spawn(team: string, kind: string, door: CFrame): BasePart?
 		nextAttack = 0,
 		lastHitBy = nil,
 		dead = false,
+		lift = 0,
 	}
 	place(m)
 	CollectionService:AddTag(root, "Minion")
@@ -541,6 +564,22 @@ function MinionService.damage(root: BasePart, amount: number, player: Instance?)
 	if attacker and not m.dead and attacker:GetAttribute("Team") ~= m.team then
 		call(m, attacker, os.clock())
 	end
+end
+
+-- Throws the minion whose root is `root` to `to` (over the ground), in an arc `height` studs high, in `length` seconds
+-- (a kit's Knockback, CombatService).
+function MinionService.knock(root: BasePart, to: Vector3, height: number, length: number)
+	local m = byRoot[root]
+	if not m or m.dead then
+		return
+	end
+	m.knock = {
+		started = os.clock(),
+		from = m.position,
+		to = Vector3.new(to.X, m.position.Y, to.Z),
+		height = height,
+		length = length,
+	}
 end
 
 -- Tells the minions that the hero `attacker` hit `victim` (a hero or a Master): `victim`'s minions near it turn on

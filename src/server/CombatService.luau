@@ -124,6 +124,10 @@ local projectileEndEvent: RemoteEvent
 local hitEvent: RemoteEvent
 local headCheckEvent: RemoteEvent
 local headshotEvent: RemoteEvent
+local knockEvent: RemoteEvent
+
+-- Carries a knocked bot (BotService.start sets it), as a knocked player's client carries him.
+CombatService.carryBot = nil :: ((actor: Instance, to: Vector3, height: number, length: number) -> ())?
 
 local function alive(character: Model): boolean
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -218,6 +222,34 @@ local function damage(player: Instance, character: Model, enemy: Enemy, amount: 
 	end
 	if model:GetAttribute("Hero") or model:GetAttribute("Master") then
 		MinionService.heroAttacked(character, model)
+	end
+end
+
+-- A kit's `Knockback` throws the enemy hero or minion struck by `character` away from him: `Distance` studs over the
+-- ground (less where a wall stops it), in an arc `Height` studs high, in `Time` seconds. A player's own client carries
+-- him (Net.HeroKnock, HeroControls), BotService a bot, MinionService a minion; the Masters stand fast.
+local function knock(character: Model, enemy: Enemy, knockback: any)
+	local target = enemy.instance
+	local from = if target:IsA("BasePart") then target elseif target:IsA("Model") then rootOf(target) else nil
+	local by = rootOf(character)
+	if not from or not by then
+		return
+	end
+	local away = HeroKit.flat(from.Position - by.Position)
+	away = if away.Magnitude > 0.1 then away.Unit else HeroKit.flat(by.CFrame.LookVector).Unit
+	local to = HeroKit.dashEnd(from.Position, away, knockback.Distance, HeroKit.leapIgnore())
+	if target:IsA("BasePart") then
+		MinionService.knock(target, to, knockback.Height, knockback.Time)
+		return
+	end
+	if not target:GetAttribute("Hero") or not alive(target :: Model) then
+		return
+	end
+	local owner = Actors.owner(target :: Model)
+	if owner and owner:IsA("Player") then
+		knockEvent:FireClient(owner, to, knockback.Height, knockback.Time)
+	elseif owner and CombatService.carryBot then
+		CombatService.carryBot(owner, to, knockback.Height, knockback.Time)
 	end
 end
 
@@ -668,9 +700,10 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 			from = HeroKit.grounded(from, humanoid.HipHeight + root.Size.Y / 2, HeroKit.leapIgnore())
 		end
 		local landing = HeroKit.dashEnd(from, direction, kit.Range, HeroKit.leapIgnore())
-		state.busyUntil = now + kit.Move + RECOVER
+		-- A dash whose blow comes well after it stops (its Slash) holds him till then (`Busy`).
+		state.busyUntil = now + (kit.Busy or kit.Move) + RECOVER
 		motionEvent:FireAllClients(character, key, 0, landing)
-		slow(state, kit.Move, 0)
+		slow(state, kit.Busy or kit.Move, 0)
 		-- Everyone he passes through is struck once, also those who walk into his way while he dashes: the stretch he
 		-- covered since the last look is searched every DASH_STEP seconds, as the client moves him (fast, then slower).
 		local struck: { [Instance]: boolean } = {}
@@ -697,6 +730,9 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 							table.insert(slashed, enemy)
 						else
 							damage(player, character, enemy, strength(kit.Damage), magic)
+							if kit.Knockback then
+								knock(character, enemy, kit.Knockback)
+							end
 						end
 					end
 				end
@@ -714,6 +750,9 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				for _, enemy in slashed do
 					if enemy.instance.Parent then
 						damage(player, character, enemy, strength(kit.Damage), magic)
+						if kit.Knockback then
+							knock(character, enemy, kit.Knockback)
+						end
 					end
 				end
 			end)
@@ -958,6 +997,7 @@ function CombatService.start()
 	hitEvent = remote("HeroHit")
 	headCheckEvent = remote("HeroHeadCheck")
 	headshotEvent = remote("HeroHeadshot")
+	knockEvent = remote("HeroKnock")
 	headCheckEvent.OnServerEvent:Connect(claimHead)
 
 	actionEvent.OnServerEvent:Connect(function(player, key, aim)

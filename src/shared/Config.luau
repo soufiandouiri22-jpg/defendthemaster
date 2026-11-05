@@ -2408,6 +2408,152 @@ Config.Heroes = {
 			},
 		},
 	},
+	-- Haldrek (owner, 2026-11-05): a beast tank, the Beast Titan's head on Viking armour, with the RobloxAnimations
+	-- Arena Fighter pack; his attacks chosen in the showroom, the sword fastest at the times below (Tools/clip_hits.py).
+	Haldrek = {
+		Role = "Tank",
+		Description = "A beast of the north who shrugs off blows and stamps his foes flat.",
+		Starter = true,
+		-- His entrance: the pack's weapon pose, sword and shield raised, played a little faster so it ends soon
+		-- after the transformation. No aura round him on the podium (owner, 2026-11-05: no aura); his
+		-- transformation flashes in the sand of his slams (ShadowEffects.Dust).
+		Showcase = {
+			Motion = "RA-ARF-056",
+			Enter = { Motion = "RA-ARF-055", Speed = 1.3, Then = "Breathe" },
+			Aura = false,
+			Colour = Color3.fromRGB(205, 160, 100),
+		},
+		Health = 1500,
+		Scales = "Attack",
+		Look = {
+			-- R3demption Ugc's Beast Titan Head (a hair accessory). It is open at the back, so a plain head without a
+			-- face fills it (owner, 2026-11-05), his whole body in the tan of the mask's face (its catalog picture's
+			-- forehead and cheeks).
+			HairAccessory = "90564049389483",
+			BlankFace = true,
+			-- Magic and Medieval's viking armour (alternative), and Blue infinity studios' Barbarian king shoulders
+			-- and lynx fur cape.
+			Shirt = 80990854645262,
+			Pants = 128344217426150,
+			ShouldersAccessory = "86670133750064,80354137910904",
+			BackAccessory = "113570761386524",
+			Skin = Color3.fromRGB(166, 136, 102),
+		},
+		-- Meshy's painting from his Edit sheet (Art/Portraits/concepts/haldrek_sheet.png): his thin striped horns,
+		-- the sword upright before his plank shield (Art/Portraits/haldrek.png = concepts/haldrek_v1.png; v2's goat
+		-- horns and round shield were not his).
+		Portrait = { Image = "rbxassetid://120577193513027", Face = { 190, 0, 660 } },
+		-- The ability bar's icons per key (Art/Icons/Haldrek, each a GenerateImage drawing on magenta in
+		-- Art/Icons/keyed/Haldrek from his sword and shield in Edit, Art/Icons/concepts/Haldrek, keyed by
+		-- Tools/key_icons.py --glow): his blows in sandy dust; his dash shows him.
+		Icons = {
+			M1 = "rbxassetid://133659705755264",
+			M2 = "rbxassetid://116875743084209",
+			E = "rbxassetid://108360445639753",
+			R = "rbxassetid://129056945361620",
+			Dash = "rbxassetid://107188406051734",
+		},
+		Pack = "ArenaFighter",
+		-- The pack's sword in his right hand and its shield on his left forearm, in every clip (ReplicatedStorage.
+		-- ArenaFighter.Components, from the model uploaded by Tools/upload_model.py).
+		Weapons = { "Sword", "Shield" },
+		-- He has no aura: his slams, shockwaves and dash trail throw up sand and dust, nothing violet
+		-- (ShadowEffects.Dust; owner, 2026-11-05).
+		Effects = "Dust",
+		Motions = {
+			Idle = "RA-ARF-015",
+			Run = "RA-ARF-005",
+			RunLeft = "RA-ARF-006",
+			RunRight = "RA-ARF-007",
+			Back = "RA-ARF-002",
+			Takeoff = "RA-ARF-011",
+			Air = "RA-ARF-012",
+			Land = "RA-ARF-013",
+			Death = "RA-ARF-038",
+		},
+		Kit = {
+			M1 = {
+				Kind = "Combo",
+				Speed = 0.85,
+				Ratio = 0.53,
+				Reset = 1.8,
+				Hits = {
+					{ Motion = "RA-ARF-027", Hit = 0.38, Recover = 0.4, Damage = 37, Range = 7, Angle = 140 },
+					{ Motion = "RA-ARF-028", Hit = 0.38, Recover = 0.4, Damage = 42, Range = 7, Angle = 120 },
+					{ Motion = "RA-ARF-029", Hit = 0.35, Recover = 0.5, Damage = 63, Range = 7, Angle = 160 },
+				},
+			},
+			-- A low sweep of his sword before him (074, owner 2026-11-05: fastest at 0.32 s), then he leaps up and
+			-- brings it down onto the ground (down at 1.48 s): the slam strikes everyone round him, harder than the
+			-- sweep, as Korrund's M2 slam does (80).
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-ARF-074",
+				Indicator = "Ring",
+				Cooldown = 9,
+				Hits = { 0.32, 1.48 },
+				Slam = 1.48,
+				SlamRadius = 10,
+				SlamDamage = 80,
+				SlamRatio = 0.4,
+				Damage = 30,
+				Ratio = 0.2,
+				Range = 8,
+				Angle = 150,
+			},
+			-- A charge (073, owner 2026-11-05): he crouches (to 0.4 s), storms ahead to where he aims with his sword
+			-- swinging up (0.4 to 0.95 s) and comes up again. Everyone he runs into is struck the moment he reaches him
+			-- and thrown away from him, heroes and minions, to clear the way (Knockback, owner 2026-11-05: a little
+			-- shorter than a jump pad's throw, 62 to 85 studs, but higher, 18 over the ground against its 13). He stands
+			-- till he is up (Busy).
+			E = {
+				Kind = "Dash",
+				Motion = "RA-ARF-073",
+				Grounded = true,
+				Indicator = "Arrow",
+				Cooldown = 10,
+				Range = 16,
+				Width = 6,
+				Damage = 70,
+				Ratio = 0.45,
+				Start = 0.4,
+				Move = 0.95,
+				Busy = 1.25,
+				Stop = 2.0,
+				Knockback = { Distance = 44, Height = 18, Time = 1.15 },
+			},
+			R = {
+				Kind = "Flurry",
+				Motion = "RA-ARF-042",
+				Indicator = "Cone",
+				Cooldown = 40,
+				Hits = { 0.25, 0.45, 1.05, 1.38 },
+				-- The last blow strikes the ground (owner, 2026-11-05): everyone within SlamRadius, with its ring. About
+				-- 180 in all, as a tank's (owner, 2026-11-05: 240 matched the warriors' and the sniper's R).
+				Slam = 1.38,
+				SlamRadius = 10,
+				SlamDamage = 90,
+				SlamRatio = 0.45,
+				Damage = 30,
+				Ratio = 0.15,
+				Range = 9,
+				Angle = 150,
+			},
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-ARF-008",
+				Speed = 1.2,
+				Cooldown = 9,
+				Range = 12,
+				Width = 4,
+				Damage = 20,
+				Ratio = 0.2,
+				Start = 0.05,
+				Move = 0.35,
+				Stop = 0.5,
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -2575,7 +2721,18 @@ Config.Bots = {
 	Hero = "Shadowren",
 	-- Every hero at most once a team, the bots' at random (owner, 2026-11-01): each bot takes the first of these, shuffled
 	-- per match and team (Shared.Lineup.botOrder), that its team does not play yet.
-	Lineup = { "Shadowren", "Rowan", "Mavorak", "Brontar", "Mortael", "Jestrel", "Korrund", "Kaeda", "Corvin" },
+	Lineup = {
+		"Shadowren",
+		"Rowan",
+		"Mavorak",
+		"Brontar",
+		"Mortael",
+		"Jestrel",
+		"Korrund",
+		"Kaeda",
+		"Corvin",
+		"Haldrek",
+	},
 	Sight = 25,
 	Taken = 20,
 	Reaction = { Min = 1.3, Max = 2.6 },

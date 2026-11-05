@@ -18,7 +18,8 @@ local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
 -- The colours of a slam: its outer ring and smoke, the shade it leaves and the smoke's end, its inner ring, sparks and
 -- flash, and the `sparks` it throws up (their textures, taken in turn). Shadow by default; Light is Jestrel's white
 -- magic (Config's Effects "Light"), throwing up the twinkles and card suits his beams shed (owner, 2026-11-01); Red is
--- Korrund's (Effects "Red", owner 2026-11-03: no violet on him); Blue is the samurai's, her blue aura (Effects "Blue").
+-- Korrund's (Effects "Red", owner 2026-11-03: no violet on him); Blue is the samurai's, her blue aura (Effects "Blue");
+-- Dust is Haldrek's, who has no aura (Effects "Dust", owner 2026-11-05): sand and dust thrown up, nothing violet.
 export type Palette = { main: Color3, deep: Color3, bright: Color3, sparks: { string }? }
 local SHADOWS: Palette = { main = SHADOW, deep = DEEP, bright = BRIGHT }
 local SPARK = "rbxasset://textures/particles/sparkles_main.dds"
@@ -37,6 +38,11 @@ ShadowEffects.Blue = {
 	main = Color3.fromRGB(40, 120, 255),
 	deep = Color3.fromRGB(6, 16, 44),
 	bright = Color3.fromRGB(140, 210, 255),
+} :: Palette
+ShadowEffects.Dust = {
+	main = Color3.fromRGB(190, 158, 112),
+	deep = Color3.fromRGB(96, 74, 48),
+	bright = Color3.fromRGB(238, 222, 186),
 } :: Palette
 
 local function effects(): Folder

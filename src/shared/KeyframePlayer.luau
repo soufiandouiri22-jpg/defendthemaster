@@ -1,8 +1,8 @@
 -- The player of a pack that comes as KeyframeSequences (the Elementalist), made by Tools/keyframe_pack.py into a
 -- ComponentPlayer as the newer packs have: its Sample gives Shared.Motion the same pose of a clip at a time, every body
--- joint's Transform as on the pack's rig, and its weapon as a prop, always shown: the Transform of the joint it hangs
--- from in the pack, on a hand (its Configuration's `weapon`), where HeroLook binds it to the hero's own hand. A pack
--- without a weapon (the Dance Collection) gives the body alone.
+-- joint's Transform as on the pack's rig, and its weapons as props, always shown: the Transform of the joint each hangs
+-- from in the pack, on a hand or forearm (its Configuration's `weapons`), where HeroLook binds it to the hero's own. A
+-- pack without a weapon (the Dance Collection) gives the body alone.
 
 local HttpService = game:GetService("HttpService")
 
@@ -40,7 +40,8 @@ end
 return function(module: ModuleScript)
 	local config = HttpService:JSONDecode((module:WaitForChild("Configuration") :: StringValue).Value)
 	local data = require(module:WaitForChild("Data")) :: any
-	local weapon = config.weapon
+	-- Packs built before `weapons` (the Arena Fighter's sword and shield) have only the one `weapon`.
+	local weapons = config.weapons or { config.weapon }
 	local parts = {}
 	for _, j in config.body_joints do
 		table.insert(parts, j.part1)
@@ -110,7 +111,7 @@ return function(module: ModuleScript)
 			body[part] = pose[part] or CFrame.identity
 		end
 		local props, opacity = {}, {}
-		if weapon then
+		for _, weapon in weapons do
 			props[weapon.name] = { world = pose[weapon.name] or CFrame.identity, scale = Vector3.one }
 			opacity[weapon.name] = 1
 		end

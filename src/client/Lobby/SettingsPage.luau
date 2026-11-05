@@ -41,6 +41,14 @@ local KEYS = {
 -- where the item's description gives one; keep it in step with the looks.
 local OUTFITS = {
 	{
+		"HALDREK",
+		{
+			"Beast Titan Head: R3demption Ugc",
+			"Viking armor (alternative): Magic and Medieval",
+			"Barbarian king shoulders and lynx fur cape: Blue infinity studios",
+		},
+	},
+	{
 		"CORVIN",
 		{
 			"1.0 Ghillie Suit - Green Jungle: Cosplay Box Store",

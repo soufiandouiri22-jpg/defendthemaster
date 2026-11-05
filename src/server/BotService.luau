@@ -50,6 +50,8 @@ type Move = {
 	sharp: boolean,
 	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift).
 	lift: any?,
+	-- Thrown away by a blow (CombatService's knock): how high the arc goes over the way.
+	height: number?,
 }
 
 type Bot = {
@@ -851,9 +853,10 @@ local function carry(b: Bot, now: number)
 	if t < m.takeoff then
 		return
 	end
-	local alpha = math.clamp((t - m.takeoff) / (m.land - m.takeoff), 0, 1)
-	alpha = if m.sharp then 1 - (1 - alpha) ^ 2 else alpha * alpha * (3 - 2 * alpha)
-	root.CFrame = CFrame.new(m.from:Lerp(m.to, alpha)) * root.CFrame.Rotation
+	local share = math.clamp((t - m.takeoff) / (m.land - m.takeoff), 0, 1)
+	local alpha = if m.sharp then 1 - (1 - share) ^ 2 else share * share * (3 - 2 * share)
+	local rise = if m.height then Vector3.new(0, m.height * 4 * share * (1 - share), 0) else Vector3.zero
+	root.CFrame = CFrame.new(m.from:Lerp(m.to, alpha) + rise) * root.CFrame.Rotation
 	root.AssemblyLinearVelocity = Vector3.zero
 	if alpha >= 1 then
 		b.move = nil
@@ -1008,6 +1011,25 @@ function BotService.start(layout: Layout, heroes: { [string]: { string } }?)
 	folder = Instance.new("Folder")
 	folder.Name = "Bots"
 	folder.Parent = ServerStorage
+
+	-- A bot knocked away flies from where it is, its own leap or dash cut short, and thinks again once down.
+	CombatService.carryBot = function(actor: Instance, to: Vector3, height: number, length: number)
+		for _, b in bots do
+			if b.actor == actor and b.root and alive(b) then
+				b.move = {
+					started = os.clock(),
+					from = b.root.Position,
+					to = to,
+					takeoff = 0,
+					land = length,
+					sharp = true,
+					height = height,
+				}
+				b.path, b.aiming = {}, nil
+				return
+			end
+		end
+	end
 
 	Players.PlayerAdded:Connect(function()
 		task.defer(balance)

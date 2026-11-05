@@ -190,6 +190,7 @@ local function paletteOf(settings: any): ShadowEffects.Palette?
 		then ShadowEffects.Light
 		elseif kind == "Red" then ShadowEffects.Red
 		elseif kind == "Blue" then ShadowEffects.Blue
+		elseif kind == "Dust" then ShadowEffects.Dust
 		else nil
 end
 
@@ -858,9 +859,9 @@ local function cast(key: string)
 			down = if from ~= root.Position then root.Position else nil
 		end
 		local to = HeroKit.dashEnd(from, direction, kit.Range, HeroKit.leapIgnore())
-		busyUntil = now + kit.Move + RECOVER
+		busyUntil = now + (kit.Busy or kit.Move) + RECOVER
 		leap = { started = now, from = from, to = to, takeoff = kit.Start, land = kit.Move, sharp = true, down = down }
-		slow(humanoid, kit.Move, 0)
+		slow(humanoid, kit.Busy or kit.Move, 0)
 		dashMotion(character, from, to, kit)
 		return
 	elseif kit.Kind == "Vanish" then
@@ -1625,6 +1626,27 @@ function HeroControls.launch(to: Vector3, height: number, length: number, ended:
 	return true
 end
 
+-- Thrown away by a blow (Net.HeroKnock, a kit's Knockback): carried in an arc from where he is to `to`, `height`
+-- studs over the higher end, in `length` seconds, facing as he did. It cuts short a leap or dash of his own and a jump
+-- pad's flight.
+local function knocked(to: Vector3, height: number, length: number)
+	local character, root, humanoid = hero()
+	if not character or not root or not humanoid then
+		return
+	end
+	leap = nil
+	endFlight()
+	flight = {
+		started = os.clock(),
+		from = root.Position,
+		to = to,
+		height = height,
+		length = length,
+		ended = function() end,
+	}
+	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+end
+
 function HeroControls.start()
 	-- Loaded now: a beam is gone before a picture first asked for by its sparkles arrives, so the first beam of a game
 	-- would shed none.
@@ -1634,7 +1656,8 @@ function HeroControls.start()
 	(net:WaitForChild("HeroMotion") :: RemoteEvent).OnClientEvent:Connect(onMotion);
 	(net:WaitForChild("HeroRefused") :: RemoteEvent).OnClientEvent:Connect(undo);
 	(net:WaitForChild("HeroProjectile") :: RemoteEvent).OnClientEvent:Connect(onProjectile);
-	(net:WaitForChild("HeroProjectileEnd") :: RemoteEvent).OnClientEvent:Connect(onProjectileEnd)
+	(net:WaitForChild("HeroProjectileEnd") :: RemoteEvent).OnClientEvent:Connect(onProjectileEnd);
+	(net:WaitForChild("HeroKnock") :: RemoteEvent).OnClientEvent:Connect(knocked)
 	-- His sniper bullet struck `target`: whether its line, from `from` to `to`, went through the head as this screen
 	-- draws him, which only the clients know (CombatService's headChecks).
 	local headCheck = net:WaitForChild("HeroHeadCheck") :: RemoteEvent

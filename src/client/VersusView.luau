@@ -36,6 +36,9 @@ local Widgets = require(script.Parent.Widgets)
 
 local VersusView = {}
 
+-- Whether the cards are on the screen, until they have faded out.
+local up = false
+
 local C = UiStyle.Colors
 local TEAM_FILL = { Blue = { C.Blue, C.BlueDark }, Red = { C.Red, C.RedDark } }
 local READY = Color3.fromRGB(120, 220, 100)
@@ -713,6 +716,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		release()
 		return
 	end
+	up = true
 	task.spawn(loadHeroes)
 	-- The match's music starts once the cards have faded out, not as the loading screen under them goes.
 	local quiet = Music.hold()
@@ -743,6 +747,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 		if arrived then
 			arrived:Destroy()
 		end
+		up = false
 		release()
 		quiet()
 		return
@@ -776,6 +781,7 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 			if arrived then
 				arrived:Destroy()
 			end
+			up = false
 			release()
 			quiet()
 			HeroCamera.setEnabled(true)
@@ -847,11 +853,22 @@ function VersusView.start(release: () -> (), waitReady: () -> ())
 	if group then
 		Widgets.tween(group, 0.5, { GroupTransparency = 1 })
 	end
-	task.delay(0.5, quiet)
+	task.delay(0.5, function()
+		up = false
+		quiet()
+	end)
 	task.delay(0.6, function()
 		frame:Disconnect()
 		gui:Destroy()
 	end)
+end
+
+-- Waits until the cards have faded out (at once when they are not up), at most `longest` seconds.
+function VersusView.awaitGone(longest: number)
+	local since = os.clock()
+	while up and os.clock() - since < longest do
+		task.wait(0.05)
+	end
 end
 
 -- In the lobby, and on a match's end screen after Play Again: once a match is found (Net.Queue "Lineup") its cards come

@@ -135,7 +135,12 @@ local function arm(character: Model, hero: string)
 	local pack = ReplicatedStorage[settings.Pack]
 	local config = HttpService:JSONDecode(pack.ComponentPlayer.Configuration.Value)
 	local components = pack.Rig:FindFirstChild("Components") or pack:FindFirstChild("Components") or pack.Rig
-	local held = if pack.Rig:FindFirstChild("Components") then nil else config.weapon
+	local held = {}
+	if not pack.Rig:FindFirstChild("Components") then
+		for _, weapon in config.weapons or { config.weapon } do
+			held[weapon.name] = weapon
+		end
+	end
 	local joints = {}
 	for _, prop in config.props or {} do
 		joints[prop.name] = prop
@@ -155,11 +160,12 @@ local function arm(character: Model, hero: string)
 				d.CanTouch = false
 				d.Massless = true
 				d.CastShadow = true
-			elseif d:IsA("Motor6D") and d.Name == "ComponentBinding" and held and weapon.Name == held.name then
-				-- Held in his own hand as on the pack's rig, so it never drifts from it.
-				d.Part0 = character:FindFirstChild(held.parent) :: BasePart
-				d.C0 = CFrame.new(table.unpack(held.c0))
-				d.C1 = CFrame.new(table.unpack(held.c1))
+			elseif d:IsA("Motor6D") and d.Name == "ComponentBinding" and held[weapon.Name] then
+				-- Held in his own hand (or on his forearm) as on the pack's rig, so it never drifts from it.
+				local grip = held[weapon.Name]
+				d.Part0 = character:FindFirstChild(grip.parent) :: BasePart
+				d.C0 = CFrame.new(table.unpack(grip.c0))
+				d.C1 = CFrame.new(table.unpack(grip.c1))
 			elseif (d:IsA("Weld") or d:IsA("Motor6D")) and d.Name == "ComponentBinding" then
 				-- A skinned component hangs from a Weld, a rigid one (the Ranger's quiver) from a Motor6D the clips
 				-- turn; both bind to the pack rig's root part, which becomes the hero's.

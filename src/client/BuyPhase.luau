@@ -14,11 +14,16 @@ local Assets = require(ReplicatedStorage.Shared.Assets)
 local Preferences = require(script.Parent.Preferences)
 local Shop = require(script.Parent.Shop)
 local UiStyle = require(script.Parent.UiStyle)
+local VersusView = require(script.Parent.VersusView)
 local BuyPhase = {}
 
 local C = UiStyle.Colors
 -- With less than this many seconds left when the player comes in, the big entrance is skipped.
 local INTRO = 4
+-- How long the arena stands in sight after the match's cards have faded out before the banner comes (owner, 2026-11-05),
+-- and the longest it waits for them to go.
+local SETTLE = 0.5
+local CARDS_LONGEST = 6
 -- How long the big banner stands before it moves up under the score board.
 local HOLD = 2.6
 -- Where the banner stands, as a share of the screen's height, and where it shrinks to (pixels from the top).
@@ -283,6 +288,12 @@ function BuyPhase.start()
 			return
 		end
 		running = true
+		VersusView.awaitGone(CARDS_LONGEST)
+		task.wait(SETTLE)
+		if left() <= 0 then
+			running = false
+			return
+		end
 		gui.Enabled = true
 		setAlpha(big, 1)
 		setAlpha(fight, 1)

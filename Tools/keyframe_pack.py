@@ -3,11 +3,13 @@
 Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack rig's joints in its Configuration, its
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
-    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|DanceCollection
+    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|ArenaFighter|DanceCollection
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
 MeshPart's mesh): its MeshPart from the model uploaded by Tools/upload_model.py, with a Motor6D "ComponentBinding".
+A pack with more than one weapon (the Arena Fighter's sword and shield) lists them all in the Configuration's
+`weapons`, each held as the first.
 """
 
 import base64
@@ -63,6 +65,26 @@ PACKS = {
             "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
             "c1": [0.32262, -1.00134, 0.00021, 1, 0, 0, 0, 1, 0, 0, 0, 1],
         },
+    },
+    # The Arena Fighter's clips with its sword and shield are its weapon tracks; the sword hangs from the right hand,
+    # the shield (`others`, a second weapon held as the first) from the left forearm ("Attach Equipment.lua").
+    "ArenaFighter": {
+        "clips": "Individual Animations/weapon-tracks",
+        "weapon": {
+            "name": "Sword",
+            "parent": "RightHand",
+            "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            "c1": [0, -0.83106, -0.00014, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+        "others": [
+            {
+                "name": "Shield",
+                "parent": "LeftLowerArm",
+                "c0": [-0.54987, -0.25694, 0.49874, 0.13651, -0.406, -0.90362, 0.93816, 0.34592, -0.0137, 0.31814,
+                       -0.84587, 0.42811],
+                "c1": [-0.00339, -0.21687, -0.1601, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            },
+        ],
     },
     # The Dance Collection (the emotes, Config.Emotes): body clips only, played on any hero (Motion.lend).
     "DanceCollection": {
@@ -228,14 +250,16 @@ def main() -> int:
 
     joints = rig_joints(source / "Included Rig.rbxmx")
     weapon = pack["weapon"]
+    weapons = ([weapon] if weapon else []) + pack.get("others", [])
     config = {
         "product": name,
         "body_joints": joints,
         "weapon": {k: weapon[k] for k in ("name", "parent", "c0", "c1")} if weapon else None,
+        "weapons": [{k: w[k] for k in ("name", "parent", "c0", "c1")} for w in weapons],
     }
     (player / "Configuration.txt").write_text(json.dumps(config))
 
-    parts = {j["part1"] for j in joints} | ({weapon["name"]} if weapon else set())
+    parts = {j["part1"] for j in joints} | {w["name"] for w in weapons}
     clips = {}
     for path in sorted((source / pack["clips"]).rglob("*.rbxmx")):
         clip_id, data = clip(path, parts)
