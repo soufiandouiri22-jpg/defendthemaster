@@ -94,12 +94,19 @@ local function podium(): CFrame
 	return Workspace:GetAttribute("ShowcaseAt") :: CFrame
 end
 
--- `hero`'s colour on the podium, in his aura, his transformation and the runes under him: his aura's, the plain gold
--- without one (owner, 2026-11-05: one rule for every hero).
-local function colourOf(hero: string): Color3
+-- `hero`'s colour on the podium, in his aura, his transformation and the runes under him: his aura's (owner,
+-- 2026-11-05: one rule for every hero). Without one he transforms in white and the runes stay the plain gold, as
+-- under the player's own avatar.
+local function auraOf(hero: string): Color3?
 	local settings = Config.Heroes[hero]
 	local showcase = settings and settings.Showcase
-	return if showcase and typeof(showcase.Aura) == "Color3" then showcase.Aura else DEFAULT_AURA
+	return if showcase and typeof(showcase.Aura) == "Color3" then showcase.Aura else nil
+end
+local function colourOf(hero: string): Color3
+	return auraOf(hero) or if Config.Heroes[hero] then WHITE else DEFAULT_AURA
+end
+local function plateColour(hero: string): Color3
+	return auraOf(hero) or DEFAULT_AURA
 end
 
 -- Whether `hero` stands in an aura on the podium: not with `Aura = false` (the Gunslinger, owner 2026-11-04).
@@ -528,7 +535,7 @@ function Showcase.show(hero: string)
 		end
 		LightningEffects.crackle(entry.model)
 	end
-	lightPlate(podium(), colour)
+	lightPlate(podium(), plateColour(hero))
 	current = entry
 end
 
@@ -950,7 +957,7 @@ function Showcase.transform(hero: string)
 		aura(after.model, colour, at, burns(hero))
 	end
 	LightningEffects.crackle(after.model)
-	lightPlate(at, colour)
+	lightPlate(at, plateColour(hero))
 	tween(runeTurn, 1.6, { Value = RUNE_TURN })
 	if p then
 		tween(p.light, 1.6, { Brightness = 1.2, Range = 14 })

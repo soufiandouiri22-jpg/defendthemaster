@@ -962,7 +962,8 @@ Config.Minions = {
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
 -- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
 -- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke; his transformation
--- and the podium's runes take the same colour, or the podium's plain gold with `Aura = false` (owner, 2026-11-05).
+-- and the podium's runes take the same colour; with `Aura = false` he transforms in white and the runes stay the
+-- podium's plain gold (owner, 2026-11-05).
 -- Every hero gets one, a pose from his own pack as Shadowren's weapon pose. `Enter` is the move he makes when he lands
 -- on the podium after the transformation (owner, 2026-10-31, each chosen on the podium), facing the camera: its clip
 -- played at `Speed` `From` that many seconds in (its start without) `Until` that many (its end without), short so it
