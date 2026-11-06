@@ -2637,8 +2637,9 @@ Config.Heroes = {
 			},
 			-- She plants her spear in the ground and vaults on it onto the spot aimed at (049, owner 2026-11-06: the
 			-- spear in the ground at 0.2 s, down at 0.5), the clip in place as the game carries her, and spins round
-			-- once as she lands: the spear at its fastest at 0.8 s strikes everyone within 8 studs, as much as
-			-- Mortael's leap (100 within 8). The landing itself strikes no one (no Damage), so no shockwave.
+			-- once as she lands: her landing strikes everyone within 8 studs with its red shockwave (owner, 2026-11-06),
+			-- and the spear at its fastest at 0.8 s strikes them again; 120 in all, a little less than Mortael's leap
+			-- (145).
 			E = {
 				Kind = "Leap",
 				Motion = "RA-LAN-049",
@@ -2647,10 +2648,12 @@ Config.Heroes = {
 				Cooldown = 8,
 				Range = 14,
 				Radius = 8,
+				Damage = 50,
+				Ratio = 0.5,
 				Takeoff = 0.2,
 				Land = 0.5,
 				Busy = 0.87,
-				Swings = { Hits = { 0.8 }, Damage = 100, Ratio = 1, Range = 8 },
+				Swings = { Hits = { 0.8 }, Damage = 70, Ratio = 0.7, Range = 8 },
 			},
 			-- She vaults high into the sky and dives spear first onto the spot aimed at (061, owner 2026-11-06),
 			-- striking everyone round it, then sweeps her spear round her twice (2.25 and 2.8 s). The clip leaps 36

@@ -655,7 +655,11 @@ local function buildBase(map: Folder, team: string): Base
 		block.Parent = area
 	end
 	for _, side in { -1, 1 } do
-		masterBlock(math.min(side * blockInner, side * blockOuter), math.max(side * blockInner, side * blockOuter), blockFront)
+		masterBlock(
+			math.min(side * blockInner, side * blockOuter),
+			math.max(side * blockInner, side * blockOuter),
+			blockFront
+		)
 	end
 	-- And the dais beside and behind the throne, from its front back: he would wedge himself in there too. He
 	-- stands up in front of it and sits down on it without walking (MasterService).

@@ -174,6 +174,12 @@ return {
 				["Sounds"] = { "A1e3519ea11ad" },
 			},
 			{
+				["Time"] = 0.48,
+				["Volume"] = 0.9,
+				["Sounds"] = { "Slam1", "Slam2" },
+				["Bank"] = "ShadowDuelist",
+			},
+			{
 				["Time"] = 0.5,
 				["Volume"] = 0.35,
 				["Footstep"] = true,

@@ -344,12 +344,14 @@ PACKS = {
         # CustomEvent): its whoosh as she sets off. Her spiral strike's (046) own recordings begin at 0.5 s, with
         # its second blow, so its first (Hit 0.25, owner 2026-11-06: not heard) gets her basic attacks' spear swing
         # (Sound 03, loudest 0.15 to 0.27 s in).
+        # Her vault onto the spot (049) strikes the ground as she lands (0.5 s, owner 2026-11-06): Shadowren's slams,
+        # from his pack's recordings.
         "extra": {
             "RA-LAN-052": [(0.0, ["A9099b14772c0"], 0.8)],
             "RA-LAN-046": [(0.05, ["A7e8637a5f932"], 0.8)],
+            "RA-LAN-049": [(0.48, ["Slam1", "Slam2"], 0.9, "ShadowDuelist")],
         },
-        # Her ultimate's dive (061, down at 1.18 s) already sounds in its own recording, and her vault onto the spot
-        # (049) lands without a blow, so they need no Slam.
+        # Her ultimate's dive (061, down at 1.18 s) already sounds in its own recording, so it needs no Slam.
         "events": {},
     },
     "GreataxeBerserker": {

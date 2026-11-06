@@ -476,9 +476,7 @@ local function step(dt: number)
 		-- Held against a charging hero it goes along at his front as this screen shows him, not after the server's
 		-- steps.
 		local held, look = HeroKit.heldAt(root, goal.Position.Y)
-		view.cframe = if held and look
-			then CFrame.lookAt(held, held - look)
-			else view.cframe:Lerp(goal, smoothing)
+		view.cframe = if held and look then CFrame.lookAt(held, held - look) else view.cframe:Lerp(goal, smoothing)
 		local speed = (view.cframe.Position - before).Magnitude / math.max(dt, 1e-3)
 		local hops = math.floor(view.phase / math.pi)
 		if speed > 1.5 then
