@@ -710,9 +710,11 @@ local function loadHeroes()
 end
 
 -- Runs the screen in a match without a draft; `release` lets the loading screen go (it goes when the cards have been
--- shown, or at once on the test ground and for a client coming in after the start).
+-- shown, or at once on the test ground and for a client coming in after the start). The test ground is Studio's only,
+-- as on the server (TestGround): a published place that still carries the attribute shows its cards and loads its
+-- heroes as any match.
 function VersusView.start(release: () -> (), waitReady: () -> ())
-	if Workspace:GetAttribute("TestGround") == true then
+	if RunService:IsStudio() and Workspace:GetAttribute("TestGround") == true then
 		release()
 		return
 	end

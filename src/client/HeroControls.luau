@@ -1063,7 +1063,8 @@ local function updateIndicator()
 	elseif indicator.kind == "Cone" then
 		Indicators.placeCone(indicator, feet, direction, kit.Range)
 	elseif indicator.kind == "Ring" then
-		Indicators.placeRing(indicator, feet, kit.SlamRadius)
+		-- A slam's ring reaches its SlamRadius, a spin all round him (Renka's M2) its Range.
+		Indicators.placeRing(indicator, feet, kit.SlamRadius or kit.Range)
 	end
 end
 
