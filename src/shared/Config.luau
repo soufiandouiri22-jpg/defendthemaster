@@ -923,8 +923,11 @@ Config.Minions = {
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
 -- With a `Slash` those he passed are struck only when his weapon cuts, `Time` seconds into its motion (after `Move`),
 -- together with everyone within its `Range` of where he lands.
--- A "Leap"'s `Swings` strike all round him before he lands, at each of their `Hits` (`Damage`, `Ratio`, `Range`);
--- with `InPlace` its motion plays without its own travel over the ground, as the game carries him.
+-- A "Leap"'s `Swings` strike all round him before he lands, at each of their `Hits` (`Damage`, `Ratio`, `Range`),
+-- or after it, holding him till `Busy`; without `Damage` his landing strikes no one and shows no shockwave, and its
+-- `Radius` is where his swings reach round the spot. With `InPlace` its motion plays without its own travel over the
+-- ground, as the game carries him; with a `Rise` the game lifts him as an Ascend does (HeroKit.lift) on his way, its
+-- motion played `InPlace = "Grounded"`, so a clip that leaps high stays in his camera's view.
 -- A `Guard` (a Flurry's at its `Slam`, a Leap's where he lands) braces him: he takes `Share` less damage for `Time`
 -- seconds (Damage.mitigated), with an iron sheen round him.
 -- With `Mirror` a key's `Motion` plays left for right (Shared.Motion), its body only, not the pack's weapons.
@@ -2551,6 +2554,149 @@ Config.Heroes = {
 			},
 		},
 	},
+	-- Renka (a working name; owner, 2026-11-06): a shrine guard with a spear, the RobloxAnimations Lancer pack. Her
+	-- M2, E, R and dash are the owner's choice from the showroom, her M1 still a placeholder; the times are where the
+	-- spear moves fastest and where the clips lift her and set her down (Tools/clip_hits.py).
+	Renka = {
+		Role = "Warrior",
+		Description = "A shrine guard whose spear strikes before her foes are in reach.",
+		Starter = true,
+		Showcase = {
+			Motion = "RA-LAN-074",
+			-- Her entrance: the pack's Battle Rally, the spear raised and brought down into her stance (owner,
+			-- 2026-11-06).
+			Enter = { Motion = "RA-LAN-050", Then = "Breathe" },
+			-- Her glowing red eyes, and the red of her hakama (owner, 2026-11-06).
+			Aura = Color3.fromRGB(220, 36, 30),
+		},
+		Health = 1050,
+		Scales = "Attack",
+		Look = {
+			-- Nexus Exchange's Shrine Maiden Robes (1.0), made for the blocky body.
+			Layered = { { Id = 11642627029, Type = Enum.AccessoryType.Jacket } },
+			HairAccessory = "134309143042240",
+			-- minokumi's (GLOWING) Elegant Pretty Anime Girl Face Red: a dynamic head with glowing red eyes.
+			Head = 109868268926203,
+			Mood = 14618207727,
+			Skin = Color3.fromRGB(240, 206, 176),
+			Legs = Color3.fromRGB(58, 52, 50),
+		},
+		-- Her real face from Studio painted over in the portraits' style, so the head keeps its narrow egg shape
+		-- (Art/Portraits/renka.png = concepts/renka_v4.png; owner, 2026-11-06).
+		Portrait = { Image = "rbxassetid://87677763162516", Face = { 190, 20, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Renka, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Renka, keyed by Tools/key_icons.py --glow), crimson as her aura.
+		Icons = {
+			M1 = "rbxassetid://131321396441612",
+			M2 = "rbxassetid://122756557890351",
+			E = "rbxassetid://135667125466457",
+			R = "rbxassetid://116565754580889",
+			Dash = "rbxassetid://79190676541386",
+		},
+		Pack = "Lancer",
+		-- The pack's spear in her left hand, in every clip (ReplicatedStorage.Lancer.Components; a placeholder until
+		-- the spear's model is chosen).
+		Weapons = { "Spear" },
+		Effects = "Red",
+		Motions = {
+			Idle = "RA-LAN-015",
+			Run = "RA-LAN-005",
+			RunLeft = "RA-LAN-006",
+			RunRight = "RA-LAN-007",
+			Back = "RA-LAN-002",
+			Takeoff = "RA-LAN-011",
+			Air = "RA-LAN-012",
+			Land = "RA-LAN-013",
+			Death = "RA-LAN-033",
+		},
+		Kit = {
+			M1 = {
+				Kind = "Combo",
+				Speed = 1,
+				Ratio = 0.6,
+				Reset = 1.8,
+				Hits = {
+					{ Motion = "RA-LAN-023", Hit = 0.35, Recover = 0.35, Damage = 45, Range = 9, Angle = 90 },
+					{ Motion = "RA-LAN-024", Hit = 0.32, Recover = 0.35, Damage = 50, Range = 9, Angle = 110 },
+					{ Motion = "RA-LAN-025", Hit = 0.38, Recover = 0.45, Damage = 70, Range = 9, Angle = 90 },
+				},
+			},
+			-- Her spear swept once round her, twirled over her head and thrust out before her (046, owner 2026-11-06):
+			-- four blows to everyone round her within the spear's reach (its tip at 0.25, 0.55, 0.85 and 1.25 s,
+			-- Tools/clip_hits.py), 120 in all, about as much as Haldrek's M2 sweep and slam together (110).
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-LAN-046",
+				Indicator = "Ring",
+				Cooldown = 8,
+				Hits = { 0.25, 0.55, 0.85, 1.25 },
+				Damage = 30,
+				Ratio = 0.25,
+				Range = 9,
+				Angle = 360,
+			},
+			-- She plants her spear in the ground and vaults on it onto the spot aimed at (049, owner 2026-11-06: the
+			-- spear in the ground at 0.2 s, down at 0.5), the clip in place as the game carries her, and spins round
+			-- once as she lands: the spear at its fastest at 0.8 s strikes everyone within 8 studs, as much as
+			-- Mortael's leap (100 within 8). The landing itself strikes no one (no Damage), so no shockwave.
+			E = {
+				Kind = "Leap",
+				Motion = "RA-LAN-049",
+				InPlace = true,
+				Indicator = "Zone",
+				Cooldown = 8,
+				Range = 14,
+				Radius = 8,
+				Takeoff = 0.2,
+				Land = 0.5,
+				Busy = 0.87,
+				Swings = { Hits = { 0.8 }, Damage = 100, Ratio = 1, Range = 8 },
+			},
+			-- She vaults high into the sky and dives spear first onto the spot aimed at (061, owner 2026-11-06),
+			-- striking everyone round it, then sweeps her spear round her twice (2.25 and 2.8 s). The clip leaps 36
+			-- studs up and 18 back on its own, out of her camera's view: played Grounded, the game lifts her as high
+			-- instead (Rise, from 0.42 to 0.9 s, diving from 0.93 to the ground at 1.18) and carries her there, as
+			-- far as Mortael's leap (22). 260 in all on one foe, as Kaeda's R.
+			R = {
+				Kind = "Leap",
+				Motion = "RA-LAN-061",
+				InPlace = "Grounded",
+				Indicator = "Zone",
+				Cooldown = 40,
+				Range = 22,
+				Radius = 12,
+				Damage = 200,
+				Ratio = 1.2,
+				Takeoff = 0.42,
+				Land = 1.18,
+				Rise = 36,
+				RiseStart = 0.42,
+				RiseEnd = 0.9,
+				Fall = 0.93,
+				Dive = true,
+				Busy = 2.85,
+				Swings = { Hits = { 2.25, 2.8 }, Damage = 30, Ratio = 0.15, Range = 9 },
+			},
+			-- A vault on her spear to where she aims (Shift, 052, owner 2026-11-06), as Corvin's leaping kick: off the
+			-- ground at 0.05 s of the clip, high in the air, the spear swept out before her as she comes down (its
+			-- fastest at 0.65 s, 7 studs out, Tools/clip_hits.py), down at 0.72. It strikes everyone she passed and
+			-- within 8 studs of where she lands, as Mortael's dash does (25 within 7, the spear a stud longer).
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-LAN-052",
+				Speed = 1.2,
+				Cooldown = 7,
+				Range = 14,
+				Width = 4,
+				Damage = 25,
+				Ratio = 0.3,
+				Start = 0.05,
+				Move = 0.72,
+				Stop = 0.95,
+				Slash = { Time = 0.65, Range = 8 },
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -2729,6 +2875,7 @@ Config.Bots = {
 		"Kaeda",
 		"Corvin",
 		"Haldrek",
+		"Renka",
 	},
 	Sight = 25,
 	Taken = 20,

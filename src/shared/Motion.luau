@@ -98,6 +98,9 @@ export type Motion = typeof(setmetatable(
 		rootTurn: CFrame,
 		bones: { [string]: Bone },
 		meshes: { [string]: { MeshPart } },
+		-- The plain parts of the weapons (a placeholder of Parts, as Renka's spear) with their own transparency: the
+		-- clips give them no opacity, so they show as made and are put away for a dance.
+		plain: { [BasePart]: number },
 		-- The rigid components' joints by their part's name, with the part's size as made (and its mesh's, in the
 		-- newest packs).
 		props: { [string]: { motor: Motor6D, size: Vector3, meshSize: Vector3? } },
@@ -220,6 +223,8 @@ local function takeWeapon(self: Motion, d: Instance)
 		if not table.find(meshes, d) then
 			table.insert(meshes, d)
 		end
+	elseif d:IsA("BasePart") and self.plain[d] == nil then
+		self.plain[d] = d.Transparency
 	end
 end
 
@@ -233,6 +238,7 @@ function Motion.new(character: Model, packName: string): Motion
 		rootTurn = CFrame.identity,
 		bones = {},
 		meshes = {},
+		plain = {},
 		props = {},
 		base = nil,
 		previous = nil,
@@ -727,6 +733,12 @@ function Motion.apply(self: Motion, pose: Pose)
 		local opacity = pose.opacity[name] or 0
 		for _, mesh in meshes do
 			mesh.Transparency = 1 - opacity
+		end
+	end
+	for part, shown in self.plain do
+		local want = if pose.lent then 1 else shown
+		if part.Transparency ~= want then
+			part.Transparency = want
 		end
 	end
 	-- His own weapon held in a hand (HeroLook's Held, Korrund's axe) is put away for a dance as the packs' weapons are.

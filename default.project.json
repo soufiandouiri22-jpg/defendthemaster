@@ -102,6 +102,16 @@
 					"$path": "Vendor/ArenaFighter/Animations/Included Rig.rbxmx"
 				}
 			},
+			"Lancer": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/Lancer/Build/ComponentPlayer"
+				},
+				"Rig": {
+					"$path": "Vendor/Lancer/Animations/Included Rig.rbxmx"
+				}
+			},
 			"DanceCollection": {
 				"$className": "Folder",
 				"$ignoreUnknownInstances": true,

@@ -48,7 +48,8 @@ type Move = {
 	takeoff: number,
 	land: number,
 	sharp: boolean,
-	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift).
+	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift), or a leap's with a Rise,
+	-- which lifts him as high as he goes from `from` to `to`.
 	lift: any?,
 	-- Thrown away by a blow (CombatService's knock): how high the arc goes over the way.
 	height: number?,
@@ -357,6 +358,7 @@ local function use(b: Bot, key: string, aim: Vector3): boolean
 			takeoff = if dash then kit.Start else kit.Takeoff,
 			land = if dash then kit.Move else kit.Land,
 			sharp = dash,
+			lift = if kit.Rise then kit else nil,
 		}
 		b.path = {}
 	end
@@ -852,7 +854,9 @@ local function carry(b: Bot, now: number)
 	local t = now - m.started
 	if m.lift then
 		local align = holder(root)
-		align.Position = m.from + Vector3.new(0, HeroKit.lift(m.lift, t), 0)
+		local along = math.clamp((t - m.takeoff) / math.max(m.land - m.takeoff, 1e-3), 0, 1)
+		local under = m.from:Lerp(m.to, along * along * (3 - 2 * along))
+		align.Position = under + Vector3.new(0, HeroKit.lift(m.lift, t), 0)
 		align.Enabled = true
 		if t >= m.lift.Land then
 			align.Enabled = false

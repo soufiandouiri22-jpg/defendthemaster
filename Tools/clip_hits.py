@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from keyframe_pack import JOINT_ORDER, PACKS, ROOT, cframe, props, rig_joints
 
 # Half the length of each pack's weapon (Weapon Attachment.json's reference size, its long axis Y).
-TIPS = {"GreatswordKnight": 11.0402 / 2, "Elementalist": 6.366 / 2, "TricksterCaster": 4.865 / 2, "Wildguard": 4.3815 / 2, "ArenaFighter": 3.204 / 2}
+TIPS = {"GreatswordKnight": 11.0402 / 2, "Elementalist": 6.366 / 2, "TricksterCaster": 4.865 / 2, "Wildguard": 4.3815 / 2, "ArenaFighter": 3.204 / 2, "Lancer": 11.6208 / 2}
 
 
 def mul(a: list[float], b: list[float]) -> list[float]:

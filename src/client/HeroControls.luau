@@ -68,7 +68,8 @@ type Leap = {
 	land: number,
 	-- A dash starts fast and slows to a stop; a leap eases in and out.
 	sharp: boolean,
-	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift).
+	-- An Ascend's kit, which holds him in the air where he cast it instead (HeroKit.lift), or a leap's with a Rise,
+	-- which lifts him as high as he goes from `from` to `to`.
 	lift: any?,
 	-- Whether he cast that in the air (a jump pad's flight): known once it lets him down.
 	aloft: boolean?,
@@ -197,11 +198,12 @@ local function paletteOf(settings: any): ShadowEffects.Palette?
 		else nil
 end
 
--- The leap's shockwave at `landing` (where the root part comes down) when the hero lands.
+-- The leap's shockwave at `landing` (where the root part comes down) when the hero lands; a leap without Damage lands
+-- without a blow, and so without one.
 local function landLater(character: Model, landing: Vector3, kit: any)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not humanoid or not root then
+	if not humanoid or not root or not kit.Damage then
 		return
 	end
 	local height = heightOf(root, humanoid)
@@ -927,10 +929,18 @@ local function cast(key: string)
 	end
 	local length = HeroAnimator.play(character, kit.Motion, 1, nil, kit.InPlace)
 	if kit.Kind == "Leap" then
-		busyUntil = now + kit.Land + RECOVER
+		busyUntil = now + (kit.Busy or kit.Land) + RECOVER
 		local to = HeroKit.leapLanding(root.Position, aim, kit.Range, heightOf(root, humanoid), HeroKit.leapIgnore())
-		leap = { started = now, from = root.Position, to = to, takeoff = kit.Takeoff, land = kit.Land, sharp = false }
-		slow(humanoid, kit.Land + RECOVER, 0)
+		leap = {
+			started = now,
+			from = root.Position,
+			to = to,
+			takeoff = kit.Takeoff,
+			land = kit.Land,
+			sharp = false,
+			lift = if kit.Rise then kit else nil,
+		}
+		slow(humanoid, (kit.Busy or kit.Land) + RECOVER, 0)
 		landLater(character, to, kit)
 	elseif kit.Kind == "Strike" then
 		local last = kit.Strikes[#kit.Strikes]
@@ -1148,14 +1158,16 @@ local function updateLeap()
 		if t >= l.lift.Fall and l.aloft == nil then
 			groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
 			local height = heightOf(root, humanoid :: Humanoid)
-			l.aloft = not Workspace:Raycast(l.from, Vector3.new(0, -(height + 2), 0), groundRay)
+			l.aloft = not Workspace:Raycast(l.to, Vector3.new(0, -(height + 2), 0), groundRay)
 		end
 		if l.aloft then
 			root.AssemblyLinearVelocity = Vector3.zero
 			leap = nil
 			return
 		end
-		root.CFrame = CFrame.new(l.from + Vector3.new(0, HeroKit.lift(l.lift, t), 0)) * root.CFrame.Rotation
+		local along = math.clamp((t - l.takeoff) / math.max(l.land - l.takeoff, 1e-3), 0, 1)
+		local under = l.from:Lerp(l.to, along * along * (3 - 2 * along))
+		root.CFrame = CFrame.new(under + Vector3.new(0, HeroKit.lift(l.lift, t), 0)) * root.CFrame.Rotation
 		root.AssemblyLinearVelocity = Vector3.zero
 		if t >= l.lift.Land then
 			leap = nil

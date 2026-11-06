@@ -3,7 +3,7 @@
 Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack rig's joints in its Configuration, its
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
-    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|ArenaFighter|DanceCollection
+    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|ArenaFighter|Lancer|DanceCollection
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
@@ -85,6 +85,17 @@ PACKS = {
                 "c1": [-0.00339, -0.21687, -0.1601, 1, 0, 0, 0, 1, 0, 0, 0, 1],
             },
         ],
+    },
+    # The Lancer's clips with its spear; the spear hangs from the left hand ("Attach Spear.lua"). The pack has no model
+    # of it, only the spear's size.
+    "Lancer": {
+        "clips": "Individual Animations/with-spear",
+        "weapon": {
+            "name": "Spear",
+            "parent": "LeftHand",
+            "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            "c1": [0, -0.90364, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
     },
     # The Dance Collection (the emotes, Config.Emotes): body clips only, played on any hero (Motion.lend).
     "DanceCollection": {

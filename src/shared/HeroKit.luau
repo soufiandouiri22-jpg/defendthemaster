@@ -41,7 +41,7 @@ function HeroKit.releases(kit: any): { number }
 end
 
 -- How high an Ascend (`kit`) holds the hero above where he cast it, `t` seconds after: easing up from RiseStart to
--- RiseEnd, hanging at Rise, and easing down from Fall to Land.
+-- RiseEnd, hanging at Rise, and easing down from Fall to Land; with `Dive` falling ever faster till he hits the ground.
 function HeroKit.lift(kit: any, t: number): number
 	local function ease(a: number): number
 		a = math.clamp(a, 0, 1)
@@ -50,7 +50,8 @@ function HeroKit.lift(kit: any, t: number): number
 	if t < kit.Fall then
 		return kit.Rise * ease((t - kit.RiseStart) / (kit.RiseEnd - kit.RiseStart))
 	end
-	return kit.Rise * (1 - ease((t - kit.Fall) / (kit.Land - kit.Fall)))
+	local fall = math.clamp((t - kit.Fall) / (kit.Land - kit.Fall), 0, 1)
+	return kit.Rise * (1 - if kit.Dive then fall * fall else ease(fall))
 end
 
 -- Whether the hits of `kit` go where the crosshair points as each lands or leaves his hand rather than where it

@@ -41,6 +41,14 @@ local KEYS = {
 -- where the item's description gives one; keep it in step with the looks.
 local OUTFITS = {
 	{
+		"RENKA",
+		{
+			"Shrine Maiden Robes (1.0): Nexus Exchange",
+			"Long Sleek High Ponytail w Curtain Bangs (Black): Voguess",
+			"(GLOWING) Elegant Pretty Anime Girl Face Red: minokumi",
+		},
+	},
+	{
 		"HALDREK",
 		{
 			"Beast Titan Head: R3demption Ugc",

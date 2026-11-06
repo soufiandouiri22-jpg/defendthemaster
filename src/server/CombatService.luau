@@ -683,9 +683,10 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 			humanoid.HipHeight + root.Size.Y / 2,
 			HeroKit.leapIgnore()
 		)
-		state.busyUntil = now + kit.Land + RECOVER
+		-- Swings that come well after he lands hold him till then (`Busy`).
+		state.busyUntil = now + (kit.Busy or kit.Land) + RECOVER
 		motionEvent:FireAllClients(character, key, 0, landing)
-		slow(state, kit.Land + RECOVER, 0)
+		slow(state, (kit.Busy or kit.Land) + RECOVER, 0)
 		local swings = kit.Swings
 		for _, at in if swings then swings.Hits else {} do
 			later(state, at, function()
@@ -702,7 +703,7 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 			end)
 		end
 		later(state, kit.Land, function()
-			for _, enemy in enemiesNear(team, landing, kit.Radius) do
+			for _, enemy in if kit.Damage then enemiesNear(team, landing, kit.Radius) else {} do
 				if HeroKit.landingStrikes(landing, kit.Radius, enemy) then
 					damage(player, character, enemy, strength(kit.Damage), magic)
 				end

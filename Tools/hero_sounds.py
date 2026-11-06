@@ -326,6 +326,32 @@ PACKS = {
         # Both slams (074 at 1.48 s, 042 at 1.38 s) already sound in their recordings, so they need no Slam.
         "events": {},
     },
+    "Lancer": {
+        "folder": ROOT / "Vendor/Lancer/Sounds",
+        "clips": [
+            # Renka's attacks (Config.Heroes.Renka.Kit) and the clips under them.
+            "RA-LAN-023", "RA-LAN-024", "RA-LAN-025", "RA-LAN-046", "RA-LAN-049", "RA-LAN-061", "RA-LAN-052",
+            "RA-LAN-005", "RA-LAN-006", "RA-LAN-007", "RA-LAN-002", "RA-LAN-011", "RA-LAN-013", "RA-LAN-033",
+        ],
+        # Her steps are a woman's.
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "f", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # Her vault (052) has a second recording the pack plays as the move begins (its additionalSounds,
+        # CustomEvent): its whoosh as she sets off. Her spiral strike's (046) own recordings begin at 0.5 s, with
+        # its second blow, so its first (Hit 0.25, owner 2026-11-06: not heard) gets her basic attacks' spear swing
+        # (Sound 03, loudest 0.15 to 0.27 s in).
+        "extra": {
+            "RA-LAN-052": [(0.0, ["A9099b14772c0"], 0.8)],
+            "RA-LAN-046": [(0.05, ["A7e8637a5f932"], 0.8)],
+        },
+        # Her ultimate's dive (061, down at 1.18 s) already sounds in its own recording, and her vault onto the spot
+        # (049) lands without a blow, so they need no Slam.
+        "events": {},
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no
