@@ -2316,9 +2316,10 @@ Config.Heroes = {
 			-- Seven quick shots off the multitool (033, owner 2026-11-04) as he swings it from his right across to his
 			-- left, each from its muzzle and where it points then (owner, 2026-11-04): `Turns` is the bearing of its
 			-- length at each release, measured on him in a match (its bone 011 poses it), 29° right to 82° left. So
-			-- it sweeps a group rather than one enemy: 182 over all seven (Ratio 1.4), and one enemy before him takes
-			-- one or two (26 to 52), as Mavorak's three orbs fanned over 30° (E: 240 over all, mostly one of 80 on
-			-- one enemy, Ratio 1.5, Cooldown 10, against 8 here).
+			-- it sweeps a group rather than one enemy, and one enemy before him takes one or two. With 26 and Ratio
+			-- 0.2 a shot it was the weakest M2 on one enemy by far, unused (owner, 2026-11-06): now each shot is as
+			-- one of Mavorak's three fanned orbs grows (E: 80 and Ratio 0.5 an orb), 45 and Ratio 0.5, so one enemy
+			-- takes 45 to 90 and a group up to 315.
 			M2 = {
 				Kind = "Throw",
 				Motion = "RA-GSL-033",
@@ -2330,8 +2331,8 @@ Config.Heroes = {
 				ProjectileSpeed = 150,
 				Range = 40,
 				Width = 1.5,
-				Damage = 26,
-				Ratio = 0.2,
+				Damage = 45,
+				Ratio = 0.5,
 			},
 			-- A bomb round (045, owner 2026-11-04): one great slow round that bursts in fire where it hits, over
 			-- everyone within 8 studs. As much as Shadowren's dagger on one enemy (110), but over several, so a
