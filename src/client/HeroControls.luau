@@ -967,7 +967,7 @@ local function cast(key: string)
 		slow(humanoid, kit.Land + RECOVER, 0)
 		thenLater(character, kit, length)
 	else
-		busyUntil = now + length
+		busyUntil = now + math.min(length, HeroKit.flurryEnd(kit) + RECOVER)
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
 		if kit.Slam then
 			slamLater(character, kit)

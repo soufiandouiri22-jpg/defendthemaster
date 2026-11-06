@@ -943,7 +943,7 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		state.snipe = snipe
 		later(state, kit.Ready + hold, snipe.fire)
 	elseif kit.Kind == "Flurry" then
-		state.busyUntil = now + length
+		state.busyUntil = now + math.min(length, HeroKit.flurryEnd(kit) + RECOVER)
 		motionEvent:FireAllClients(character, key, 0)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		for hit, time in kit.Hits do

@@ -289,6 +289,20 @@ function HeroKit.turned(kit: any, n: number, direction: Vector3): Vector3
 		else direction
 end
 
+-- When a Flurry (`kit`) has struck for the last time, seconds into it: its last hit, pulse or the end of its beam. He
+-- may act again just after (owner, 2026-11-06), as after every other ability, or as the motion ends if that comes
+-- first; the rest of its motion plays out unless he does.
+function HeroKit.flurryEnd(kit: any): number
+	local last = kit.Hits[#kit.Hits]
+	if kit.Pulses then
+		last = math.max(last, kit.Pulses[#kit.Pulses])
+	end
+	if kit.Beam then
+		last = math.max(last, kit.Beam.To)
+	end
+	return last
+end
+
 -- What one strike of a Flurry (`kit`) at `time` seconds into it reaches: a sweep along the crosshair (Range, Angle),
 -- or from its Slam on the slam all round him (SlamRadius); and whether it is the slam.
 function HeroKit.flurryStrike(kit: any, time: number): (number, number, boolean)

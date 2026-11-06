@@ -2859,7 +2859,8 @@ Config.Respawn = {
 -- to `Stray` studs from where it aimed. An
 -- archer (a hero whose combo shoots, as Rowan) keeps `Keep` studs from an enemy hero, hops away from one within
 -- `Flee`, looses his fan of arrows at a hero within `Fan` of its range, and into minions when 3 stand within `Crowd`
--- studs of the one he aims at. Only while `Buys` is on does a bot shop: at the armory it buys its hero's build in
+-- studs of the one he aims at. Only in the modes `Buys` lists (Config.Queue.Modes) does a bot shop, in Ranked and not in
+-- Quick Play (owner, 2026-11-06): at the armory it buys its hero's build in
 -- `Builds`, or else the one the armory recommends him (Config.ClassBuilds), in order, its parts first while the whole
 -- is too dear, and it drinks a potion below `PotionAt` of its health.
 Config.Bots = {
@@ -2891,7 +2892,7 @@ Config.Bots = {
 	Flee = 8,
 	Fan = 0.6,
 	Crowd = 8,
-	Buys = false,
+	Buys = { QuickPlay = false, Ranked = true },
 	Builds = {
 		Shadowren = {
 			"IronSword",

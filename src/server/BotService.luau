@@ -3,8 +3,8 @@
 -- one of its team fights yet, anywhere in the arena, and helps with one only when all are taken; with none alive it
 -- fights the other enemies (Config.Bots). It fights with its own hero's whole kit through CombatService, as a player
 -- would: a fighter up close goes in with it, an archer keeps his distance; with a person's reaction time, rests and
--- misses (Config.Bots), not perfectly. It levels up as players do and spends its points itself; while Buys is on it
--- buys its hero's build at the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its
+-- misses (Config.Bots), not perfectly. It levels up as players do and spends its points itself; in a mode Buys lists
+-- (Ranked) it buys its hero's build at the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its
 -- potions. It comes back on a
 -- spawn pad after it dies. It plays the hero the draft picked for its place (BotService.start), and a bot that takes over
 -- from a player who left plays his hero.
@@ -26,6 +26,7 @@ local CombatService = require(script.Parent.CombatService)
 local Economy = require(script.Parent.Economy)
 local HeroService = require(script.Parent.HeroService)
 local MatchService = require(script.Parent.MatchService)
+local MatchSetup = require(script.Parent.MatchSetup)
 local ProgressService = require(script.Parent.ProgressService)
 local ShopService = require(script.Parent.ShopService)
 
@@ -713,6 +714,11 @@ local function missingParts(id: string, pool: { string }, out: { string })
 	end
 end
 
+-- Whether the bots shop in this match's mode (Config.Bots.Buys).
+local function buys(): boolean
+	return SETTINGS.Buys[MatchSetup.mode()] == true
+end
+
 -- At the armory the bot buys the next item of its hero's build (Config.Bots.Builds, else the one the armory
 -- recommends him), or while that is too dear the dearest part of it it can afford; an item it cannot carry is passed
 -- over.
@@ -783,7 +789,7 @@ local function think(b: Bot, now: number)
 	end
 	if not alive(b) then
 		b.prey = nil
-		if SETTINGS.Buys then
+		if buys() then
 			shop(b)
 		end
 		return
@@ -792,14 +798,14 @@ local function think(b: Bot, now: number)
 		return
 	end
 	spend(b)
-	if SETTINGS.Buys then
+	if buys() then
 		shop(b)
 		drink(b)
 	end
 	local root = b.root :: BasePart
 	-- In the buy phase a bot that buys walks to its armory stall and shops there; the others wait on their pad.
 	if not MatchService.fighting() then
-		local stall = SETTINGS.Buys and nearestStall(b, root.Position)
+		local stall = buys() and nearestStall(b, root.Position)
 		if stall and not ShopService.atShop(b.actor) then
 			walkTo(b, stall, now)
 		else
