@@ -15,12 +15,14 @@
 local CollectionService = game:GetService("CollectionService")
 local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local Trace = require(ReplicatedFirst:WaitForChild("Trace"))
 local AbilityBar = require(script.Parent.AbilityBar)
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -53,6 +55,7 @@ local KEY_OF: { [Enum.KeyCode | Enum.UserInputType]: string } = {
 }
 local player = Players.LocalPlayer
 local actionEvent: RemoteEvent
+local castListeners: { (key: string) -> () } = {}
 local groundRay = RaycastParams.new()
 groundRay.FilterType = Enum.RaycastFilterType.Exclude
 -- How far down a hero in the air looks for the ground under him.
@@ -512,14 +515,14 @@ local function holdLater(character: Model, kit: any)
 	end)
 end
 
--- An Ascend's or a Rain's second motion (`kit.Then`), as its first (`length` seconds) ends or at its `ThenAt`, unless
--- that was cut short; a Rain's in place, as he hangs where he is.
-local function thenLater(character: Model, kit: any, length: number)
-	task.delay(math.max(0, (kit.ThenAt or length) - 0.03), function()
-		if HeroAnimator.playing(character) == kit.Motion then
-			HeroAnimator.play(character, kit.Then, 1, nil, kit.Kind == "Rain")
-		end
-	end)
+-- An Ascend's or a Rain's second motion (`kit.Then`), as its first ends or at its `ThenAt`, unless that was cut short;
+-- a Rain's in place, as he hangs where he is. The motions themselves hand over (HeroAnimator.chain), so no hitch in the
+-- frames can make it miss the first's end.
+local function thenLater(character: Model, kit: any)
+	if character == player.Character then
+		Trace.mark("ult.chain", { playing = HeroAnimator.playing(character) or "none", clip = kit.Then })
+	end
+	HeroAnimator.chain(character, kit.Then, kit.ThenAt, kit.Kind == "Rain")
 end
 
 -- Seconds between a Rain's beams, how much higher than he hangs they fall from, how long each takes to come down, and
@@ -848,6 +851,13 @@ local function cast(key: string)
 	actionEvent:FireServer(key, aim)
 	following, aimSentAt = HeroKit.follows(kit), now
 	AbilityBar.used(key)
+	if key == "R" then
+		Trace.mark("ult.cast", { hero = character:GetAttribute("Hero"), kind = kit.Kind })
+		HeroSounds.watch(8)
+	end
+	for _, callback in castListeners do
+		task.spawn(callback, key)
+	end
 
 	if kit.Kind == "Combo" then
 		local continuing = now <= comboUntil
@@ -901,7 +911,7 @@ local function cast(key: string)
 		vanishMotion(character, kit)
 		return
 	elseif kit.Kind == "Rain" then
-		local length = HeroAnimator.play(character, kit.Motion, 1, nil, "Grounded")
+		HeroAnimator.play(character, kit.Motion, 1, nil, "Grounded")
 		busyUntil = now + kit.Land + RECOVER
 		local spot = HeroKit.leapLanding(root.Position, aim, kit.Range, heightOf(root, humanoid), HeroKit.leapIgnore())
 		leap = {
@@ -914,7 +924,7 @@ local function cast(key: string)
 			lift = kit,
 		}
 		slow(humanoid, kit.Land + RECOVER, 0)
-		thenLater(character, kit, length)
+		thenLater(character, kit)
 		rainLater(character, spot, kit)
 		return
 	elseif kit.Kind == "Snipe" then
@@ -965,7 +975,7 @@ local function cast(key: string)
 			lift = kit,
 		}
 		slow(humanoid, kit.Land + RECOVER, 0)
-		thenLater(character, kit, length)
+		thenLater(character, kit)
 	else
 		busyUntil = now + math.min(length, HeroKit.flurryEnd(kit) + RECOVER)
 		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
@@ -1266,15 +1276,16 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 		end
 		return
 	elseif kit.Kind == "Rain" then
-		thenLater(character, kit, HeroAnimator.play(character, kit.Motion, 1, nil, "Grounded"))
+		HeroAnimator.play(character, kit.Motion, 1, nil, "Grounded")
+		thenLater(character, kit)
 		if landing then
 			rainLater(character, landing, kit)
 		end
 		return
 	else
-		local length = HeroAnimator.play(character, kit.Motion, 1, nil, kit.InPlace)
+		HeroAnimator.play(character, kit.Motion, 1, nil, kit.InPlace)
 		if kit.Kind == "Ascend" then
-			thenLater(character, kit, length)
+			thenLater(character, kit)
 		end
 	end
 	if kit.Kind == "Leap" and landing then
@@ -1648,6 +1659,12 @@ local function abilityStrikes(key: string): boolean
 		end
 	end
 	return false
+end
+
+-- Runs `callback` with the key ("M1", "M2", "E", "R", "Dash") of every attack the player's hero starts (the first
+-- matches' Tips).
+function HeroControls.onCast(callback: (key: string) -> ())
+	table.insert(castListeners, callback)
 end
 
 -- Throws the player's hero from where he stands so his root comes down on `to`, in an arc `height` studs over the

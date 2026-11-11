@@ -68,6 +68,9 @@ local CUES: { [string]: Cue } = {
 	Potion = { asset = Assets.CorkPull, start = 0, length = 0.4, gain = 0.8 },
 	Scoreboard = { asset = Assets.PaperHandling, start = 0.08, length = 0.37, gain = 0.27 },
 
+	-- A tip of the first matches done (Tips).
+	StepDone = { asset = Assets.MagicGlow, start = 0, length = 1.2, gain = 1.6 },
+
 	-- A sniper's scope coming to his eye, and his bullet striking a head (Scope).
 	ScopeIn = { asset = Assets.PowerClunk, start = 0, length = 0.3, gain = 0.6 },
 	Headshot = { asset = Assets.UiSelect, start = 0, length = 0.45, gain = 1.4 },

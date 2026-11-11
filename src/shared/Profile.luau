@@ -31,6 +31,11 @@ export type Data = {
 	SeenEmotes: { [string]: boolean },
 	Favourite: string,
 	Welcomed: boolean,
+	-- The one-time tips he has had: those of his first matches (client Tips) and of the lobby after them (Lobby.Hints).
+	SeenHints: { [string]: boolean },
+	-- His Stats.Games when he was made new to the game again to test it (Config.Account.AlwaysNew, Studio's
+	-- TestNewPlayer); nil for everyone else (Profile.newGames).
+	NewAt: number?,
 	LastHero: string,
 	Rank: any,
 	Mastery: { [string]: any },
@@ -50,6 +55,7 @@ function Profile.template(): Data
 		SeenEmotes = {},
 		Favourite = "",
 		Welcomed = false,
+		SeenHints = {},
 		LastHero = "",
 		Rank = {
 			Season = Config.Season.Number,
@@ -83,6 +89,12 @@ function Profile.defaultSettings(): Settings
 		DamageNumbers = true,
 		Sensitivity = 0.5,
 	}
+end
+
+-- How many matches `data` has played as a new player: all of them, or since he was made new again (NewAt). His first
+-- match pays its bonus (MatchEnd) and his first matches show their tips (client Tips, Lobby.Hints).
+function Profile.newGames(data: Data): number
+	return math.max(0, data.Stats.Games - (data.NewAt or 0))
 end
 
 -- Whether `data` owns `hero`: every starter hero, and those bought or earned.

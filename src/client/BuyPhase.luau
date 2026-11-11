@@ -3,6 +3,7 @@
 -- counting down while the heroes walk to their armory stalls; with the armory open (Shop) its own countdown shows
 -- instead. The last three seconds count big in the middle, and "FIGHT!" opens the match with a deep boom.
 
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -10,6 +11,7 @@ local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
+local Loading = require(ReplicatedFirst:WaitForChild("Loading"))
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Preferences = require(script.Parent.Preferences)
 local Shop = require(script.Parent.Shop)
@@ -53,6 +55,14 @@ local function sound(id: string, volume: number): Sound
 	s.SoundGroup = Preferences.group("Effects")
 	s.Parent = SoundService
 	return s
+end
+
+-- Plays `s` from the start, unless the loading screen is still up (UiSound keeps quiet behind it too).
+local function play(s: Sound)
+	if Loading.isGone() then
+		s.TimePosition = 0
+		s:Play()
+	end
 end
 
 -- Big lettering filling its frame (TextSize stops at 100), with a gradient fill and a thick dark edge.
@@ -217,7 +227,7 @@ function BuyPhase.start()
 		band.Size = UDim2.fromScale(1, 0)
 		band.BackgroundTransparency = 0
 		tween(band, 0.3, { Size = UDim2.new(1, 0, 0, 330) })
-		sting:Play()
+		play(sting)
 		fade(title, 0, 0.18)
 		tween(groupScale, 0.38, { Scale = 1 }, Enum.EasingStyle.Back)
 		tween(group, 0.38, { Rotation = 0 }, Enum.EasingStyle.Back)
@@ -254,15 +264,14 @@ function BuyPhase.start()
 		bigScale.Scale = 1.9
 		tween(bigScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
 		fade(big, 1, 0.25, 0.7)
-		tick.TimePosition = 0
-		tick:Play()
+		play(tick)
 		task.delay(0.8, function()
 			tick:Stop()
 		end)
 	end
 
 	local function fightNow()
-		boom:Play()
+		play(boom)
 		fightFrame.Visible = true
 		fade(fight, 0, 0.1)
 		fightScale.Scale = 3.2

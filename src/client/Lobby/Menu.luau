@@ -3,7 +3,8 @@
 -- page of the chosen tab; the ladder (Leaderboard) opens from the Ranked page, the settings over everything. Away
 -- from Play a dark veil lies over the hall. Notices (what the server answered) slide in under the tab bar. A player
 -- without a hero starts on the welcome screen (Lobby.Welcome); becoming a hero there or on the heroes page plays his
--- transformation on the podium (Showcase.transform) with the menu out of the way.
+-- transformation on the podium (Showcase.transform) with the menu out of the way. After the player's first match
+-- the Play page shows its one-time hints (Lobby.Hints).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -224,6 +225,7 @@ function Menu.start()
 	end)
 
 	go("Play")
+	require(script.Parent.Hints).start(gui)
 
 	-- A player without a hero yet starts on the welcome screen.
 	ProfileClient.watch(function(data)

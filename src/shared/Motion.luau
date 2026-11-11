@@ -76,6 +76,8 @@ type Clip = {
 	mirror: boolean,
 	-- Played over and over until stopped, when it loops (Motion.keepPlaying).
 	repeating: boolean,
+	-- The clip played after it, from `at` seconds into it or at its end (Motion.chain).
+	following: { id: string, at: number?, inPlace: boolean }?,
 	-- The pack player it is sampled from.
 	player: any,
 }
@@ -551,6 +553,14 @@ function Motion.stop(self: Motion)
 	end
 end
 
+-- Plays `id` after the clip played over the base, as its clock passes `at` seconds or at its end, unless another is
+-- played over the base by then.
+function Motion.chain(self: Motion, id: string, at: number?, inPlace: boolean)
+	if self.action then
+		self.action.following = { id = id, at = at, inPlace = inPlace }
+	end
+end
+
 function Motion.playing(self: Motion): string?
 	return if self.action then self.action.id else nil
 end
@@ -620,6 +630,11 @@ function Motion.step(self: Motion, dt: number)
 	local action = self.action
 	if action then
 		advance(self, action, dt * action.speed, true)
+		local following = action.following
+		if following and action.time >= (following.at or action.meta.duration) then
+			self:play(following.id, 1, nil, following.inPlace)
+			action = self.action :: Clip
+		end
 		if action.stopAt and action.time >= action.stopAt then
 			action.time = action.stopAt
 			action.speed = 0

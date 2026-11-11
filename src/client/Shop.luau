@@ -900,6 +900,21 @@ function Shop.isOpen(): boolean
 	return isOpen
 end
 
+-- What a new player's first-match tips point at while the armory is open (Tips.Focus): the chosen item's card and the
+-- buy button.
+function Shop.targets(): { GuiObject }
+	if not isOpen then
+		return {}
+	end
+	local list: { GuiObject } = {}
+	local card = pickedItem and cards[pickedItem]
+	if card then
+		table.insert(list, card.button)
+	end
+	table.insert(list, detail.button)
+	return list
+end
+
 local function showPrompts()
 	local team = player.Character and player.Character:GetAttribute("Team") or "Blue"
 	for anchor, prompt in prompts do

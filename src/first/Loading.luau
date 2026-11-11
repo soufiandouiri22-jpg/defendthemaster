@@ -771,9 +771,13 @@ local function overlap(a: GuiObject, b: GuiObject): boolean
 	return aMin.X < bMax.X and bMin.X < aMax.X and aMin.Y < bMax.Y and bMin.Y < aMax.Y
 end
 
--- Whether `item` is drawn: shown, on the screen and not cut away by what clips it (a card scrolled out of sight is
--- never drawn, so its picture never loads, owner 2026-11-01).
+-- Whether `item` is drawn: shown, not fully clear, on the screen and not cut away by what clips it (a card scrolled out
+-- of sight is never drawn, so its picture never loads, owner 2026-11-01; nor is a clear one, as a key's glow before it
+-- lights).
 local function seen(item: GuiObject): boolean
+	if (item:IsA("ImageLabel") or item:IsA("ImageButton")) and item.ImageTransparency >= 1 then
+		return false
+	end
 	local at: Instance? = item
 	while at and not at:IsA("LayerCollector") do
 		if

@@ -1,5 +1,5 @@
 -- The ability bar at the bottom centre (design 05): a slot per key (M1, M2, E, R, Shift) on a parchment panel, with the
--- hero's icon for it (Config.Heroes[hero].Icons) over the key, each darkening from the top while its cooldown runs with the seconds left on it, and lighting up while it is held to aim.
+-- hero's icon for it (Config.Heroes[hero].Icons) over the key (M1 and M2 as the mouse with that button lit), each darkening from the top while its cooldown runs with the seconds left on it, and lighting up while it is held to aim.
 -- Under M2, E and R a pill with the ability's rank as pips; with a point to spend it lights up with the key that
 -- raises it (1, 2, 3) and the slot pulses in a gold glow, which, or a click on the pill, raises the rank through Net.Upgrade (Shared.Leveling). An
 -- ability not learned yet shows its icon greyed out. A rank raised rings like an anvil, and the ultimate (R) coming off
@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local UiSound = require(script.Parent.UiSound)
@@ -20,8 +21,9 @@ local AbilityBar = {}
 
 local C = UiStyle.Colors
 local KEYS = { "M1", "M2", "E", "R", "Dash" }
--- What a slot shows when it is not its kit key.
+-- What a slot shows when it is not its kit key; the mouse's buttons show as the mouse with that button lit.
 local LABELS = { Dash = "Shift" }
+local MOUSE = { M1 = Assets.MouseLeft, M2 = Assets.MouseRight }
 local UPGRADE_KEYS = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three }
 local SLOT = 104
 local GAP = 14
@@ -103,6 +105,19 @@ local function slot(parent: Instance, key: string, index: number): Slot
 	local glyph = UiStyle.text(frame, name, if #name > 2 then 28 else 40, C.Ink, C.Cream)
 	glyph.Size = UDim2.fromScale(1, 1)
 	glyph.ZIndex = 5
+	if MOUSE[key] then
+		glyph.Text = ""
+		local mouse = Instance.new("ImageLabel")
+		mouse.Name = "Mouse"
+		mouse.BackgroundTransparency = 1
+		mouse.Image = MOUSE[key]
+		mouse.ScaleType = Enum.ScaleType.Fit
+		mouse.Size = UDim2.fromScale(1, 0.7)
+		mouse.Position = UDim2.fromScale(0.5, 0.5)
+		mouse.AnchorPoint = Vector2.one / 2
+		mouse.ZIndex = 5
+		mouse.Parent = glyph
+	end
 	local icon = Instance.new("ImageLabel")
 	icon.Name = "Icon"
 	icon.BackgroundTransparency = 1
@@ -222,6 +237,10 @@ local function showIcons(hero: string?)
 		s.icon.Image = image or ""
 		s.icon.Visible = image ~= nil
 		local name = LABELS[key] or key
+		local mouse = s.glyph:FindFirstChild("Mouse") :: ImageLabel?
+		if mouse then
+			mouse.Size = if image then UDim2.fromScale(1, 1.25) else UDim2.fromScale(1, 0.7)
+		end
 		if image then
 			s.glyph.TextSize = 18
 			s.glyph.Size = UDim2.new(1, 0, 0, 22)

@@ -9,6 +9,7 @@ local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Profile = require(ReplicatedStorage.Shared.Profile)
 local ProfileClient = require(script.Parent.Parent.ProfileClient)
@@ -22,6 +23,8 @@ local Welcome = {}
 local C = UiStyle.Colors
 local KEYS = { "M1", "M2", "E", "R", "Dash" }
 local LABELS = { Dash = "Shift" }
+-- The mouse's buttons show as the mouse with that button lit.
+local MOUSE = { M1 = Assets.MouseLeft, M2 = Assets.MouseRight }
 -- Where the podium stands on the screen while the welcome screen is open (a share of its width), and the camera's
 -- field of view then: a little wider than the menu's, so the greeting fits over the avatar's head.
 local PODIUM_AT, PODIUM_FOV = 0.3, 48
@@ -232,9 +235,19 @@ function Welcome.open(api: any)
 			icon.Image = settings.Icons and settings.Icons[key] or ""
 			icon.Parent = box
 			UiStyle.corner(icon, 8)
-			local keyText = Widgets.label(slot, LABELS[key] or key, 26, C.Ink)
-			keyText.Size = UDim2.new(1, 0, 0, 30)
-			keyText.Position = UDim2.fromOffset(0, 98)
+			if MOUSE[key] then
+				local mouse = Instance.new("ImageLabel")
+				mouse.BackgroundTransparency = 1
+				mouse.Image = MOUSE[key]
+				mouse.ScaleType = Enum.ScaleType.Fit
+				mouse.Size = UDim2.new(1, 0, 0, 34)
+				mouse.Position = UDim2.fromOffset(0, 97)
+				mouse.Parent = slot
+			else
+				local keyText = Widgets.label(slot, LABELS[key] or key, 26, C.Ink)
+				keyText.Size = UDim2.new(1, 0, 0, 30)
+				keyText.Position = UDim2.fromOffset(0, 98)
+			end
 		end
 		for hero, b in buttons do
 			local chosen = hero == selected

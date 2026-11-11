@@ -1,6 +1,7 @@
 -- What the menu asks of the server (Net.Menu, a RemoteFunction answering { ok, error?, ... }): buying a hero for coins
 -- (Shared.HeroShop), choosing the favourite for the podium, claiming a reward of the season pass (Shared.Pass), filling
--- the emote wheel's slots (Profile.wheel) and marking new emotes seen, saving the settings, and reading the ladder (Ladder). The server checks everything; the client only shows the answer and
+-- the emote wheel's slots (Profile.wheel) and marking new emotes seen, marking the one-time tips seen, saving the
+-- settings, and reading the ladder (Ladder). The server checks everything; the client only shows the answer and
 -- the new data (ProfileService). Settings are saved in a match too.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -113,6 +114,17 @@ local function emotesSeen(player: Player): Answer
 	end) or fail("Your data is still loading.")
 end
 
+-- Marks the one-time tip `id` seen (the first matches' Tips, the lobby's Lobby.Hints).
+local function hintSeen(player: Player, id: any): Answer
+	if typeof(id) ~= "string" or #id > 24 then
+		return fail("Unknown hint.")
+	end
+	return ProfileService.update(player, function(data): Answer
+		data.SeenHints[id] = true
+		return { ok = true }
+	end) or fail("Your data is still loading.")
+end
+
 local function settings(player: Player, values: any): Answer
 	if typeof(values) ~= "table" then
 		return fail("Bad settings.")
@@ -148,6 +160,7 @@ local ACTIONS: { [string]: (player: Player, ...any) -> Answer } = {
 	Claim = claim,
 	EmoteSlot = emoteSlot,
 	EmotesSeen = emotesSeen,
+	HintSeen = hintSeen,
 	Settings = settings,
 	Ladder = ladder,
 }

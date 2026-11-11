@@ -508,9 +508,25 @@ local function rewardsBand(parent: Instance, rewards: any, y: number)
 		x += w + 10
 	end
 
-	-- The rank.
+	-- The rank; after the player's first match the emote it gave him instead (Config.FirstMatch).
 	local rankCell = cells[1]
-	if rewards.ranked and rewards.placing then
+	local firstEmote = rewards.firstMatch and rewards.emote and Config.Emotes.List[rewards.emote]
+	if firstEmote then
+		local icon = Instance.new("ImageLabel")
+		icon.BackgroundTransparency = 1
+		icon.Image = firstEmote.Icon
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Size = UDim2.fromOffset(60, 60)
+		icon.AnchorPoint = Vector2.new(0, 0.5)
+		icon.Position = UDim2.fromScale(0, 0.5)
+		icon.Parent = rankCell
+		local fresh = Widgets.label(rankCell, "NEW EMOTE!", 18, C.Gold, "Left", C.Edge)
+		fresh.Size = UDim2.new(1, -64, 0, 26)
+		fresh.Position = UDim2.fromOffset(64, 6)
+		local name = Widgets.label(rankCell, string.upper(firstEmote.Name), 26, C.Cream, "Left", C.Edge)
+		name.Size = UDim2.new(1, -64, 0, 30)
+		name.Position = UDim2.fromOffset(64, 34)
+	elseif rewards.ranked and rewards.placing then
 		local placing =
 			Widgets.label(rankCell, if rewards.placed then "PLACED!" else "PLACEMENTS", 26, C.Cream, nil, C.Edge)
 		placing.Size = UDim2.new(1, 0, 0, 30)

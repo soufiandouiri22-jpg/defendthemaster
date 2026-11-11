@@ -8,6 +8,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HeroShop = require(ReplicatedStorage.Shared.HeroShop)
 local Mastery = require(ReplicatedStorage.Shared.Mastery)
@@ -28,6 +29,8 @@ local PLACES = 10
 local CARD_HEIGHT = 330
 local KEYS = { "M1", "M2", "E", "R", "Dash" }
 local LABELS = { Dash = "Shift" }
+-- The mouse's buttons show as the mouse with that button lit.
+local MOUSE = { M1 = Assets.MouseLeft, M2 = Assets.MouseRight }
 local PURPLE = Widgets.Kinds.Purple
 
 local function heroNames(): { string }
@@ -276,9 +279,19 @@ function HeroesPage.build(page: Frame, api: any)
 			icon.Image = settings.Icons and settings.Icons[key] or ""
 			icon.Parent = box
 			UiStyle.corner(icon, 8)
-			local keyText = Widgets.label(slot, LABELS[key] or key, 26, C.Ink)
-			keyText.Size = UDim2.new(1, 0, 0, 30)
-			keyText.Position = UDim2.fromOffset(0, 94)
+			if MOUSE[key] then
+				local mouse = Instance.new("ImageLabel")
+				mouse.BackgroundTransparency = 1
+				mouse.Image = MOUSE[key]
+				mouse.ScaleType = Enum.ScaleType.Fit
+				mouse.Size = UDim2.new(1, 0, 0, 34)
+				mouse.Position = UDim2.fromOffset(0, 93)
+				mouse.Parent = slot
+			else
+				local keyText = Widgets.label(slot, LABELS[key] or key, 26, C.Ink)
+				keyText.Size = UDim2.new(1, 0, 0, 30)
+				keyText.Position = UDim2.fromOffset(0, 94)
+			end
 		end
 
 		local owned = Profile.owns(data, selected)

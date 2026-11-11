@@ -3076,13 +3076,16 @@ Config.Season = {
 -- and `PerLevel` more for every one after it up to level `Plateau`, the same after it; there is no top level. The
 -- accounts of `AlwaysWelcome` (by UserId) have their hero cleared every time they come into the lobby, so they always
 -- see the welcome screen (Lobby.Welcome); none now: the owner's DraivoGames (11859499496) sees it once, as a player
--- does (owner, 2026-11-01).
+-- does (owner, 2026-11-01). The accounts of `AlwaysNew` are new to the game again every time they come into the
+-- lobby from outside the game (ProfileService): their next matches are their first, with its tips and bonus
+-- (Config.FirstMatch), to try them in the real game; their totals and rank stay (owner, 2026-11-11).
 Config.Account = {
 	StartCoins = 500,
 	First = 300,
 	PerLevel = 50,
 	Plateau = 30,
 	AlwaysWelcome = {},
+	AlwaysNew = { 11859499496 },
 }
 
 -- Ranked (Shared.Ranks), as League of Legends (Docs/League_Reference.md): the tiers in order, the first `Divided` with
@@ -3174,8 +3177,9 @@ Config.Pass = {
 -- Every dance of the pack is in `List` with its icon (owner, 2026-11-03), the ones of no pass yet kept for the next
 -- passes in this order (two free, three premium each): pass 2 QuickStep, BunnyHop; Wiggle, Twirl, RingDance. Pass 3
 -- SideShuffle, PumpIt; Flow, Hopscotch, Mambo. Pass 4 Swing, Festival; FireDance, FanDance, Spotlight. Pass 5 Jig,
--- Waltz; Harvest, Jive, PopStar. Left over: Ritual and Hype. Not to be used: 002 (the same as 003), 029 (as 017), 030
--- (as 031) and the Pole Dance (032, made for a pole the pack does not have).
+-- Waltz; Harvest, Jive, PopStar. Left over: Ritual. Hype is the first match's own (`FirstMatch`, owner 2026-11-06,
+-- Config.FirstMatch.Emote), earned only by playing it. Not to be used: 002 (the same as 003), 029 (as 017), 030 (as
+-- 031) and the Pole Dance (032, made for a pole the pack does not have).
 Config.Emotes = {
 	Pack = "DanceCollection",
 	-- How the pack's clips' ids begin.
@@ -3239,7 +3243,7 @@ Config.Emotes = {
 		Jive = { Name = "Jive", Motion = "RA-DNC-035", Icon = "rbxassetid://120389247525346" },
 		PopStar = { Name = "Pop Star", Motion = "RA-DNC-033", Once = true, Icon = "rbxassetid://91448674797318" },
 		Ritual = { Name = "Ritual", Motion = "RA-DNC-031", Icon = "rbxassetid://80710475618836" },
-		Hype = { Name = "Hype", Motion = "RA-DNC-003", Icon = "rbxassetid://126812403157109" },
+		Hype = { Name = "Hype", Motion = "RA-DNC-003", FirstMatch = true, Icon = "rbxassetid://126812403157109" },
 	} :: {
 		[string]: {
 			Name: string,
@@ -3248,6 +3252,7 @@ Config.Emotes = {
 			Start: string?,
 			Once: boolean?,
 			Default: boolean?,
+			FirstMatch: boolean?,
 		},
 	},
 	-- How the collection lists them: the defaults first, then by the pass they came from.
@@ -3350,6 +3355,15 @@ Config.Mastery = {
 Config.HeroShop = {
 	FeaturedDays = 3,
 	Daily = 4,
+}
+
+-- A player's first match ever (owner, 2026-11-07): a real match like any other, where the tips (client Tips) show him
+-- the armory and his attacks; at its end it pays `Coins` on top and the emote `Emote` (MatchEnd). A tip he has not
+-- done comes back in his next matches, up to his first `TipGames`.
+Config.FirstMatch = {
+	Coins = 500,
+	Emote = "Hype",
+	TipGames = 3,
 }
 
 -- The queue (QueueService): parties of up to `PartySize` wait for a match of two teams of Config.HeroesPerTeam. Players

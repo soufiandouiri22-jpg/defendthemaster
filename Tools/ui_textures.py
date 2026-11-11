@@ -356,7 +356,30 @@ def coin():
     save(rgba, "hud_coin.png")
 
 
+def edge_arrow():
+    """The tips' arrow pointing at a goal (Tips.Path): a bold gold arrowhead pointing up
+    with a dark outline, a lighter top half and a white gleam, as the HUD's gold."""
+    n = 160
+    x, y = grid(n, n)
+    points = [(n / 2, 10), (n - 14, n - 30), (n / 2, n - 58), (14, n - 30)]
+    d = polygon_sdf(x, y, points)
+    outline = 7
+    rgba = np.zeros(x.shape + (4,), np.float32)
+    light = np.clip(1.15 - y / n * 0.55, 0, 1.2)
+    paint(rgba, coverage(d), np.stack([255 / 255 * light, 206 / 255 * light, 74 / 255 * light], -1))
+    gleam = coverage(polygon_sdf(x, y, [(n / 2, 24), (n / 2 + 16, 52), (n / 2, 46)]) + 1)
+    paint(rgba, gleam * 0.8, rgb(255, 250, 220))
+    paint(rgba, coverage(-d) * coverage(d - outline), rgb(58, 30, 8))
+    rgba[..., 3] = coverage(d - outline)
+    save(rgba, "tutorial_edge_arrow.png")
+
+
 if __name__ == "__main__":
+    import sys
+
+    if sys.argv[1:] == ["tutorial"]:
+        edge_arrow()
+        sys.exit()
     crown()
     team_crown("hud_crown_blue.png", rgb(30, 146, 246), rgb(12, 108, 214), rgb(140, 206, 255), rgb(10, 22, 44))
     team_crown("hud_crown_red.png", rgb(236, 52, 44), rgb(186, 26, 22), rgb(255, 150, 136), rgb(44, 10, 8))

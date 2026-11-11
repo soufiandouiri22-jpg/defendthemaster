@@ -7,10 +7,12 @@
 local ContentProvider = game:GetService("ContentProvider")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local Workspace = game:GetService("Workspace")
 
+local Trace = require(ReplicatedFirst:WaitForChild("Trace"))
 local Preferences = require(script.Parent.Preferences)
 
 local HeroSounds = {}
@@ -32,6 +34,8 @@ export type Bank = {
 
 local banks: { [string]: Bank | false } = {}
 local contact: { [Instance]: number } = {}
+-- Until when the player's own hero's sounds are logged (HeroSounds.watch).
+local watchUntil = 0
 
 -- The sound bank of the pack `name`, or nil when it has none (yet).
 function HeroSounds.bank(name: string): Bank?
@@ -80,6 +84,24 @@ local function play(root: BasePart, bank: Bank, id: string, volume: number)
 	sound.Parent = root
 	sound:Play()
 	Debris:AddItem(sound, region[2] + 0.5)
+	if own and os.clock() < watchUntil then
+		Trace.mark("sound.play", { id = id, loaded = sound.IsLoaded, volume = sound.Volume })
+		task.delay(0.25, function()
+			Trace.mark("sound.check", {
+				id = id,
+				loaded = sound.IsLoaded,
+				playing = sound.IsPlaying,
+				at = math.floor((sound.TimePosition - region[1]) * 100) / 100,
+				loud = math.floor(sound.PlaybackLoudness),
+				parent = sound.Parent ~= nil,
+			})
+		end)
+	end
+end
+
+-- Logs the player's own hero's sounds (but its footsteps) for `seconds` from now: whether each starts and plays.
+function HeroSounds.watch(seconds: number)
+	watchUntil = os.clock() + seconds
 end
 
 -- Plays `walker`'s next footstep on the sand from `at`, its contacts alternating.

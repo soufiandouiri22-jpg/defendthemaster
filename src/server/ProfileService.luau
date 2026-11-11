@@ -99,6 +99,24 @@ local function welcome(player: Player, data: Profile.Data)
 	end
 end
 
+-- Makes a player new to the game again, to try what a new player meets (the first match's tips and bonus, client Tips
+-- and Config.FirstMatch, and the lobby's hints after it): his matches from now on count as his first (Profile.newGames),
+-- no tip is seen and the first match's emote is gone; his totals, rank and everything else stay. In Studio with the
+-- Workspace attribute TestNewPlayer every player, whenever he comes in; in the game the accounts of
+-- Config.Account.AlwaysNew, whenever they come into the lobby from outside the game (not back from a match).
+local function makeNew(player: Player, data: Profile.Data)
+	local fresh = Places.isLobby() and player:GetJoinData().TeleportData == nil
+	local new = if RunService:IsStudio()
+		then Workspace:GetAttribute("TestNewPlayer") == true
+		else fresh and table.find(Config.Account.AlwaysNew, player.UserId) ~= nil
+	if new then
+		data.NewAt = data.Stats.Games
+		data.SeenHints = {}
+		data.Emotes[Config.FirstMatch.Emote] = nil
+		data.SeenEmotes[Config.FirstMatch.Emote] = nil
+	end
+end
+
 -- In Studio with the Workspace attribute TestEmotes, every player has every emote, none seen and his wheel as it
 -- fills by itself, to try the wheel and the collection.
 local function testEmotes(data: Profile.Data)
@@ -139,6 +157,7 @@ local function load(player: Player)
 	end
 	newSeason(profile.Data)
 	welcome(player, profile.Data)
+	makeNew(player, profile.Data)
 	testEmotes(profile.Data)
 	sessions[player] = profile
 	player:SetAttribute("ProfileLoaded", true)

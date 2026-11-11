@@ -21,6 +21,17 @@ return {
 	-- The mouse pointer everywhere (client Pointer): a gold gauntlet pointing to the top-left, keyed from
 	-- Art/Icons/keyed/Pointer and cut close round it (Art/UI/Pointer/PointerGold_tight.png, 211 by 238).
 	Pointer = "rbxassetid://124420581695634",
+	-- The tips' key prompts (client Tips.Prompts; GenerateImage keyed from Art/Icons/keyed/Tutorial into
+	-- Art/Icons/Tutorial, 256 square): an ivory keycap with a blank top for the letter over it, a wide one for Shift
+	-- and Space (sliced at KeyWideSlice to stretch), and the mouse with its left or right button lit gold.
+	KeyCap = "rbxassetid://80349645523817",
+	KeyWide = "rbxassetid://123699824033914",
+	KeyWideSlice = Rect.new(84, 60, 172, 200),
+	MouseLeft = "rbxassetid://135839741049379",
+	MouseRight = "rbxassetid://102054997810498",
+	-- The tips' gold arrow pointing up at a goal (Tips.Path: over it, and round the screen's middle while it is out of
+	-- sight; Tools/ui_textures.py tutorial).
+	TutorialEdgeArrow = "rbxassetid://92633877175141",
 	HudCrown = "rbxassetid://101598854323035",
 	HudCoin = "rbxassetid://127769238687652",
 	-- The menu's icons (one GenerateImage sheet in design 13's look, Art/Icons/concepts/menu_icons_sheet.jpg, cut by

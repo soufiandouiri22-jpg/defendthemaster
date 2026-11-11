@@ -1,6 +1,7 @@
 -- Client entry point of Defend The Master. The server says what this place is (the Workspace attribute "Role"): in the
 -- lobby the menu runs (Lobby.Menu), in a match the arena's views and the HUD, with the draft before the fight and the
--- end screen after it, from where Play Again goes to the next match. The loading screen (ReplicatedFirst.Loading) stays up until the place's world, pictures, music
+-- end screen after it, from where Play Again goes to the next match; in a new player's first matches the tips show
+-- over them (Tips). The loading screen (ReplicatedFirst.Loading) stays up until the place's world, pictures, music
 -- and, in a match, the draft are there, and goes along on every teleport from here. The mouse is the game's gold gauntlet everywhere (Pointer).
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
@@ -85,6 +86,7 @@ local Scoreboard = require(script.Scoreboard)
 local Shop = require(script.Shop)
 local Showroom = require(script.Showroom)
 local Side = require(script.Side)
+local Tips = require(script.Tips)
 local Vanish = require(script.Vanish)
 local VersusView = require(script.VersusView)
 
@@ -119,6 +121,7 @@ ItemBar.start()
 HeroControls.start()
 task.spawn(EmoteControls.start)
 Showroom.start()
+task.spawn(Tips.start)
 -- The loading screen stays until the draft is up, or without a draft until both teams' cards have been shown
 -- (VersusView), except on Studio's test ground, which has neither.
 local draftShown = Loading.hold()

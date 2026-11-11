@@ -4,7 +4,7 @@
 -- (S+ to D-); the winners' best is the MVP. Every player then earns his coins, account XP and pass XP (twice the XP
 -- while his pass boost runs), and in Ranked his LP (Shared.Ranks, against the enemies' rating) with the ladder told;
 -- it is saved at once and sent to him (Net.MatchEnd "Result"), with every hero's line for the scoreboard. A player who leaves a match from the queue before its
--- end loses it. After the end "PlayAgain" queues the player for the next match in this one's mode from here
+-- end loses it. A player's first match ever pays a bonus as well (Config.FirstMatch). After the end "PlayAgain" queues the player for the next match in this one's mode from here
 -- (QueueService, owner 2026-11-01), with those of his party who pressed it too: once all of it still here did, or
 -- PARTY_WAIT seconds after the first (meanwhile "Again" "Waiting"); "Cancel" takes him out again, and the others search
 -- on. "Menu" sends him back to the lobby, and after Config.MatchEnd.Return seconds everyone still here who is not
@@ -144,7 +144,8 @@ local function rankView(rank: any): any
 	return { tier = rank.Tier, division = rank.Division, lp = rank.Lp }
 end
 
--- Pays `player` for the match and saves it; returns what he got, for his screen.
+-- Pays `player` for the match and saves it; returns what he got, for his screen. His first match ever also pays
+-- Config.FirstMatch's coins and emote.
 local function reward(player: Player, line: Line?, won: boolean, mvp: boolean): any
 	local key = if won then "Win" else "Loss"
 	local grade = if line then line.grade else "D-"
@@ -164,7 +165,14 @@ local function reward(player: Player, line: Line?, won: boolean, mvp: boolean): 
 		if ranked then
 			change = Ranks.apply(data.Rank, won, against(player, data))
 		end
-		data.Coins += coins
+		local first = Profile.newGames(data) == 0
+		local paid = coins
+		if first then
+			paid += Config.FirstMatch.Coins
+			data.Emotes[Config.FirstMatch.Emote] = true
+			TraceService.mark("firstmatch.done", { won = won }, player)
+		end
+		data.Coins += paid
 		data.Xp += accountXp
 		data.Pass.Xp += passXp
 		data.Stats.Games += 1
@@ -185,7 +193,9 @@ local function reward(player: Player, line: Line?, won: boolean, mvp: boolean): 
 		local accountLevel, accountInto, accountNeed = Account.level(data.Xp)
 		local passLevel, passInto, passNeed = Pass.level(data.Pass.Xp)
 		return {
-			coins = coins,
+			coins = paid,
+			firstMatch = first,
+			emote = if first then Config.FirstMatch.Emote else nil,
 			accountXp = accountXp,
 			passXp = passXp,
 			boosted = boosted,
