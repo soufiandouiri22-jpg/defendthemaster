@@ -25,7 +25,14 @@ local C = UiStyle.Colors
 local W = Widgets.Colors
 local WIDTH, HEIGHT = 560, 196
 local ARROW = 56
-local GAP = 14
+-- The arrow's picture leaves this much empty under its foot (Art/UI/tutorial_edge_arrow.png drawn ARROW high).
+local FOOT = 7
+-- The bubble's gold edge (drawn outside it), the room always kept between that edge and the arrow's foot, how far the
+-- arrow bobs towards what it points at, and how close its tip then comes to it.
+local EDGE, CLEAR, BOB, REACH = 3, 8, 6, 4
+-- How far the bubble stays from what it points at, and the arrow's middle from the bubble at rest.
+local AWAY = EDGE + CLEAR + ARROW - FOOT + BOB + REACH
+local HOLD = EDGE + CLEAR - FOOT + ARROW / 2
 -- Seconds on the Play page before the first hint, and between two.
 local FIRST_WAIT, NEXT_WAIT = 1.5, 0.8
 local KEY = 54
@@ -35,6 +42,8 @@ type Hint = {
 	title: string,
 	text: (data: Profile.Data) -> string,
 	target: (menu: ScreenGui) -> GuiObject?,
+	-- What is seen round the target, when that is not the target itself (a tab's bar): the arrow keeps away from it.
+	outline: ((menu: ScreenGui) -> GuiObject?)?,
 	-- A key shown at its foot, with what it does.
 	key: { name: string, text: string }?,
 }
@@ -71,6 +80,9 @@ local HINTS: { Hint } = {
 		target = function(menu)
 			return find(menu, { "Top", "Tabs", "Row", "Pass" })
 		end,
+		outline = function(menu)
+			return find(menu, { "Top", "Tabs" })
+		end,
 	},
 	{
 		id = "Ranked",
@@ -82,8 +94,30 @@ local HINTS: { Hint } = {
 		target = function(menu)
 			return find(menu, { "Top", "Tabs", "Row", "Ranked" })
 		end,
+		outline = function(menu)
+			return find(menu, { "Top", "Tabs" })
+		end,
 	},
 }
+
+-- The top and bottom of `object` on the screen counted from `origin`, its border (UIStroke) round it included.
+local function rows(object: GuiObject, origin: Vector2): (number, number)
+	local grow = 0
+	local stroke = object:FindFirstChildOfClass("UIStroke")
+	if stroke and stroke.Enabled and stroke.ApplyStrokeMode == Enum.ApplyStrokeMode.Border then
+		grow = stroke.Thickness
+		local at: Instance? = object
+		while at do
+			local scale = at:FindFirstChildOfClass("UIScale")
+			if scale then
+				grow *= scale.Scale
+			end
+			at = at.Parent
+		end
+	end
+	local top = object.AbsolutePosition.Y - origin.Y - grow
+	return top, top + object.AbsoluteSize.Y + 2 * grow
+end
 
 -- The first hint not seen yet, for a player who has played a match.
 local function nextHint(data: Profile.Data?, seen: { [string]: boolean }): Hint?
@@ -112,7 +146,7 @@ function Hints.start(menu: ScreenGui)
 	bubble.BackgroundColor3 = W.Parchment
 	bubble.Visible = false
 	UiStyle.corner(bubble, 16)
-	UiStyle.stroke(bubble, C.Gold, 3)
+	UiStyle.stroke(bubble, C.Gold, EDGE)
 	local size = Instance.new("UIScale")
 	size.Parent = bubble
 	local title = Widgets.label(bubble, "", 30, C.GoldDark, "Left")
@@ -201,24 +235,24 @@ function Hints.start(menu: ScreenGui)
 		size.Scale = scale
 		local screen = gui.AbsoluteSize
 		-- Absolute positions count from under Roblox's top bar; this screen starts above it.
-		local corner = target.AbsolutePosition - gui.AbsolutePosition
-		local centre = corner + target.AbsoluteSize / 2
+		local centre = target.AbsolutePosition - gui.AbsolutePosition + target.AbsoluteSize / 2
+		local upper, lower = rows(hint.outline and hint.outline(menu) or target, gui.AbsolutePosition)
 		local below = centre.Y < screen.Y / 2
 		local half = WIDTH * scale / 2
 		local x = math.clamp(centre.X, half + 16, screen.X - half - 16)
-		local bob = 8 * math.abs(math.sin(os.clock() * 4))
+		local bob = BOB * math.abs(math.sin(os.clock() * 4))
 		if below then
 			bubble.AnchorPoint = Vector2.new(0.5, 0)
-			local y = corner.Y + target.AbsoluteSize.Y + (ARROW + GAP) * scale
+			local y = lower + AWAY * scale
 			bubble.Position = UDim2.fromOffset(x, y)
 			arrow.Rotation = 0
-			arrow.Position = UDim2.fromOffset(WIDTH / 2 + (centre.X - x) / scale, -ARROW / 2 - 4 + bob)
+			arrow.Position = UDim2.fromOffset(WIDTH / 2 + (centre.X - x) / scale, -HOLD - bob)
 		else
 			bubble.AnchorPoint = Vector2.new(0.5, 1)
-			local y = corner.Y - (ARROW + GAP) * scale
+			local y = upper - AWAY * scale
 			bubble.Position = UDim2.fromOffset(x, y)
 			arrow.Rotation = 180
-			arrow.Position = UDim2.fromOffset(WIDTH / 2 + (centre.X - x) / scale, HEIGHT + ARROW / 2 + 4 - bob)
+			arrow.Position = UDim2.fromOffset(WIDTH / 2 + (centre.X - x) / scale, HEIGHT + HOLD + bob)
 		end
 	end)
 end
