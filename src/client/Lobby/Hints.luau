@@ -1,7 +1,8 @@
 -- The lobby's one-time hints after the player's first match (Config.FirstMatch): one at a time on the Play page, a
 -- parchment bubble with a bobbing gold arrow pointing at what it is about (the EMOTE button, with the G key that opens
 -- the wheel in a match; the Pass tab; the Ranked tab); GOT IT marks it seen in the profile (MenuService's HintSeen,
--- data.SeenHints) and the next follows. Laid on the screen in its own pixels, over the menu but under its pop-ups.
+-- data.SeenHints) and the bubble glides on to the next, after the last it shrinks away. Laid on the screen in its own
+-- pixels, over the menu but under its pop-ups.
 
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
@@ -33,8 +34,11 @@ local EDGE, CLEAR, BOB, REACH = 3, 8, 6, 4
 -- How far the bubble stays from what it points at, and the arrow's middle from the bubble at rest.
 local AWAY = EDGE + CLEAR + ARROW - FOOT + BOB + REACH
 local HOLD = EDGE + CLEAR - FOOT + ARROW / 2
--- Seconds on the Play page before the first hint, and between two.
-local FIRST_WAIT, NEXT_WAIT = 1.5, 0.8
+-- Seconds on the Play page before the first hint.
+local FIRST_WAIT = 1.5
+-- Seconds the last hint takes to shrink away after GOT IT, and the first to pop up; how fast the bubble glides on to
+-- the next hint (a rate: the share of the way left it closes each moment).
+local LEAVE, ARRIVE, GLIDE = 0.14, 0.24, 10
 local KEY = 54
 
 type Hint = {
@@ -119,6 +123,12 @@ local function rows(object: GuiObject, origin: Vector2): (number, number)
 	return top, top + object.AbsoluteSize.Y + 2 * grow
 end
 
+-- How big a hint is `t` seconds after it popped up: from a little smaller, past its size and back.
+local function popped(t: number): number
+	local k = math.clamp(t / ARRIVE, 0, 1) - 1
+	return 0.8 + 0.2 * (1 + 2.70158 * k ^ 3 + 1.70158 * k ^ 2)
+end
+
 -- The first hint not seen yet, for a player who has played a match.
 local function nextHint(data: Profile.Data?, seen: { [string]: boolean }): Hint?
 	if not data or Profile.newGames(data) == 0 then
@@ -178,23 +188,45 @@ function Hints.start(menu: ScreenGui)
 	arrow.AnchorPoint = Vector2.new(0.5, 0.5)
 	arrow.Parent = bubble
 
+	-- GOT IT's own press (Widgets.feel), left grown by the click that sent its hint away.
+	local press = ok:FindFirstChildOfClass("UIScale")
+
 	local seen: { [string]: boolean } = {}
 	local shown: Hint? = nil
+	local shownAt = 0
+	local leftAt: number? = nil
 	local readyAt = math.huge
+	-- Where the bubble's top middle is on the screen while it shows, gliding to where its hint wants it.
+	local at: Vector2? = nil
 
 	ok.Activated:Connect(function()
 		local hint = shown
-		if not hint then
+		if not hint or leftAt then
 			return
 		end
 		seen[hint.id] = true
-		shown = nil
-		bubble.Visible = false
-		readyAt = os.clock() + NEXT_WAIT
 		task.spawn(ProfileClient.ask, "HintSeen", hint.id)
+		if nextHint(ProfileClient.get(), seen) then
+			readyAt = 0
+		else
+			shown = nil
+			leftAt = os.clock()
+		end
 	end)
 
-	RunService.RenderStepped:Connect(function()
+	RunService.RenderStepped:Connect(function(dt)
+		local now = os.clock()
+		local scale = math.max(gui.AbsoluteSize.Y / 1080, 0.6)
+		if leftAt then
+			local t = (now - leftAt) / LEAVE
+			if t < 1 then
+				size.Scale = scale * (1 - t * t)
+				return
+			end
+			leftAt = nil
+			bubble.Visible = false
+			at = nil
+		end
 		local top = menu:FindFirstChild("Top") :: GuiObject?
 		local play = find(menu, { "Pages", "Play" })
 		-- Not under the loading screen, which waits for every picture shown under it.
@@ -203,20 +235,27 @@ function Hints.start(menu: ScreenGui)
 		local target = hint and hint.target(menu)
 		if not hint or not target or not target.Visible or target.AbsoluteSize.X <= 0 then
 			bubble.Visible = false
-			readyAt = math.max(readyAt, os.clock() + FIRST_WAIT)
+			at = nil
+			readyAt = math.max(readyAt, now + FIRST_WAIT)
 			if not hint then
 				readyAt = math.huge
 			end
 			return
 		end
 		if readyAt == math.huge then
-			readyAt = os.clock() + FIRST_WAIT
+			readyAt = now + FIRST_WAIT
 		end
-		if os.clock() < readyAt then
+		if now < readyAt then
 			return
 		end
 		if shown ~= hint then
 			shown = hint
+			if not at then
+				shownAt = now
+			end
+			if press then
+				press.Scale = 1
+			end
 			local data = ProfileClient.get() :: Profile.Data
 			title.Text = hint.title
 			body.Text = hint.text(data)
@@ -231,8 +270,7 @@ function Hints.start(menu: ScreenGui)
 		end
 		bubble.Visible = true
 
-		local scale = math.max(gui.AbsoluteSize.Y / 1080, 0.6)
-		size.Scale = scale
+		size.Scale = scale * popped(now - shownAt)
 		local screen = gui.AbsoluteSize
 		-- Absolute positions count from under Roblox's top bar; this screen starts above it.
 		local centre = target.AbsolutePosition - gui.AbsolutePosition + target.AbsoluteSize / 2
@@ -240,19 +278,23 @@ function Hints.start(menu: ScreenGui)
 		local below = centre.Y < screen.Y / 2
 		local half = WIDTH * scale / 2
 		local x = math.clamp(centre.X, half + 16, screen.X - half - 16)
-		local bob = BOB * math.abs(math.sin(os.clock() * 4))
+		local goal = Vector2.new(x, if below then lower + AWAY * scale else upper - AWAY * scale - HEIGHT * scale)
+		local spot = if at then at:Lerp(goal, 1 - math.exp(-GLIDE * dt)) else goal
+		at = spot
+		-- It grows from the side its arrow is on, so it pops up out of the arrow.
+		local anchor = if below then 0 else 1
+		bubble.AnchorPoint = Vector2.new(0.5, anchor)
+		bubble.Position = UDim2.fromOffset(spot.X, spot.Y + anchor * HEIGHT * scale)
+		-- The arrow shows once the bubble has come where it points from.
+		arrow.ImageTransparency = math.clamp(((goal - spot).Magnitude - 2) / 12, 0, 1)
+		local bob = BOB * math.abs(math.sin(now * 4))
+		local reach = WIDTH / 2 + (centre.X - spot.X) / scale
 		if below then
-			bubble.AnchorPoint = Vector2.new(0.5, 0)
-			local y = lower + AWAY * scale
-			bubble.Position = UDim2.fromOffset(x, y)
 			arrow.Rotation = 0
-			arrow.Position = UDim2.fromOffset(WIDTH / 2 + (centre.X - x) / scale, -HOLD - bob)
+			arrow.Position = UDim2.fromOffset(reach, -HOLD - bob)
 		else
-			bubble.AnchorPoint = Vector2.new(0.5, 1)
-			local y = upper - AWAY * scale
-			bubble.Position = UDim2.fromOffset(x, y)
 			arrow.Rotation = 180
-			arrow.Position = UDim2.fromOffset(WIDTH / 2 + (centre.X - x) / scale, HEIGHT + HOLD + bob)
+			arrow.Position = UDim2.fromOffset(reach, HEIGHT + HOLD + bob)
 		end
 	end)
 end

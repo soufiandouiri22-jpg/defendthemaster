@@ -285,7 +285,7 @@ function HeroesPage.build(page: Frame, api: any)
 				mouse.Image = MOUSE[key]
 				mouse.ScaleType = Enum.ScaleType.Fit
 				mouse.Size = UDim2.new(1, 0, 0, 34)
-				mouse.Position = UDim2.fromOffset(0, 93)
+				mouse.Position = UDim2.fromOffset(0, 100)
 				mouse.Parent = slot
 			else
 				local keyText = Widgets.label(slot, LABELS[key] or key, 26, C.Ink)
