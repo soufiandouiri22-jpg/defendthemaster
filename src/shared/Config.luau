@@ -3075,16 +3075,16 @@ Config.Season = {
 -- A player's account (Shared.Account): what he starts with, and the account XP each level asks, `First` for the first
 -- and `PerLevel` more for every one after it up to level `Plateau`, the same after it; there is no top level. The
 -- accounts of `AlwaysWelcome` (by UserId) have their hero cleared every time they come into the lobby, so they always
--- see the welcome screen (Lobby.Welcome); none now: the owner's DraivoGames (11859499496) sees it once, as a player
--- does (owner, 2026-11-01). The accounts of `AlwaysNew` are new to the game again every time they come into the
--- lobby from outside the game (ProfileService): their next matches are their first, with its tips and bonus
--- (Config.FirstMatch), to try them in the real game; their totals and rank stay (owner, 2026-11-11).
+-- see the welcome screen (Lobby.Welcome): the owner's DraivoGames (11859499496) again since 2026-11-14 (owner). The
+-- accounts of `AlwaysNew` are new to the game again every time they come into the lobby from outside the game
+-- (ProfileService): their next matches are their first, with its tips and bonus (Config.FirstMatch), to try them in
+-- the real game; their totals and rank stay (owner, 2026-11-11).
 Config.Account = {
 	StartCoins = 500,
 	First = 300,
 	PerLevel = 50,
 	Plateau = 30,
-	AlwaysWelcome = {},
+	AlwaysWelcome = { 11859499496 },
 	AlwaysNew = { 11859499496 },
 }
 

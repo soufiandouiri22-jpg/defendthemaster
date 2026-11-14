@@ -106,9 +106,9 @@ function HeroesPage.build(page: Frame, api: any)
 
 	-- The grid's panel on the left, the chosen hero's on the right, both with their middles in the middle of the room
 	-- under the tab bar.
-	local middle = Widgets.middle(page, 910)
-	local _, inner = UiStyle.panel(middle, UDim2.new(1, -660, 0, 820), UDim2.fromOffset(40, 45), nil, 14, 5)
-	local _, side = UiStyle.panel(middle, UDim2.fromOffset(560, 910), UDim2.new(1, -40, 0, 0), Vector2.new(1, 0), 14, 5)
+	local middle = Widgets.middle(page, 922)
+	local _, inner = UiStyle.panel(middle, UDim2.new(1, -660, 0, 820), UDim2.fromOffset(40, 51), nil, 14, 5)
+	local _, side = UiStyle.panel(middle, UDim2.fromOffset(560, 922), UDim2.new(1, -40, 0, 0), Vector2.new(1, 0), 14, 5)
 
 	local count = Widgets.label(inner, "MY HEROES", 36, C.Ink, "Left")
 	count.Size = UDim2.fromOffset(330, 60)
@@ -172,7 +172,7 @@ function HeroesPage.build(page: Frame, api: any)
 	abilities.BackgroundTransparency = 1
 	local abilityLayout = Widgets.list(abilities, "Horizontal", 12)
 	abilityLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	local masteryBox = Widgets.dark(side, UDim2.new(1, -60, 0, 98), UDim2.fromOffset(30, 680), nil, 12)
+	local masteryBox = Widgets.dark(side, UDim2.new(1, -60, 0, 98), UDim2.fromOffset(30, 692), nil, 12)
 	masteryBox.Name = "Mastery"
 	UiStyle.stroke(masteryBox, C.GoldDark, 3)
 	local action, actionText = Widgets.button(
