@@ -98,7 +98,7 @@ type Projectile = {
 	turn: number?,
 	-- Seconds it hangs where it splits before it flies.
 	wait: number?,
-	-- Whether it flies on through the ground (its hero's Projectile.ThroughGround), stopped by walls only.
+	-- Whether it flies on through the ground, walls and everything else (its hero's Projectile.ThroughAll).
 	through: boolean?,
 	-- A weapon that flies itself back into the hand (its shot's `Back`): the share of its damage it strikes with on
 	-- the way back, from where and since when it is on its way back, the enemies it touches now, and those it touched
@@ -398,9 +398,6 @@ walls.FilterType = Enum.RaycastFilterType.Exclude
 
 -- How much farther than its Range a seeking shot flies, for its turns.
 local SEEK_REACH = 1.5
--- What a projectile that goes through the ground takes for ground: a surface facing at least this much up.
-local GROUND_NORMAL = 0.6
-
 -- Sends a projectile from the hero towards `direction`: `shot` gives its Range, ProjectileSpeed, Width, Pierce and Back;
 -- `struck` is shared with the other projectiles of its fan; `basic` when it is an M1 shot. A seeking one (`shot.Seek`)
 -- turns on its way towards `seek`, an enemy or a point, and flies SEEK_REACH times as far.
@@ -444,7 +441,7 @@ local function launch(
 		seek = if shot.Seek then seek else nil,
 		turn = if shot.Seek then shot.Seek.Turn else nil,
 		wait = if shot.Seek then shot.Seek.Split else nil,
-		through = HeroKit.throughGround(state.character),
+		through = HeroKit.throughAll(state.character),
 		back = shot.Back,
 		reach = if shot.Seek and shot.Back then shot.Range else nil,
 		sought = if shot.Seek and typeof(seek) == "Instance" then seek else nil,
@@ -490,15 +487,15 @@ local function seekPoint(p: Projectile): Vector3?
 end
 
 -- The enemies a Throw's Seek (`kit`) can go at from `origin`, nearest first: within its Range and its Seek's Angle
--- (degrees across) of `facing`, round, with no wall between.
-local function seekTargets(team: string, origin: Vector3, facing: Vector3, kit: any): { Instance }
+-- (degrees across) of `facing`, round, with no wall between unless they fly `through` walls.
+local function seekTargets(team: string, origin: Vector3, facing: Vector3, kit: any, through: boolean): { Instance }
 	walls.FilterDescendantsInstances = HeroKit.leapIgnore()
 	local found = {}
 	for _, enemy in enemiesNear(team, origin, kit.Range) do
 		local offset = HeroKit.flat(enemy.position - origin)
 		local ahead = offset.Magnitude < 1
 			or math.deg(math.acos(math.clamp(offset.Unit:Dot(facing), -1, 1))) <= kit.Seek.Angle / 2
-		if ahead and not Workspace:Raycast(origin, enemy.position - origin, walls) then
+		if ahead and (through or not Workspace:Raycast(origin, enemy.position - origin, walls)) then
 			table.insert(found, { instance = enemy.instance, distance = offset.Magnitude })
 		end
 	end
@@ -636,10 +633,7 @@ local function stepProjectiles(dt: number)
 		end
 		local travel = math.min(p.left, p.speed * dt)
 		local from = p.position
-		local wall = Workspace:Raycast(from, p.direction * travel, walls)
-		if wall and p.through and wall.Normal.Y > GROUND_NORMAL then
-			wall = nil
-		end
+		local wall = if p.through then nil else Workspace:Raycast(from, p.direction * travel, walls)
 		local reach = if wall then wall.Distance / travel else 1
 		local to = from + p.direction * travel
 		local best: Enemy? = nil
@@ -1021,7 +1015,10 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 					local muzzle = HeroKit.muzzle(if body then body.Position else root.Position)
 					local facing = HeroKit.flat(way)
 					facing = if facing.Magnitude > 0.1 then facing.Unit else HeroKit.flat(root.CFrame.LookVector).Unit
-					local share = HeroKit.seekShare(seekTargets(team, muzzle, facing, kit), #fan)
+					local share = HeroKit.seekShare(
+						seekTargets(team, muzzle, facing, kit, HeroKit.throughAll(state.character)),
+						#fan
+					)
 					local far = if state.aim
 						then math.clamp((state.aim - muzzle).Magnitude, 6, kit.Range)
 						else kit.Range

@@ -270,14 +270,15 @@ function HeroKit.landingStrikes(landing: Vector3, radius: number, body: Body): b
 	return HeroKit.flat(body.position - landing).Magnitude - body.radius <= radius
 end
 
--- Whether `character`'s hero's projectiles fly on through the ground (Config's Projectile.ThroughGround).
 -- How fast a weapon that flies itself (Projectile.Returns) comes back into the hand, against its speed out: the same
 -- on the server, which strikes with it on the way back (a shot's `Back`), and on the clients, which draw it.
 HeroKit.RETURN_SPEED = 0.8
 
-function HeroKit.throughGround(character: Model): boolean
+-- Whether `character`'s hero's projectiles fly on through the ground, walls and everything else in their way
+-- (Config's Projectile.ThroughAll).
+function HeroKit.throughAll(character: Model): boolean
 	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
-	return settings ~= nil and settings.Projectile ~= nil and settings.Projectile.ThroughGround == true
+	return settings ~= nil and settings.Projectile ~= nil and settings.Projectile.ThroughAll == true
 end
 
 -- Within how many studs a seeking shot turns twice as hard, and harder still nearer.

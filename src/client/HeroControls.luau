@@ -2083,9 +2083,9 @@ local extents: { [Model]: { number } } = setmetatable({}, { __mode = "k" }) :: a
 
 -- Whether the hero's next left click (the combo's next hit) would strike `target` where the crosshair is on it, at
 -- `aim`: only what the server strikes (a minion's root part or a Combatant), by the server's own measure
--- (HeroKit.body, HeroKit.hitReaches), and a shot only with no wall in its way.
+-- (HeroKit.body, HeroKit.hitReaches), and a shot only with no wall in its way unless it flies through them.
 local function reaches(target: Instance, aim: Vector3): boolean
-	local _, root, _, settings = hero()
+	local character, root, _, settings = hero()
 	local kit = settings and settings.Kit.M1
 	if not root or not kit or kit.Kind ~= "Combo" then
 		return false
@@ -2100,7 +2100,7 @@ local function reaches(target: Instance, aim: Vector3): boolean
 	if not body or not HeroKit.hitReaches(hit, root.Position, aim, facing, body) then
 		return false
 	end
-	if not hit.ProjectileSpeed then
+	if not hit.ProjectileSpeed or HeroKit.throughAll(character :: Model) then
 		return true
 	end
 	local muzzle = HeroKit.muzzle(root.Position)

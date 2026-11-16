@@ -972,7 +972,8 @@ Config.Minions = {
 -- `From` seen leaving the far end of that weapon or part of his weapons as the clip holds it, or that bone of them (a
 -- kit's `ShotsFrom` may name another). With `Returns` the component is the weapon he holds itself: it leaves his hand,
 -- comes back into it after it stops, and is not seen in his hand meanwhile. `Frost` (a colour) dresses it in icy
--- starlight instead of a trail. With `ThroughGround` it flies on through the ground, stopped by walls only. With `Gun`
+-- starlight instead of a trail. With `ThroughAll` it flies on through the ground, walls and everything else in its
+-- way, and seeks enemies behind them too. With `Gun`
 -- they are a gun's
 -- rounds (GunEffects: "Revolver", "Bomb", "Rifle"), with a flash at the barrel and a strike where they stop; a kit's
 -- `Round` names its own.
@@ -2787,8 +2788,9 @@ Config.Heroes = {
 		Projectile = {
 			Component = "StarGlobe",
 			Returns = true,
-			-- On through the ground rather than turning back off it (owner, 2026-11-14).
-			ThroughGround = true,
+			-- On through the ground rather than turning back off it (owner, 2026-11-14), and through walls and
+			-- everything else as well (owner, 2026-11-16).
+			ThroughAll = true,
 			Spin = 6,
 			Frost = Color3.fromRGB(120, 210, 255),
 			Glow = Color3.fromRGB(120, 210, 255),
@@ -2804,9 +2806,10 @@ Config.Heroes = {
 			Land = "RA-CLC-013",
 			Death = "RA-CLC-031",
 		},
-		-- A mage as Mavorak and Jestrel (owner, 2026-11-14): the same combo, M2 and Ratios as theirs, its E as
-		-- strong as Jestrel's, its R a little under their 315 and 320, as it comes sooner (1.35 s against their 3)
-		-- and throws those it strikes up.
+		-- A mage as Mavorak and Jestrel (owner, 2026-11-14): the same M2 and Ratios as theirs, its R a little under
+		-- their 315 and 320, as it comes sooner (1.35 s against their 3) and throws those it strikes up. Its globes
+		-- strike again on the way back and fly through walls, so its combo and E strike less on the way out (owner,
+		-- 2026-11-16): 108 a combo with the way back against their 96, about 52 a second to their 46-48.
 		Kit = {
 			-- Three throws of the globe, each on through every enemy in its way (Pierce; owner, 2026-11-15: it turned
 			-- back stiffly off the first) and back from the end of its reach, striking everyone on the way back again for
@@ -2825,7 +2828,7 @@ Config.Heroes = {
 						Speed = 1.06,
 						Hit = 0.42,
 						Recover = 0.31,
-						Damage = 26,
+						Damage = 20,
 						Range = 30,
 						ProjectileSpeed = 120,
 						Width = 1.5,
@@ -2837,7 +2840,7 @@ Config.Heroes = {
 						Speed = 0.83,
 						Hit = 0.33,
 						Recover = 0.245,
-						Damage = 30,
+						Damage = 22,
 						Range = 30,
 						ProjectileSpeed = 120,
 						Width = 1.5,
@@ -2849,7 +2852,7 @@ Config.Heroes = {
 						Speed = 0.93,
 						Hit = 0.37,
 						Recover = 0.275,
-						Damage = 40,
+						Damage = 30,
 						Range = 30,
 						ProjectileSpeed = 120,
 						Width = 1.5,
@@ -2878,8 +2881,8 @@ Config.Heroes = {
 				-- once (owner, 2026-11-14), each seeking one of the two nearest enemies all round Astryn within its
 				-- Range, whichever way it faces (owner, 2026-11-15; none: both to the crosshair; one: both at it), on
 				-- through it straight to the end of the Range striking no one else, and back to the hand, striking
-				-- everyone on the way back again for half as the M1's globe does (owner, 2026-11-16). 144 in all as Jestrel's E on the way
-				-- out, as they hardly miss.
+				-- everyone on the way back again for half as the M1's globe does (owner, 2026-11-16). 100 on the way out
+				-- and up to 150 with the way back, as they hardly miss and fly through walls (owner, 2026-11-16).
 				Motion = "RA-CLC-044",
 				ShotsFrom = "Hand",
 				Indicator = "Ring",
@@ -2894,7 +2897,7 @@ Config.Heroes = {
 				Width = 1.5,
 				Pierce = true,
 				Back = 0.5,
-				Damage = 72,
+				Damage = 50,
 				Ratio = 0.3,
 			},
 			R = {
