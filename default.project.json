@@ -112,6 +112,16 @@
 					"$path": "Vendor/Lancer/Animations/Included Rig.rbxmx"
 				}
 			},
+			"CelestialCaster": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/CelestialCaster/Build/ComponentPlayer"
+				},
+				"Rig": {
+					"$path": "Vendor/CelestialCaster/Animations/Included Rig.rbxmx"
+				}
+			},
 			"DanceCollection": {
 				"$className": "Folder",
 				"$ignoreUnknownInstances": true,

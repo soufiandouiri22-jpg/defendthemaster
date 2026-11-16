@@ -37,6 +37,8 @@ function HeroLook.description(name: string): HumanoidDescription
 	-- A dynamic head from the catalog with its own animated face, and the mood it plays.
 	description.Head = look.Head or 0
 	description.MoodAnimation = look.Mood or 0
+	-- A torso from the catalog, for rigid clothing made to fit one (the Girl Torso under Astryn's coat).
+	description.Torso = look.Torso or 0
 	for _, part in BODY_COLOURS do
 		(description :: any)[part] = look.Skin
 	end
@@ -187,6 +189,8 @@ local function arm(character: Model, hero: string)
 			binding.C1 = CFrame.new(table.unpack(joint.c1))
 			binding.Parent = weapon
 		end
+		-- Shared.Motion turns it slowly round its own axis on top of what the clips do.
+		weapon:SetAttribute("Turning", settings.Turning and settings.Turning[name])
 		weapon.Parent = folder
 	end
 	folder.Parent = character
@@ -253,6 +257,9 @@ end
 function HeroLook.dress(character: Model, hero: string)
 	character:SetAttribute("Hero", hero)
 	local look = Config.Heroes[hero].Look
+	-- Long hair that would swing through a cape: the head turns only this much of what the clips turn it
+	-- (Shared.Motion).
+	character:SetAttribute("HeadTurn", look.HeadTurn)
 	local head = character:FindFirstChild("Head")
 	if look.HideHead and head and head:IsA("BasePart") then
 		-- Nothing of his face is drawn on a hidden head.
@@ -390,6 +397,15 @@ function HeroLook.dress(character: Model, hero: string)
 			weld.Part1 = strip
 			weld.Parent = strip
 			strip.Parent = head
+		end
+	end
+	-- A catalog accessory that sits too tight over the clothes under it (an arm chain over a sleeve) is made this much
+	-- wider round the limb, its height kept (Look.Widen, by the accessory's name).
+	for name, wider in look.Widen or {} do
+		local accessory = character:FindFirstChild("Accessory (" .. name .. ")")
+		local handle = accessory and accessory:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			handle.Size = Vector3.new(handle.Size.X * wider, handle.Size.Y, handle.Size.Z * wider)
 		end
 	end
 	if look.Held then

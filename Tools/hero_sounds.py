@@ -354,6 +354,53 @@ PACKS = {
         # Her ultimate's dive (061, down at 1.18 s) already sounds in its own recording, so it needs no Slam.
         "events": {},
     },
+    "CelestialCaster": {
+        "folder": ROOT / "Vendor/CelestialCaster/Sounds",
+        "clips": [
+            # Astryn's attacks (Config.Heroes.Astryn.Kit) and the clips under them.
+            "RA-CLC-023", "RA-CLC-033", "RA-CLC-034", "RA-CLC-053", "RA-CLC-044", "RA-CLC-050",
+            "RA-CLC-005", "RA-CLC-006", "RA-CLC-007", "RA-CLC-002", "RA-CLC-011", "RA-CLC-013", "RA-CLC-031",
+        ],
+        # Astryn's steps are light ones.
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "f", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # Its combo's globe leaves the hand earlier than the pack's casts of 033 and 034 sound (their long spells at
+        # 0.57 and 0.3 and 0.77 s, after and around its throws at 0.33 and 0.37 s): every globe of the combo sounds as
+        # one of 023's three short swishes of the globe (0.2 s), the Release as it leaves the hand, light enough to
+        # hear on every throw while M1 is held (owner, 2026-11-14), and 023 no longer swishes before its throw. 033's
+        # cast from just before its loudest (`Cast`), the Release before, was too heavy for that; it stays in the
+        # uploaded file, unplayed. Under the swish a soft edge of magic (owner, 2026-11-14), the Glint: 034's
+        # Sound 10, loud from its start, its first second only (`parts`, cut where it has fallen 22 dB). The orbit's
+        # spell (053's Sound 01, loudest 0.32 s in)
+        # starts with the globe's circling (0.07 s), not as it comes back. The Rising Ward's split (044's Sound 01,
+        # loudest 0.11 s in) comes as the globe splits over its head (Release 0.75 s); its swell, loudest at 1.0 s, as
+        # the two fly. The Solar Invocation (050) is loudest at 1.38 s, as its pillar bursts up (1.35 s), so it keeps
+        # its cue and needs no Slam. The dash (011) is also its jump: the invocations' shared rush (loudest 0.14 s in)
+        # sounds as the Dash event, so a jump stays quiet.
+        "mute": ["RA-CLC-023", "RA-CLC-033", "RA-CLC-034", "RA-CLC-053", "RA-CLC-044"],
+        "extra": {
+            "RA-CLC-053": [(0.05, ["Af2527cf0173c"], 0.8)],
+            "RA-CLC-044": [
+                (0.0, ["A84c4477603c4"], 0.25),
+                (0.0, ["Af422f44d2384"], 0.75),
+                (0.64, ["A7724687ef57d"], 0.75),
+            ],
+        },
+        "keep": ["Cast"],
+        "mixes": {
+            "Cast": [("Ad1afe4098fff", 0.22)],
+        },
+        "parts": {"Glint": ("Af086706bb8c7", 0.0, 1.0)},
+        "events": {
+            "Release": (["A661624dbda8e", "A968bea54bac4", "Ab63df4ec7a7e"], 0.5),
+            "Glint": (["Glint"], 0.18),
+            "Dash": (["A84c4477603c4"], 0.7),
+        },
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no

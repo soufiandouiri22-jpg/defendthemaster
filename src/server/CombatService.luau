@@ -92,6 +92,27 @@ type Projectile = {
 	headshot: number?,
 	-- Where it was let go.
 	origin: Vector3,
+	-- A seeking shot's (a Throw's Seek) enemy, or the point it goes to without one, and how fast it turns (radians a
+	-- second).
+	seek: Instance? | Vector3?,
+	turn: number?,
+	-- Seconds it hangs where it splits before it flies.
+	wait: number?,
+	-- Whether it flies on through the ground (its hero's Projectile.ThroughGround), stopped by walls only.
+	through: boolean?,
+	-- A weapon that flies itself back into the hand (its shot's `Back`): the share of its damage it strikes with on
+	-- the way back, from where and since when it is on its way back, the enemies it touches now, and those it touched
+	-- as it turned, struck on the way back only once it has left them.
+	back: number?,
+	-- A seeking one with a `Back` turns back as far as its Range from where it left once it no longer seeks an enemy
+	-- (it struck it, or there was none), as one that flies straight does at the end of its reach.
+	reach: number?,
+	-- The enemy a seeking one was sent at: on its way out it strikes no one else, also when it flies on through him
+	-- (owner, 2026-11-15), unless he is gone before it gets there.
+	sought: Instance?,
+	returning: { from: Vector3, started: number }?,
+	touching: { [Instance]: boolean },
+	blocked: { [Instance]: boolean },
 }
 
 -- A Snipe's bullet that struck a hero, held till its shooter's client says whether it went through the head as that
@@ -250,15 +271,16 @@ local function carry(target: Instance, to: Vector3, height: number, length: numb
 	end
 end
 
--- A kit's `Knockback` throws the enemy hero or minion struck by `character` away from him: `Distance` studs over the
--- ground (less where a wall stops it), in an arc `Height` studs high, in `Time` seconds.
-local function knock(character: Model, enemy: Enemy, knockback: any)
+-- A kit's `Knockback` throws the enemy hero or minion struck by `character` away from him (or from `centre`, where
+-- his strike fell): `Distance` studs over the ground (less where a wall stops it), in an arc `Height` studs high, in
+-- `Time` seconds.
+local function knock(character: Model, enemy: Enemy, knockback: any, centre: Vector3?)
 	local from = partOf(enemy.instance)
 	local by = rootOf(character)
 	if not from or not by then
 		return
 	end
-	local away = HeroKit.flat(from.Position - by.Position)
+	local away = HeroKit.flat(from.Position - (centre or by.Position))
 	away = if away.Magnitude > 0.1 then away.Unit else HeroKit.flat(by.CFrame.LookVector).Unit
 	carry(
 		enemy.instance,
@@ -370,8 +392,18 @@ local function strikeCone(
 	end
 end
 
--- Sends a projectile from the hero towards `direction`: `shot` gives its Range, ProjectileSpeed, Width and Pierce;
--- `struck` is shared with the other projectiles of its fan; `basic` when it is an M1 shot.
+-- Walls and floors, which stop projectiles and stand between a seeking shot and an enemy.
+local walls = RaycastParams.new()
+walls.FilterType = Enum.RaycastFilterType.Exclude
+
+-- How much farther than its Range a seeking shot flies, for its turns.
+local SEEK_REACH = 1.5
+-- What a projectile that goes through the ground takes for ground: a surface facing at least this much up.
+local GROUND_NORMAL = 0.6
+
+-- Sends a projectile from the hero towards `direction`: `shot` gives its Range, ProjectileSpeed, Width, Pierce and Back;
+-- `struck` is shared with the other projectiles of its fan; `basic` when it is an M1 shot. A seeking one (`shot.Seek`)
+-- turns on its way towards `seek`, an enemy or a point, and flies SEEK_REACH times as far.
 local function launch(
 	player: Instance,
 	state: State,
@@ -381,7 +413,9 @@ local function launch(
 	amount: number,
 	magic: boolean,
 	struck: { [Instance]: boolean }?,
-	basic: boolean?
+	basic: boolean?,
+	seek: (Instance | Vector3)?,
+	side: number?
 )
 	local root = rootOf(state.character)
 	if not root then
@@ -396,7 +430,7 @@ local function launch(
 		team = team,
 		position = origin,
 		direction = direction,
-		left = shot.Range,
+		left = if shot.Seek then shot.Range * SEEK_REACH else shot.Range,
 		speed = shot.ProjectileSpeed,
 		width = shot.Width,
 		damage = amount,
@@ -407,6 +441,15 @@ local function launch(
 		blast = shot.Blast,
 		headshot = shot.Headshot,
 		origin = origin,
+		seek = if shot.Seek then seek else nil,
+		turn = if shot.Seek then shot.Seek.Turn else nil,
+		wait = if shot.Seek then shot.Seek.Split else nil,
+		through = HeroKit.throughGround(state.character),
+		back = shot.Back,
+		reach = if shot.Seek and shot.Back then shot.Range else nil,
+		sought = if shot.Seek and typeof(seek) == "Instance" then seek else nil,
+		touching = {},
+		blocked = {},
 	}
 	table.insert(projectiles, projectile)
 	projectileEvent:FireAllClients(
@@ -415,10 +458,58 @@ local function launch(
 		origin,
 		direction,
 		shot.ProjectileSpeed,
-		shot.Range,
+		projectile.left,
 		shot.OrbScale,
-		shot.Blast
+		shot.Blast,
+		projectile.seek,
+		projectile.turn,
+		projectile.wait,
+		side
 	)
+end
+
+-- Where a seeking projectile `p` goes now: its enemy's middle while that is there and alive, else its point till it
+-- is nearly there; nil when it flies on straight.
+local function seekPoint(p: Projectile): Vector3?
+	local seek = p.seek
+	if typeof(seek) == "Vector3" then
+		if (seek - p.position).Magnitude < 1.5 then
+			p.seek = nil
+			return nil
+		end
+		return seek
+	elseif typeof(seek) == "Instance" then
+		local body = partOf(seek)
+		if not body or not body:IsDescendantOf(Workspace) or (seek:IsA("Model") and not alive(seek)) then
+			p.seek, p.sought = nil, nil
+			return nil
+		end
+		return body.Position
+	end
+	return nil
+end
+
+-- The enemies a Throw's Seek (`kit`) can go at from `origin`, nearest first: within its Range and its Seek's Angle
+-- (degrees across) of `facing`, round, with no wall between.
+local function seekTargets(team: string, origin: Vector3, facing: Vector3, kit: any): { Instance }
+	walls.FilterDescendantsInstances = HeroKit.leapIgnore()
+	local found = {}
+	for _, enemy in enemiesNear(team, origin, kit.Range) do
+		local offset = HeroKit.flat(enemy.position - origin)
+		local ahead = offset.Magnitude < 1
+			or math.deg(math.acos(math.clamp(offset.Unit:Dot(facing), -1, 1))) <= kit.Seek.Angle / 2
+		if ahead and not Workspace:Raycast(origin, enemy.position - origin, walls) then
+			table.insert(found, { instance = enemy.instance, distance = offset.Magnitude })
+		end
+	end
+	table.sort(found, function(a, b)
+		return a.distance < b.distance
+	end)
+	local targets = {}
+	for i, t in found do
+		targets[i] = t.instance
+	end
+	return targets
 end
 
 -- A bursting projectile `p` stopped at `at`: everyone within its blast it has not struck yet is struck.
@@ -476,11 +567,51 @@ local function claimHead(player: Player, id: unknown)
 	settleHead(id :: number, near)
 end
 
--- A projectile flies where it was aimed, up or down too, strikes an enemy whose height it passes at, and stops at the
--- first wall or floor in its way.
-local walls = RaycastParams.new()
-walls.FilterType = Enum.RaycastFilterType.Exclude
+-- A projectile `p` with a `Back` that stopped at `at` turns back for its hero's hand, striking with its share of its
+-- damage everyone on the way back, once each.
+local function turnBack(p: Projectile, at: Vector3)
+	p.returning = { from = at, started = os.clock() }
+	p.position = at
+	p.damage *= p.back :: number
+	p.struck = {}
+	p.blocked = table.clone(p.touching)
+end
 
+-- A projectile `p` on its way back flies straight at its hero's hand, as fast as his clients draw it
+-- (HeroKit.RETURN_SPEED) and through walls, and strikes everyone it touches whom it has not struck on the way back,
+-- but not those it was still in as it turned until it has left them (owner, 2026-11-15). Whether it is back.
+local function stepBack(p: Projectile): boolean
+	local root = rootOf(p.character)
+	if not root or not alive(p.character) then
+		return true
+	end
+	local back = p.returning :: { from: Vector3, started: number }
+	local way = HeroKit.muzzle(root.Position) - back.from
+	local gone = (os.clock() - back.started) * p.speed * HeroKit.RETURN_SPEED
+	local done = gone >= way.Magnitude
+	local from = p.position
+	local to = if done then back.from + way else back.from + way.Unit * gone
+	local touched = {}
+	for _, enemy in enemiesNear(p.team, (from + to) / 2, (to - from).Magnitude / 2 + p.width) do
+		if HeroKit.shotTouch(from, to, p.width, enemy) then
+			touched[enemy.instance] = true
+			if not p.struck[enemy.instance] and not p.blocked[enemy.instance] then
+				p.struck[enemy.instance] = true
+				damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
+			end
+		end
+	end
+	for instance in p.blocked do
+		if not touched[instance] then
+			p.blocked[instance] = nil
+		end
+	end
+	p.position = to
+	return done
+end
+
+-- A projectile flies where it was aimed, up or down too (a seeking one turning towards its enemy), strikes an enemy
+-- whose height it passes at, and stops at the first wall or floor in its way (or with a `Back` turns back there).
 local function stepProjectiles(dt: number)
 	if #projectiles == 0 then
 		return
@@ -488,24 +619,54 @@ local function stepProjectiles(dt: number)
 	walls.FilterDescendantsInstances = HeroKit.leapIgnore()
 	for i = #projectiles, 1, -1 do
 		local p = projectiles[i]
+		-- Seeking shots hang a moment where they split from his globe before they fly (HeroControls draws the split).
+		if p.wait and p.wait > 0 then
+			p.wait -= dt
+			continue
+		end
+		if p.returning then
+			if stepBack(p) then
+				table.remove(projectiles, i)
+			end
+			continue
+		end
+		local point = if p.seek then seekPoint(p) else nil
+		if point then
+			p.direction = HeroKit.seek(p.direction, p.position, point, p.turn or 0, dt)
+		end
 		local travel = math.min(p.left, p.speed * dt)
 		local from = p.position
 		local wall = Workspace:Raycast(from, p.direction * travel, walls)
+		if wall and p.through and wall.Normal.Y > GROUND_NORMAL then
+			wall = nil
+		end
 		local reach = if wall then wall.Distance / travel else 1
 		local to = from + p.direction * travel
 		local best: Enemy? = nil
 		local bestAlong = math.huge
+		local touched = {}
 		for _, enemy in enemiesNear(p.team, (from + to) / 2, travel / 2 + p.width) do
 			local along = HeroKit.shotTouch(from, to, p.width, enemy)
-			if along and along <= reach and not p.struck[enemy.instance] then
-				if p.pierce then
+			if along and along <= reach then
+				touched[enemy.instance] = true
+				if p.struck[enemy.instance] or (p.sought and p.sought ~= enemy.instance) then
+					continue
+				elseif p.pierce then
 					p.struck[enemy.instance] = true
 					damage(p.player, p.character, enemy, p.damage, p.magic, p.basic)
+					-- Through the enemy it sought it flies on straight, out to its reach however far its turns took it.
+					if p.seek == enemy.instance then
+						p.seek = nil
+						if p.reach then
+							p.left = math.max(p.left, p.reach)
+						end
+					end
 				elseif along < bestAlong then
 					best, bestAlong = enemy, along
 				end
 			end
 		end
+		p.touching = touched
 		if best then
 			local at = from:Lerp(to, bestAlong)
 			p.struck[best.instance] = true
@@ -556,15 +717,26 @@ local function stepProjectiles(dt: number)
 		if wall then
 			burst(p, wall.Position)
 			projectileEndEvent:FireAllClients(p.id, wall.Position, false)
-			table.remove(projectiles, i)
+			if p.back then
+				turnBack(p, wall.Position)
+			else
+				table.remove(projectiles, i)
+			end
 			continue
 		end
 		p.position = to
 		p.left -= travel
-		if p.left <= 0 then
+		local reached = p.reach ~= nil
+			and typeof(p.seek) ~= "Instance"
+			and (to - p.origin).Magnitude >= p.reach :: number
+		if p.left <= 0 or reached then
 			burst(p, to)
 			projectileEndEvent:FireAllClients(p.id, to, false)
-			table.remove(projectiles, i)
+			if p.back then
+				turnBack(p, to)
+			else
+				table.remove(projectiles, i)
+			end
 		end
 	end
 end
@@ -840,9 +1012,30 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		for n, time in releases do
 			later(state, time, function()
+				local way = HeroKit.turned(kit, n, aimedNow())
+				local fan = HeroKit.fan(way, kit.Count or 1, kit.Spread or 0)
+				if kit.Seek then
+					-- Each at an enemy it can reach (HeroKit.seekShare), each striking for itself, or all to the
+					-- crosshair, as far as they reach.
+					local body = rootOf(state.character)
+					local muzzle = HeroKit.muzzle(if body then body.Position else root.Position)
+					local facing = HeroKit.flat(way)
+					facing = if facing.Magnitude > 0.1 then facing.Unit else HeroKit.flat(root.CFrame.LookVector).Unit
+					local share = HeroKit.seekShare(seekTargets(team, muzzle, facing, kit), #fan)
+					local far = if state.aim
+						then math.clamp((state.aim - muzzle).Magnitude, 6, kit.Range)
+						else kit.Range
+					for i, shot in fan do
+						local seek: (Instance | Vector3)? = share[i] or muzzle + way * far
+						-- Where in the fan it splits to: 1 on his right (the fan's first), -1 on his left.
+						local side = if #fan > 1 then 1 - 2 * (i - 1) / (#fan - 1) else 0
+						launch(player, state, team, shot, kit, strength(kit.Damage), magic, nil, nil, seek, side)
+					end
+					return
+				end
 				local struck = {}
-				for _, way in HeroKit.fan(HeroKit.turned(kit, n, aimedNow()), kit.Count or 1, kit.Spread or 0) do
-					launch(player, state, team, way, kit, strength(kit.Damage), magic, struck)
+				for _, shot in fan do
+					launch(player, state, team, shot, kit, strength(kit.Damage), magic, struck)
 				end
 			end)
 		end
@@ -857,15 +1050,18 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 			humanoid.HipHeight + root.Size.Y / 2,
 			HeroKit.leapIgnore()
 		)
-		local last = kit.Strikes[#kit.Strikes]
+		local last = kit.Busy or kit.Strikes[#kit.Strikes]
 		state.busyUntil = now + last + RECOVER
 		motionEvent:FireAllClients(character, key, 0, spot)
 		slow(state, last + RECOVER, 0)
-		for _, at in kit.Strikes do
+		for i, at in kit.Strikes do
 			later(state, at, function()
 				for _, enemy in enemiesNear(team, spot, kit.Radius) do
 					if HeroKit.landingStrikes(spot, kit.Radius, enemy) then
 						damage(player, character, enemy, strength(kit.Damage), magic)
+						if i == 1 and kit.Knockback then
+							knock(character, enemy, kit.Knockback, spot)
+						end
 					end
 				end
 			end)

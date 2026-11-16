@@ -123,6 +123,8 @@ local CUES: { [string]: Cue } = {
 	-- The thunder rolling under the strike's bolts (owner, 2026-10-31): Pro Sound Effects' "Lightning Strike Sharp
 	-- Hissing Crack 5" from its build-up, its crack 0.6 seconds in, rumbling on for about three seconds; heard far.
 	Thunder = { asset = Assets.Thunder, start = 0.9, length = 3.8, gain = 1.6, near = 40, far = 150 },
+	-- Astryn's pillar of ice shattering (Config.Heroes.Astryn.Kit.R): the glass breaking whole, as heard as its hero.
+	IceShatter = { asset = Assets.GlassShards, start = 0.03, gain = 0.6, near = 14, far = 80 },
 
 	-- Every hit, by anyone on anything (HitFeedback, Config.Combat.HitSounds).
 	Hit = { asset = Assets.Hit, start = 0, gain = 0.5 },

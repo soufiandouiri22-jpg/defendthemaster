@@ -3,7 +3,8 @@
 Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack rig's joints in its Configuration, its
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
-    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|ArenaFighter|Lancer|DanceCollection
+    python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|ArenaFighter|Lancer|
+        CelestialCaster|DanceCollection
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
@@ -96,6 +97,26 @@ PACKS = {
             "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
             "c1": [0, -0.90364, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
         },
+    },
+    # The Celestial Caster's clips with its star globe and card case are its weapon tracks; the globe hangs from the
+    # left hand, the card case (`others`) from the hips ("Attach Weapons.lua", Weapon Attachment.json).
+    "CelestialCaster": {
+        "clips": "Individual Animations/weapon-tracks",
+        "weapon": {
+            "name": "StarGlobe",
+            "parent": "LeftHand",
+            "c0": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            "c1": [0, -1.43328, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+        "others": [
+            {
+                "name": "Cardholder",
+                "parent": "LowerTorso",
+                "c0": [-1.01281, 0.06616, 1.00315, -0.34861, -0.92979, 0.11818, -0.9255, 0.32157, -0.20011, 0.14806,
+                       -0.17914, -0.97262],
+                "c1": [-0.0083, 1.57142, -0.19428, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            },
+        ],
     },
     # The Dance Collection (the emotes, Config.Emotes): body clips only, played on any hero (Motion.lend).
     "DanceCollection": {

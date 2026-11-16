@@ -38,6 +38,8 @@ HOLE = 0.0015
 # the drawing) how far out it may reach.
 EDGE = 3
 GLOW_EDGE = 60
+# With --glow, how light (mean RGB) the colour mixed with the key must be for a pixel to count as glow.
+GLOW_LIGHT = 110
 # How much of the key's tint is taken out of the drawing (1: all of it). Off for icons that use the key's hue.
 DESPILL = 1.0
 # Tints this close to the key's hue (cosine) count as its reflection.
@@ -80,19 +82,8 @@ def key(rgb: np.ndarray, glow: bool = False) -> np.ndarray:
     sizes = ndimage.sum(np.ones_like(distance), labels, range(1, n + 1))
     drawing = np.isin(labels, 1 + np.nonzero(sizes >= SPECK * sizes.max())[0])
     # The edge: drawn pixels next to the background, part drawing and part key colour.
-    reach = GLOW_EDGE if glow else EDGE
     inside = drawing & (distance >= SOLID)
-    edge = drawing & ~inside & ndimage.binary_dilation(background, iterations=reach)
-    if glow:
-        # A glow or smoke has no colour of its own to compare with: each pixel is the most transparent mix of the key
-        # and a real colour that gives it.
-        span = np.where(rgb > k, (255 - k), k)
-        need = np.abs(rgb - k) / np.maximum(span, 1e-3)
-        alpha = np.clip(need.max(axis=2), 0, 1)
-        unmixed = k + (rgb - k) / np.maximum(alpha[..., None], 1e-3)
-        alpha = np.where(edge, alpha, drawing.astype(np.float32))
-        colour = np.where(edge[..., None], np.clip(unmixed, 0, 255), despill(rgb, k))
-        return np.dstack([colour, alpha * 255]).astype(np.float32)
+    edge = drawing & ~inside & ndimage.binary_dilation(background, iterations=EDGE)
     # A hard edge: each pixel takes the colour of the nearest pixel inside, and its alpha is how far it lies from the
     # key towards that colour.
     _, (iy, ix) = ndimage.distance_transform_edt(~inside, return_indices=True)
@@ -101,6 +92,18 @@ def key(rgb: np.ndarray, glow: bool = False) -> np.ndarray:
     alpha = np.einsum("ijk,ijk->ij", rgb - k, towards) / np.maximum(np.einsum("ijk,ijk->ij", towards, towards), 1e-3)
     alpha = np.where(edge, np.clip(alpha, 0, 1), drawing.astype(np.float32))
     colour = np.where(edge[..., None], nearest, despill(rgb, k))
+    if glow:
+        # A glow or smoke has no colour of its own to compare with: each pixel is the most transparent mix of the key
+        # and a real colour that gives it. That colour is light for a glow; darker drawing near it (cards, an outline)
+        # keeps its hard edge, or it would turn half transparent.
+        span = np.where(rgb > k, (255 - k), k)
+        need = np.abs(rgb - k) / np.maximum(span, 1e-3)
+        mixed = np.clip(need.max(axis=2), 0, 1)
+        unmixed = k + (rgb - k) / np.maximum(mixed[..., None], 1e-3)
+        soft = drawing & ~inside & ndimage.binary_dilation(background, iterations=GLOW_EDGE)
+        soft &= np.clip(unmixed, 0, 255).mean(axis=2) >= GLOW_LIGHT
+        alpha = np.where(soft, mixed, alpha)
+        colour = np.where(soft[..., None], np.clip(unmixed, 0, 255), colour)
     return np.dstack([colour, alpha * 255]).astype(np.float32)
 
 

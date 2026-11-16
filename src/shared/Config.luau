@@ -917,8 +917,15 @@ Config.Minions = {
 -- round the hero and the spot aimed at), "Cone", "Ring" (what a slam round him reaches). A combo hit with a `ProjectileSpeed` is a shot instead of a swing;
 -- a combo hit's `Recover` is the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
--- `Pierce` strikes everyone it passes once; with `ShotsFrom = "Hand"` they are seen leaving the hand that holds his weapon
--- rather than where his shots leave him (HeroControls). Its `Turns` (degrees to his right, one a release) turn each
+-- `Pierce` strikes everyone it passes once; a shot of a weapon that flies itself back (Projectile.Returns) with a `Back`
+-- strikes everyone on its way back too, with that share of its damage, once each and only once it has left those it was
+-- still in as it turned (CombatService), a seeking one turning as far as its Range from where it left once it is
+-- through its enemy; with `ShotsFrom = "Hand"` they are seen leaving the hand that holds his weapon
+-- rather than where his shots leave him (HeroControls). With a `Seek` its projectiles turn on their way (`Turn`
+-- radians a second, HeroKit.seek) each towards an enemy within its Range and `Angle` (degrees across, the cone
+-- indicator's) with no wall between, the nearest first and round again when there are fewer (HeroKit.seekShare), each
+-- striking for itself and through the others on its way to its own, or all towards the crosshair when there is none; they hang `Split` seconds where they split from
+-- his weapon first, those of the fan's sides sliding out to his left and right (HeroControls). Its `Turns` (degrees to his right, one a release) turn each
 -- release from the crosshair where its motion swings his weapon across, so they go where it points. A "Dash" without `Damage` only moves him, and `Trail = false` leaves out
 -- the shadow along its way; its `Shot` is a projectile he lets go on the way, at `Release` seconds into its motion.
 -- With a `Slash` those he passed are struck only when his weapon cuts, `Time` seconds into its motion (after `Move`),
@@ -935,11 +942,20 @@ Config.Minions = {
 -- charges along it, as a leap comes down (HeroKit.grounded).
 -- A "Strike" keeps him where he stands and strikes the spot aimed at (up to `Range` away) at each of its `Strikes`
 -- (seconds from the cast), everyone within `Radius` of it, from the sky (LightningEffects); his motion itself strikes
--- no one. A `Hold` plays its motion at `Speed` from `From` to `To` seconds into the clip, a moment drawn out.
+-- no one. A `Hold` plays its motion at `Speed` from `From` to `To` seconds into the clip, a moment drawn out. A
+-- Strike's `Knockback` throws those its first strike reaches away from the spot. One that `Erupt`s strikes from the
+-- ground instead (IceEffects, HeroControls): his Projectile that Returns goes into the ground at `Dive`, bursts up out
+-- of it on the spot at the first strike on a pillar of ice `Height` studs tall, grown `Grow` times, which shatters at
+-- `Shatter`, and comes back to his hand over `Back` seconds. A Strike's `Busy` keeps him in it till that many seconds,
+-- when its motion goes on past its last strike.
 -- A "Flurry" with `Zap` shoots lightning from the point of his weapon at each of its `Hits` (LightningEffects.zap),
 -- each at one enemy the sweep reaches, the nearest `Targets` taking them in turn (HeroKit.zapTarget), or straight
 -- ahead to its `Range` when it reaches no one. A Flurry's `Beam` is a laser beam `Width` studs thick from his upper
--- body along its sweep, from `From` to `To` seconds into its motion (HeroControls). Every one of a Flurry's `Hits` from
+-- body along its sweep, from `From` to `To` seconds into its motion (HeroControls). A Flurry's `Orbit` sends his
+-- Projectile that Returns out of his hand at `From` (out over `Out` seconds) to circle `Radius` studs round him at
+-- `Height`, `Turns` times round at one speed (less than 0 the other way) with his spin in the clip, till `To` and back
+-- over `Back` seconds;
+-- its Hits reach all round him (Angle 360, Range a little past Radius). Every one of a Flurry's `Hits` from
 -- its `Slam` on strikes the ground: SlamDamage all round him, SlamRadius studs, with a shockwave. Its `Pulses` (seconds
 -- into its motion) are smaller waves through the ground after, each striking everyone within SlamRadius for
 -- PulseDamage (with PulseRatio).
@@ -954,7 +970,10 @@ Config.Minions = {
 -- A "Snipe" brings up a rifle and looks through its scope; a click fires one bullet across the arena (Corvin's R).
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first; with
 -- `From` seen leaving the far end of that weapon or part of his weapons as the clip holds it, or that bone of them (a
--- kit's `ShotsFrom` may name another). With `Gun` they are a gun's
+-- kit's `ShotsFrom` may name another). With `Returns` the component is the weapon he holds itself: it leaves his hand,
+-- comes back into it after it stops, and is not seen in his hand meanwhile. `Frost` (a colour) dresses it in icy
+-- starlight instead of a trail. With `ThroughGround` it flies on through the ground, stopped by walls only. With `Gun`
+-- they are a gun's
 -- rounds (GunEffects: "Revolver", "Bomb", "Rifle"), with a flash at the barrel and a strike where they stop; a kit's
 -- `Round` names its own.
 --
@@ -2701,6 +2720,215 @@ Config.Heroes = {
 			},
 		},
 	},
+	-- Astryn (owner, 2026-11-14; Celune while it was made): a star mage of ice, neither he nor she, with a star globe,
+	-- the RobloxAnimations Celestial Caster pack, its keys chosen by the owner in the showroom (Workspace attribute
+	-- "TestShowroom").
+	Astryn = {
+		Role = "Mage",
+		Description = "Reads the stars and casts them down on its foes.",
+		Starter = true,
+		Showcase = {
+			Motion = "RA-CLC-014",
+			-- Scorching Release as the transformation (owner, 2026-11-14).
+			Enter = { Motion = "RA-CLC-052", Then = "Breathe" },
+			-- Icy blue (owner, 2026-11-14).
+			Aura = Color3.fromRGB(120, 210, 255),
+		},
+		Health = 720,
+		Scales = "Magic",
+		Look = {
+			-- White leggings (DuckXander) under Nexus Exchange's Y2K Thigh High Boots Black (1.0), WhiteAsh's Long
+			-- Hooded Anime Trench Coat (White) made for the Girl Torso it wears with its left and right sleeves, with XO
+			-- UGC's White Royal Cape with Silver Chain and Fur Collar over it, Butterfly Affects' long white hair, the
+			-- White Sheep Horns and UGC Particles' glowing silver cross (owner, 2026-11-14; the sleeves back on
+			-- 2026-11-15, with Accessory Archive's silver arm chain with a cross round the right one).
+			Layered = {
+				{ Id = 91265282155947, Type = Enum.AccessoryType.Pants },
+				{ Id = 11520098466, Type = Enum.AccessoryType.Pants },
+			},
+			Torso = 48474356,
+			BackAccessory = "80426763291184,133370331462933",
+			ShouldersAccessory = "98924467432096,123807930500393,75820296970431",
+			-- The arm chain is made for a bare arm and sank into the sleeve (owner, 2026-11-15).
+			Widen = { ["Arm Chain (Right)"] = 1.18 },
+			HairAccessory = "92210156770376",
+			HatAccessory = "16479820563",
+			NeckAccessory = "132110007873570",
+			-- The clips turn its head up to 38 degrees aside and 16 back, which swung its long hair through the cape
+			-- (owner, 2026-11-14): it turns only a third of that.
+			HeadTurn = 0.35,
+			-- [Animated] Anime Girl Monochrome Shadowed Head.
+			Head = 138725165243806,
+			Mood = 14618207727,
+			Skin = Color3.fromRGB(246, 218, 196),
+		},
+		Portrait = { Image = "rbxassetid://102750772571390", Face = { 205, 45, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Astryn, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Astryn, keyed by Tools/key_icons.py --glow).
+		Icons = {
+			M1 = "rbxassetid://138913662602710",
+			M2 = "rbxassetid://93274072750445",
+			E = "rbxassetid://115299689594266",
+			R = "rbxassetid://80890338941681",
+			Dash = "rbxassetid://130507130352870",
+		},
+		Pack = "CelestialCaster",
+		-- The pack's star globe in its left hand (Tools/keyframe_pack.py); not its card case on the back (owner,
+		-- 2026-11-14).
+		Weapons = { "StarGlobe" },
+		-- Its weapons that slowly turn round their own axis in its hand, in radians a second (HeroLook, Shared.Motion):
+		-- the star globe about once in five seconds (owner, 2026-11-14).
+		Turning = { StarGlobe = 1.25 },
+		-- Its slams, shockwaves and trails in icy blue (ShadowEffects.Ice).
+		Effects = "Ice",
+		-- The star globe itself is its shot: it flies from its hand at the foe and back into it, hidden in the hand
+		-- meanwhile (Returns, HeroControls; owner, 2026-11-14), turning as it goes in icy starlight instead of a trail
+		-- (Frost: a glow, a turning rune circle, frost mist, sparkles and the little stars it leaves behind).
+		Projectile = {
+			Component = "StarGlobe",
+			Returns = true,
+			-- On through the ground rather than turning back off it (owner, 2026-11-14).
+			ThroughGround = true,
+			Spin = 6,
+			Frost = Color3.fromRGB(120, 210, 255),
+			Glow = Color3.fromRGB(120, 210, 255),
+		},
+		Motions = {
+			Idle = "RA-CLC-015",
+			Run = "RA-CLC-005",
+			RunLeft = "RA-CLC-006",
+			RunRight = "RA-CLC-007",
+			Back = "RA-CLC-002",
+			Takeoff = "RA-CLC-011",
+			Air = "RA-CLC-012",
+			Land = "RA-CLC-013",
+			Death = "RA-CLC-031",
+		},
+		-- A mage as Mavorak and Jestrel (owner, 2026-11-14): the same combo, M2 and Ratios as theirs, its E as
+		-- strong as Jestrel's, its R a little under their 315 and 320, as it comes sooner (1.35 s against their 3)
+		-- and throws those it strikes up.
+		Kit = {
+			-- Three throws of the globe, each on through every enemy in its way (Pierce; owner, 2026-11-15: it turned
+			-- back stiffly off the first) and back from the end of its reach, striking everyone on the way back again for
+			-- half (Back; owner, 2026-11-15: once it has gone all the way through them), at its fastest push forward in the clip
+			-- (Tools/clip_hits.py: 0.42, 0.33 and 0.37 s). All three go equally fast, at Mavorak's pace (owner,
+			-- 2026-11-14: 1.72 s for the three): each hit's own Speed brings its globe 0.33 s after the click and the
+			-- next click 0.245 s later. A heavy globe flies slower than Jestrel's laser and faster than Mavorak's orb.
+			M1 = {
+				Kind = "Combo",
+				Speed = 1.2,
+				Ratio = 0.35,
+				Reset = 1.5,
+				Hits = {
+					{
+						Motion = "RA-CLC-023",
+						Speed = 1.06,
+						Hit = 0.42,
+						Recover = 0.31,
+						Damage = 26,
+						Range = 30,
+						ProjectileSpeed = 120,
+						Width = 1.5,
+						Pierce = true,
+						Back = 0.5,
+					},
+					{
+						Motion = "RA-CLC-033",
+						Speed = 0.83,
+						Hit = 0.33,
+						Recover = 0.245,
+						Damage = 30,
+						Range = 30,
+						ProjectileSpeed = 120,
+						Width = 1.5,
+						Pierce = true,
+						Back = 0.5,
+					},
+					{
+						Motion = "RA-CLC-034",
+						Speed = 0.93,
+						Hit = 0.37,
+						Recover = 0.275,
+						Damage = 40,
+						Range = 30,
+						ProjectileSpeed = 120,
+						Width = 1.5,
+						Pierce = true,
+						Back = 0.5,
+					},
+				},
+			},
+			-- Four blows of the circling globe, 120 in all as Mavorak's slam, on a smaller ring (9 studs to his 12).
+			M2 = {
+				Kind = "Flurry",
+				-- The globe circles round Astryn through the clip's two spins, 0.07 to 0.63 s (owner, 2026-11-14).
+				Motion = "RA-CLC-053",
+				Indicator = "Ring",
+				Cooldown = 9,
+				Hits = { 0.2, 0.35, 0.5, 0.63 },
+				Damage = 30,
+				Ratio = 0.2,
+				Range = 9,
+				Angle = 360,
+				Orbit = { From = 0.07, To = 0.63, Out = 0.12, Back = 0.35, Radius = 7, Height = 2.5, Turns = -2 },
+			},
+			E = {
+				Kind = "Throw",
+				-- As Astryn throws its arms open from over its head, 0.75 s in, the globe splits in two that fly out at
+				-- once (owner, 2026-11-14), each seeking one of the two nearest enemies all round Astryn within its
+				-- Range, whichever way it faces (owner, 2026-11-15; none: both to the crosshair; one: both at it), on
+				-- through it straight to the end of the Range striking no one else, and back to the hand, striking
+				-- everyone on the way back again for half as the M1's globe does (owner, 2026-11-16). 144 in all as Jestrel's E on the way
+				-- out, as they hardly miss.
+				Motion = "RA-CLC-044",
+				ShotsFrom = "Hand",
+				Indicator = "Ring",
+				Cooldown = 11,
+				Release = 0.75,
+				Count = 2,
+				Spread = 50,
+				-- The globe splits over Astryn's head, one sliding out to each side, for 0.2 s before they fly.
+				Seek = { Angle = 360, Turn = 8, Split = 0.2 },
+				ProjectileSpeed = 110,
+				Range = 30,
+				Width = 1.5,
+				Pierce = true,
+				Back = 0.5,
+				Damage = 72,
+				Ratio = 0.3,
+			},
+			R = {
+				-- Frostroot Eruption (owner, 2026-11-14): as Astryn reaches down, 0.85 s in, the globe goes into the
+				-- ground and races under it to the spot; as Astryn pulls its hands up, 1.35 s, it bursts up there on a
+				-- pillar of ice, grown, throwing those on it up; the pillar shatters as the hands come down, 2.05 s.
+				-- One hard blow as the pillar bursts up (owner, 2026-11-14).
+				Kind = "Strike",
+				Motion = "RA-CLC-050",
+				Indicator = "Zone",
+				Cooldown = 40,
+				Range = 30,
+				Radius = 9,
+				Strikes = { 1.35 },
+				Busy = 2.05,
+				Damage = 280,
+				Ratio = 0.9,
+				Knockback = { Distance = 6, Height = 14, Time = 0.9 },
+				Erupt = { Dive = 0.85, Shatter = 2.05, Back = 0.4, Height = 11, Grow = 3 },
+			},
+			Dash = {
+				-- A real dash on its jump's push-off, drawn out, with a trail of its icy blue (owner, 2026-11-14).
+				Kind = "Dash",
+				Motion = "RA-CLC-011",
+				Speed = 0.4,
+				Cooldown = 7,
+				Range = 14,
+				Width = 3,
+				Start = 0.03,
+				Move = 0.28,
+				Stop = 0.4,
+			},
+		},
+	},
 }
 Config.DefaultHero = "Shadowren"
 
@@ -2881,6 +3109,7 @@ Config.Bots = {
 		"Corvin",
 		"Haldrek",
 		"Renka",
+		"Astryn",
 	},
 	Sight = 25,
 	Taken = 20,

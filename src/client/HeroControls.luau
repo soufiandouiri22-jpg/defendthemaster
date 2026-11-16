@@ -35,6 +35,7 @@ local HeroSounds = require(script.Parent.HeroSounds)
 local Indicators = require(script.Parent.Indicators)
 local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
+local IceEffects = require(script.Parent.IceEffects)
 local LightningEffects = require(script.Parent.LightningEffects)
 local Scope = require(script.Parent.Scope)
 local ShadowEffects = require(script.Parent.ShadowEffects)
@@ -126,6 +127,15 @@ type Flying = {
 	-- A gun's round (GunEffects) and where it was first seen.
 	round: string?,
 	start: Vector3,
+	-- A seeking shot's enemy or point (a Throw's Seek, HeroKit.seek), how fast it turns, and where it is and goes as
+	-- it is drawn frame by frame.
+	seek: (Instance | Vector3)?,
+	seekTurn: number?,
+	at: Vector3?,
+	heading: Vector3?,
+	stepped: number?,
+	-- Its split from his globe: from and to where, over how long (seconds) from when it was let go.
+	split: { from: Vector3, to: Vector3, length: number }?,
 }
 local flying: { [number]: Flying } = {}
 
@@ -196,6 +206,7 @@ local function paletteOf(settings: any): ShadowEffects.Palette?
 		then ShadowEffects.Light
 		elseif kind == "Red" then ShadowEffects.Red
 		elseif kind == "Blue" then ShadowEffects.Blue
+		elseif kind == "Ice" then ShadowEffects.Ice
 		elseif kind == "Dust" then ShadowEffects.Dust
 		elseif kind == "Wind" then ShadowEffects.Wind
 		else nil
@@ -268,6 +279,9 @@ end
 -- its warning there from now till the last bolt, and a bolt at each of `kit.Strikes`, the first in the middle and
 -- the others somewhere inside the ring, each cracking as the zap's shocks do, louder, over thunder that cracks with the
 -- first bolt and rolls on under the rest (its crack comes THUNDER_CRACK seconds into UiSound's Thunder).
+-- A Strike's `Erupt`: its globe through the ground and up out of it on the spot (defined with the projectiles below).
+local eruptLater: (character: Model, ground: Vector3, kit: any) -> ()
+
 local function strikeLater(character: Model, spot: Vector3, kit: any)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -278,6 +292,10 @@ local function strikeLater(character: Model, spot: Vector3, kit: any)
 	groundRay.FilterDescendantsInstances = HeroKit.leapIgnore()
 	local below = Workspace:Raycast(spot, Vector3.new(0, -(height + 2), 0), groundRay)
 	local ground = if below then below.Position else spot - Vector3.new(0, height, 0)
+	if kit.Erupt then
+		eruptLater(character, ground, kit)
+		return
+	end
 	LightningEffects.warn(ground, kit.Radius, kit.Strikes[#kit.Strikes])
 	task.delay(math.max(0, kit.Strikes[1] - THUNDER_CRACK), UiSound.at, "Thunder", ground)
 	for i, at in kit.Strikes do
@@ -422,6 +440,9 @@ local BEAM_CHEST = 0.8
 -- `kit.Beam`'s laser beam: from the middle of his upper body as his motion moves it, along where he aims (another
 -- hero's where he faces) to the flurry's Range or the first wall, from its From to its To unless his motion is cut short, a glowing shell round a bright core
 -- in his projectiles' colours with a glow where it strikes, and a crack as it starts.
+-- A Flurry's `Orbit`: its thrown weapon circling round him as he spins (defined with the projectiles below).
+local orbitLater: (character: Model, kit: any) -> ()
+
 local function beamLater(character: Model, kit: any)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
@@ -766,13 +787,17 @@ local function rainLater(character: Model, spot: Vector3, kit: any)
 end
 
 -- The dash's lunge in place while the hero is carried from `from` to `to`, its trail, and the lunge cut off at its end.
+-- A pack whose dash motion is also its jump (Astryn's) sounds it as the Dash event, so its jumps stay quiet.
 local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any)
 	HeroAnimator.play(character, kit.Motion, kit.Speed or 1, nil, true)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local drop = if root and humanoid then Vector3.new(0, heightOf(root, humanoid), 0) else Vector3.zero
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	if settings and settings.Pack then
+		HeroSounds.event(character, settings.Pack, "Dash")
+	end
 	if kit.Trail ~= false then
-		local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
 		local kind = settings and settings.Effects
 		task.delay(kit.Start, function()
 			if kind == "Fire" then
@@ -953,7 +978,7 @@ local function cast(key: string)
 		slow(humanoid, (kit.Busy or kit.Land) + RECOVER, 0)
 		landLater(character, to, kit)
 	elseif kit.Kind == "Strike" then
-		local last = kit.Strikes[#kit.Strikes]
+		local last = kit.Busy or kit.Strikes[#kit.Strikes]
 		busyUntil = now + last + RECOVER
 		local spot = HeroKit.leapLanding(root.Position, aim, kit.Range, heightOf(root, humanoid), HeroKit.leapIgnore())
 		slow(humanoid, last + RECOVER, 0)
@@ -987,6 +1012,9 @@ local function cast(key: string)
 		end
 		if kit.Beam then
 			beamLater(character, kit)
+		end
+		if kit.Orbit then
+			orbitLater(character, kit)
 		end
 	end
 end
@@ -1302,6 +1330,9 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	if kit.Beam then
 		beamLater(character, kit)
 	end
+	if kit.Orbit then
+		orbitLater(character, kit)
+	end
 end
 
 -- A hero's flying projectile (Config.Heroes[hero].Projectile): the pack's component, or a glowing `Orb` of magic
@@ -1372,7 +1403,307 @@ local function dressOrb(part: BasePart, size: number)
 	sparks.Parent = part
 end
 
-local function projectileModel(settings: any, scale: number): BasePart
+-- The icy starlight round a flying weapon (Config's Projectile.Frost, Astryn's globe), `size` studs across: a soft
+-- glow and a turning rune circle facing the camera, frost mist and sparkles, and little stars it leaves hanging in the
+-- air behind it, all in `colour` and white.
+local function dressFrost(part: BasePart, size: number, colour: Color3)
+	local pale = colour:Lerp(Color3.new(1, 1, 1), 0.6)
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromScale(size * 2.4, size * 2.4)
+	gui.LightInfluence = 0
+	gui.Brightness = 1.6
+	gui.MaxDistance = 400
+	gui.Adornee = part
+	local glow = Instance.new("ImageLabel")
+	glow.BackgroundTransparency = 1
+	glow.Image = Assets.GunGlow
+	glow.ImageColor3 = colour
+	glow.ImageTransparency = 0.3
+	glow.Size = UDim2.fromScale(1, 1)
+	glow.Parent = gui
+	local runes = Instance.new("ImageLabel")
+	runes.BackgroundTransparency = 1
+	runes.Image = Assets.PadRunes
+	runes.ImageColor3 = pale
+	runes.ImageTransparency = 0.15
+	runes.AnchorPoint = Vector2.new(0.5, 0.5)
+	runes.Position = UDim2.fromScale(0.5, 0.5)
+	runes.Size = UDim2.fromScale(0.75, 0.75)
+	runes.Parent = gui
+	TweenService
+		:Create(runes, TweenInfo.new(1.6, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
+		:Play()
+	gui.Parent = part
+
+	local mist = Instance.new("ParticleEmitter")
+	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	mist.Color = ColorSequence.new(pale, colour)
+	mist.LightEmission = 0.6
+	mist.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size * 0.5),
+		NumberSequenceKeypoint.new(1, size * 1.1),
+	})
+	mist.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.45),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	mist.Lifetime = NumberRange.new(0.35, 0.6)
+	mist.Rate = 60
+	mist.Speed = NumberRange.new(0.3, 1)
+	mist.SpreadAngle = Vector2.new(180, 180)
+	mist.Rotation = NumberRange.new(0, 360)
+	mist.RotSpeed = NumberRange.new(-120, 120)
+	mist.Parent = part
+	local sparkles = Instance.new("ParticleEmitter")
+	sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	sparkles.Color = ColorSequence.new(Color3.new(1, 1, 1), colour)
+	sparkles.LightEmission = 1
+	sparkles.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size * 0.22),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	sparkles.Lifetime = NumberRange.new(0.25, 0.5)
+	sparkles.Rate = 45
+	sparkles.Speed = NumberRange.new(size * 1.2, size * 2.4)
+	sparkles.SpreadAngle = Vector2.new(180, 180)
+	sparkles.Parent = part
+	local stars = Instance.new("ParticleEmitter")
+	stars.Texture = Assets.CardStar
+	stars.Color = ColorSequence.new(Color3.new(1, 1, 1), pale)
+	stars.LightEmission = 1
+	stars.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, size * 0.2),
+		NumberSequenceKeypoint.new(0.3, size * 0.26),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	stars.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.7, 0.2),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	stars.Lifetime = NumberRange.new(0.6, 1)
+	stars.Rate = 22
+	stars.Speed = NumberRange.new(0.3, 1.2)
+	stars.SpreadAngle = Vector2.new(180, 180)
+	stars.Rotation = NumberRange.new(0, 360)
+	stars.RotSpeed = NumberRange.new(-60, 60)
+	stars.Drag = 2
+	stars.Parent = part
+	-- What it leaves behind fades on its own when it is gone (retire).
+	part:SetAttribute("Linger", 1)
+end
+
+-- The part of `character`'s weapon `name` held in his hand, if he holds it.
+local function heldPart(character: Model, name: string): BasePart?
+	local weapons = character:FindFirstChild("Weapons")
+	local component = weapons and weapons:FindFirstChild(name)
+	return component
+		and (if component:IsA("BasePart") then component else component:FindFirstChildWhichIsA("BasePart", true))
+end
+
+-- How many of each held weapon are out of the hand, flying: the one in the hand is hidden ("Away", Shared.Motion) till
+-- the last is back.
+local out: { [Instance]: number } = setmetatable({}, { __mode = "k" }) :: any
+local function putAway(part: BasePart, by: number)
+	local component: Instance = part
+	while component.Parent and component.Parent.Name ~= "Weapons" do
+		component = component.Parent
+	end
+	local count = math.max((out[component] or 0) + by, 0)
+	out[component] = count
+	component:SetAttribute("Away", if count > 0 then true else nil)
+end
+
+local projectileModel: (settings: any, scale: number) -> BasePart
+-- His weapon that flies itself (Projectile.Returns, Astryn's globe) out of his hand at the kit's Orbit `From`, out
+-- `Radius` studs at `Height` over his root, `Turns` times round him (less is the other way) as he spins in the clip,
+-- till `To`, and back into his hand over `Back` seconds; hidden in his hand meanwhile. The server strikes
+-- everyone round him at the Flurry's Hits.
+orbitLater = function(character: Model, kit: any)
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	local look = settings and settings.Projectile
+	local held = look and look.Returns and heldPart(character, look.Component)
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local hips = character:FindFirstChild("LowerTorso") :: BasePart?
+	if not held or not root or not hips then
+		return
+	end
+	local orbit = kit.Orbit
+	task.delay(orbit.From, function()
+		if not root.Parent or HeroAnimator.playing(character) ~= kit.Motion then
+			return
+		end
+		local globe = projectileModel(settings, 1)
+		putAway(held, 1)
+		local started = os.clock()
+		local circling = orbit.To - orbit.From
+		local backAt: number? = nil
+		-- Round at one even speed through his spin rather than with his hips, which the clip turns faster in its
+		-- last round; from his left as his hips face at the start, and on round, slowing, as it comes back.
+		local side = -hips.CFrame.RightVector
+		local start = math.atan2(side.X, side.Z)
+		local speed = orbit.Turns * 2 * math.pi / circling
+		local connection
+		connection = RunService.RenderStepped:Connect(function()
+			local now = os.clock()
+			local t = now - started
+			local cut = not root.Parent or HeroAnimator.playing(character) ~= kit.Motion
+			if not backAt and (t >= circling or cut) then
+				backAt = now
+			end
+			local around = start + speed * t
+			if backAt then
+				local spun = backAt - started
+				local b = math.min(now - backAt, orbit.Back)
+				around = start + speed * (spun + b - b * b / (2 * orbit.Back))
+			end
+			local ring = root.Position
+				+ Vector3.new(math.sin(around), 0, math.cos(around)) * orbit.Radius
+				+ Vector3.new(0, orbit.Height, 0)
+			local position
+			if backAt then
+				-- Spiralling in with his spin, slowing into his hand.
+				local f = math.min((now - backAt) / orbit.Back, 1)
+				position = ring:Lerp(held.Position, f * f * (3 - 2 * f))
+				if f >= 1 or not held:IsDescendantOf(Workspace) then
+					connection:Disconnect()
+					retire(globe)
+					putAway(held, -1)
+					return
+				end
+			else
+				local f = math.min(t / orbit.Out, 1)
+				position = held.Position:Lerp(ring, 1 - (1 - f) * (1 - f))
+			end
+			globe.CFrame = CFrame.new(position) * CFrame.Angles(0, t * 9, 0)
+		end)
+	end)
+end
+
+-- How long a Strike's Erupt globe takes from his hand into the ground, and its rise out of it onto its pillar.
+local ERUPT_DIVE = 0.15
+local ERUPT_RISE = 0.2
+
+-- His weapon that flies itself (Projectile.Returns, Astryn's globe) through the ground and up out of it on the spot
+-- `ground` (a Strike's `Erupt`, seconds from the cast): frost runes warn there till its first strike; at `Dive` it
+-- leaves his hand into the ground before him and frost cracks race through the ground to the spot; at the first
+-- strike a pillar of ice `Height` studs tall bursts up there (IceEffects) with the globe on top, grown `Grow` times;
+-- at `Shatter` the pillar shatters and the globe flies back into his hand over `Back` seconds, shrinking. Cut short,
+-- it comes straight back.
+eruptLater = function(character: Model, ground: Vector3, kit: any)
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	local look = settings and settings.Projectile
+	local held = look and look.Returns and heldPart(character, look.Component)
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not held or not root or not humanoid then
+		return
+	end
+	local erupt = kit.Erupt
+	local rise = kit.Strikes[1]
+	IceEffects.warn(ground, kit.Radius, rise)
+	local function going(): boolean
+		return root.Parent ~= nil and HeroAnimator.playing(character) == kit.Motion
+	end
+	task.delay(erupt.Dive, function()
+		if not going() then
+			return
+		end
+		local globe = projectileModel(settings, 1)
+		local size = globe.Size
+		local gui = globe:FindFirstChildOfClass("BillboardGui")
+		local guiSize = gui and gui.Size
+		local light = globe:FindFirstChildOfClass("PointLight")
+		local range = light and light.Range
+		local function scaled(by: number)
+			globe.Size = size * by
+			if gui and guiSize then
+				gui.Size = UDim2.fromScale(guiSize.X.Scale * by, guiSize.Y.Scale * by)
+			end
+			if light and range then
+				light.Range = range * by
+			end
+		end
+		local function shown(on: boolean)
+			globe.Transparency = if on then 0 else 1
+			for _, d in globe:GetDescendants() do
+				if d:IsA("ParticleEmitter") or d:IsA("BillboardGui") or d:IsA("PointLight") then
+					d.Enabled = on
+				end
+			end
+		end
+		putAway(held, 1)
+		local from = held.Position
+		local feet = root.Position - Vector3.new(0, heightOf(root, humanoid), 0)
+		local toward = Vector3.new(ground.X - feet.X, 0, ground.Z - feet.Z)
+		toward = if toward.Magnitude > 0.5
+			then toward.Unit
+			else Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
+		local under = feet + toward * 2.5
+		local started = os.clock()
+		local hidden = false
+		local top: Vector3? = nil
+		local backFrom: Vector3? = nil
+		local backAt = 0
+		local backScale = 1
+		local scale = 1
+		local connection
+		connection = RunService.RenderStepped:Connect(function()
+			local now = os.clock()
+			local t = erupt.Dive + now - started
+			if not backFrom and (t >= erupt.Shatter or not going() or not held:IsDescendantOf(Workspace)) then
+				backFrom, backAt, backScale = globe.Position, now, scale
+				if hidden then
+					hidden = false
+					shown(true)
+				end
+			end
+			local position
+			if backFrom then
+				local f = math.min((now - backAt) / erupt.Back, 1)
+				local s = f * f * (3 - 2 * f)
+				position = backFrom:Lerp(held.Position, s)
+				scale = backScale + (1 - backScale) * s
+				if f >= 1 or not held:IsDescendantOf(Workspace) then
+					connection:Disconnect()
+					scaled(1)
+					retire(globe)
+					putAway(held, -1)
+					return
+				end
+			elseif t < erupt.Dive + ERUPT_DIVE then
+				local f = (t - erupt.Dive) / ERUPT_DIVE
+				position = from:Lerp(under, f * f)
+			elseif t < rise then
+				if not hidden then
+					hidden = true
+					shown(false)
+					ShadowEffects.pulse(under, 4, ShadowEffects.Ice)
+					IceEffects.crack(under, ground, math.max(rise - t - 0.05, 0.1))
+				end
+				local f = (t - erupt.Dive - ERUPT_DIVE) / math.max(rise - erupt.Dive - ERUPT_DIVE, 0.05)
+				position = under:Lerp(ground, f) - Vector3.new(0, 3, 0)
+			else
+				if not top then
+					top = IceEffects.pillar(ground, kit.Radius, erupt.Height, erupt.Shatter - rise)
+					hidden = false
+					shown(true)
+					shakeNear(ground, 1)
+					slamSound(character)
+				end
+				local f = math.min((t - rise) / ERUPT_RISE, 1)
+				local e = 1 - (1 - f) * (1 - f) * (1 - f)
+				scale = 1 + (erupt.Grow - 1) * e
+				local perch = (top :: Vector3) + Vector3.new(0, size.Y * scale * 0.45 + math.sin(t * 4) * 0.3, 0)
+				position = ground:Lerp(perch, e)
+			end
+			scaled(scale)
+			globe.CFrame = CFrame.new(position) * CFrame.Angles(0, t * 3, 0)
+		end)
+	end)
+end
+
+projectileModel = function(settings: any, scale: number): BasePart
 	local look = settings.Projectile
 	local part: BasePart
 	if look.Orb then
@@ -1396,8 +1727,11 @@ local function projectileModel(settings: any, scale: number): BasePart
 			shedCards(part, look.Glow or look.Laser.Color)
 		end
 	else
-		local template =
-			ReplicatedStorage[settings.Pack].Rig.Components[look.Component]:FindFirstChildWhichIsA("MeshPart", true)
+		-- The pack's rig holds its weapons, or the place does (ReplicatedStorage.<pack>.Components) when Rojo cannot
+		-- set their meshes.
+		local pack = ReplicatedStorage[settings.Pack]
+		local components = pack.Rig:FindFirstChild("Components") or pack.Components
+		local template = components[look.Component]:FindFirstChildWhichIsA("MeshPart", true)
 		part = template:Clone() :: MeshPart
 		for _, d in part:GetChildren() do
 			if d:IsA("JointInstance") then
@@ -1410,21 +1744,25 @@ local function projectileModel(settings: any, scale: number): BasePart
 	part.CanQuery = false
 	part.CanTouch = false
 	part.Transparency = if look.Orb and look.Orb.Swirl then 1 else 0
-	local half = if look.TrailHalf then look.TrailHalf * scale else part.Size.Y * 0.3
-	local a0 = Instance.new("Attachment")
-	a0.Position = Vector3.new(0, half, 0)
-	a0.Parent = part
-	local a1 = Instance.new("Attachment")
-	a1.Position = Vector3.new(0, -half, 0)
-	a1.Parent = part
-	local trail = Instance.new("Trail")
-	trail.Attachment0, trail.Attachment1 = a0, a1
-	trail.Lifetime = 0.25
-	trail.Color = ColorSequence.new(look.Trail[1], look.Trail[2])
-	trail.Transparency = NumberSequence.new(look.TrailFade or 0.35, 1)
-	trail.LightEmission = 0.4
-	trail.FaceCamera = true
-	trail.Parent = part
+	if look.Frost then
+		dressFrost(part, part.Size.Magnitude / math.sqrt(3), look.Frost)
+	else
+		local half = if look.TrailHalf then look.TrailHalf * scale else part.Size.Y * 0.3
+		local a0 = Instance.new("Attachment")
+		a0.Position = Vector3.new(0, half, 0)
+		a0.Parent = part
+		local a1 = Instance.new("Attachment")
+		a1.Position = Vector3.new(0, -half, 0)
+		a1.Parent = part
+		local trail = Instance.new("Trail")
+		trail.Attachment0, trail.Attachment1 = a0, a1
+		trail.Lifetime = 0.25
+		trail.Color = ColorSequence.new(look.Trail[1], look.Trail[2])
+		trail.Transparency = NumberSequence.new(look.TrailFade or 0.35, 1)
+		trail.LightEmission = 0.4
+		trail.FaceCamera = true
+		trail.Parent = part
+	end
 	if look.Glow then
 		local light = Instance.new("PointLight")
 		light.Color = look.Glow
@@ -1436,6 +1774,13 @@ local function projectileModel(settings: any, scale: number): BasePart
 	return part
 end
 
+-- How far to his sides and up seeking shots split from his globe (a Throw's Seek `Split`).
+local SPLIT_OUT = 2.6
+local SPLIT_UP = 0.8
+
+-- When each hero's seeking shots last split from his weapon.
+local splitAt: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
+
 local function onProjectile(
 	id: number,
 	character: Model,
@@ -1444,7 +1789,11 @@ local function onProjectile(
 	speed: number,
 	range: number,
 	scale: number?,
-	blast: number?
+	blast: number?,
+	seek: (Instance | Vector3)?,
+	seekTurn: number?,
+	split: number?,
+	side: number?
 )
 	local name = character and character:GetAttribute("Hero")
 	local settings = name and Config.Heroes[name]
@@ -1473,8 +1822,14 @@ local function onProjectile(
 		model, spin = projectileModel(settings, scale or 1), settings.Projectile.Spin or 0
 	end
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local start = if from and root then weaponFrom(character, root, from) else origin
+	-- A weapon that flies itself (`Returns`) leaves from where its hand holds it, hidden there till it is back.
+	local held = if settings.Projectile.Returns then heldPart(character, settings.Projectile.Component) else nil
+	if held then
+		putAway(held, 1)
+	end
+	local start = if held then held.Position elseif from and root then weaponFrom(character, root, from) else origin
 	flying[id] = {
+		held = held,
 		dagger = model,
 		origin = origin,
 		from = from,
@@ -1489,14 +1844,36 @@ local function onProjectile(
 		character = character,
 		round = round,
 		start = start,
+		seek = if seekTurn then seek else nil,
+		seekTurn = seekTurn,
+		at = start,
+		heading = direction,
+		stepped = os.clock(),
 	}
+	-- Split from his globe: the one of the middle of the fan rises a little, those to its sides (the server's `side`,
+	-- 1 his right, -1 his left) slide out to his right and left beside it, over `split` seconds, before they fly.
+	if seekTurn and split and split > 0 and root then
+		local right = Vector3.new(root.CFrame.RightVector.X, 0, root.CFrame.RightVector.Z)
+		local aside = if right.Magnitude > 0.1 then right.Unit * (side or 0) * SPLIT_OUT else Vector3.zero
+		flying[id].split = { from = start, to = start + aside + Vector3.new(0, SPLIT_UP, 0), length = split }
+	end
 	-- Where it is first drawn, should this frame be drawn before it moves.
 	local f = flying[id]
 	f.dagger.CFrame = CFrame.lookAt(start, start + direction) * f.turn
 	if round then
 		GunEffects.muzzle(start, direction, round)
 	end
-	HeroSounds.event(character, settings.Pack, "Release")
+	-- Seeking shots of one release split from his globe in a flash of frost, once for them all.
+	if seekTurn and settings.Projectile.Frost and os.clock() - (splitAt[character] or 0) > 0.1 then
+		splitAt[character] = os.clock()
+		IceEffects.split(start, settings.Projectile.Frost)
+	end
+	-- Seeking shots split from one release, which its motion's own cues sound. A pack's Glint (Astryn's soft edge of
+	-- magic) sounds under its Release.
+	if not seekTurn then
+		HeroSounds.event(character, settings.Pack, "Release")
+		HeroSounds.event(character, settings.Pack, "Glint")
+	end
 end
 
 -- A great orb bursting at `at` over `radius` studs: a blast of dark magic in the air there (of fire for a hero with
@@ -1527,8 +1904,12 @@ end
 local function onProjectileEnd(id: number, at: Vector3, hit: boolean)
 	local f = flying[id]
 	if f then
-		retire(f.dagger)
-		flying[id] = nil
+		if f.held then
+			f.returning = { from = f.dagger.Position, started = os.clock() }
+		else
+			retire(f.dagger)
+			flying[id] = nil
+		end
 		if f.blast then
 			blastAt(f.character, at, f.blast)
 		elseif hit and f.burst then
@@ -1549,32 +1930,120 @@ end
 -- Over how many studs of its way a projectile `FromWeapon` comes from his weapon's point onto the way the server sends
 -- it along.
 local WEAPON_BLEND = 12
+-- How far past the reach the server sent a seeking shot is drawn on at most, waiting for its end: one with a `Back`
+-- flies on through its enemy out to its Range after its turns.
+local SEEK_FLIGHT = 40
+
+-- Where a seeking shot `f` goes now: its enemy's middle while that is there, else its point till it is nearly there.
+-- Once in him it goes on straight, as the server has one that flies on through him (a Pierce).
+local function seekPoint(f: Flying): Vector3?
+	local seek = f.seek
+	if typeof(seek) == "Vector3" then
+		if (seek - (f.at :: Vector3)).Magnitude < 1.5 then
+			f.seek = nil
+			return nil
+		end
+		return seek
+	elseif typeof(seek) == "Instance" then
+		local body = if seek:IsA("BasePart")
+			then seek
+			elseif seek:IsA("Model") then seek:FindFirstChild("HumanoidRootPart") or seek.PrimaryPart
+			else nil
+		if not body or not body:IsA("BasePart") or not body:IsDescendantOf(Workspace) then
+			f.seek = nil
+			return nil
+		end
+		local reached = HeroKit.body(seek)
+		if reached and HeroKit.flat(body.Position - (f.at :: Vector3)).Magnitude <= reached.radius then
+			f.seek = nil
+			return nil
+		end
+		return body.Position
+	end
+	return nil
+end
 
 local function updateFlying()
 	local now = os.clock()
 	for id, f in flying do
+		local spin = CFrame.Angles(-(now - f.started) * f.spin, 0, 0)
+		-- A weapon that flies itself comes back from where it stopped into the hand that holds it.
+		if f.returning then
+			local held = f.held :: BasePart
+			local back = (now - f.returning.started) * f.speed * HeroKit.RETURN_SPEED
+			local way = held.Position - f.returning.from
+			if not held:IsDescendantOf(Workspace) or back >= way.Magnitude then
+				retire(f.dagger)
+				flying[id] = nil
+				putAway(held, -1)
+				continue
+			end
+			local position = f.returning.from + way.Unit * back
+			f.dagger.CFrame = CFrame.lookAt(position, position + way) * spin * f.turn
+			continue
+		end
+		-- A seeking shot turns as the server turns it (HeroKit.seek), towards its enemy or point, from where it is drawn.
+		if f.seekTurn then
+			local split = f.split
+			if split then
+				local s = math.min((now - f.started) / split.length, 1)
+				local at = split.from:Lerp(split.to, 1 - (1 - s) * (1 - s))
+				f.at, f.stepped = at, now
+				f.dagger.CFrame = CFrame.lookAt(at, at + (f.heading :: Vector3)) * spin * f.turn
+				if s >= 1 then
+					f.split = nil
+					f.started = now
+				end
+				continue
+			end
+			local dt = now - (f.stepped :: number)
+			f.stepped = now
+			local at, heading = f.at :: Vector3, f.heading :: Vector3
+			local point = seekPoint(f)
+			if point then
+				heading = HeroKit.seek(heading, at, point, f.seekTurn, dt)
+			end
+			at += heading * f.speed * dt
+			f.at, f.heading = at, heading
+			-- The server ends it or turns it back; this only puts away one whose end was lost.
+			if (now - f.started) * f.speed > f.range + SEEK_FLIGHT then
+				if f.held then
+					f.returning = { from = at, started = now }
+				else
+					retire(f.dagger)
+					flying[id] = nil
+				end
+				continue
+			end
+			f.dagger.CFrame = CFrame.lookAt(at, at + heading) * spin * f.turn
+			continue
+		end
 		-- One from his weapon is first seen right at its point, however long the frame.
-		if f.from and not f.seen then
+		if (f.from or f.held) and not f.seen then
 			f.seen = true
 			f.started = now
 		end
 		local travelled = (now - f.started) * f.speed
 		if travelled > f.range + 10 then
+			if f.held then
+				f.returning = { from = f.dagger.Position, started = now }
+				continue
+			end
 			retire(f.dagger)
 			flying[id] = nil
 			continue
 		end
-		local fade = if f.from then math.max(1 - travelled / WEAPON_BLEND, 0) else 0
+		local fade = if f.from or f.held then math.max(1 - travelled / WEAPON_BLEND, 0) else 0
 		-- Where it leaves him as he moves now, not where that was as the shot left the server.
 		local root = f.character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		local shift = if fade > 0 and root
-			then weaponFrom(f.character, root, f.from :: string) - f.origin
+		local shift = if fade > 0 and f.held
+			then f.held.Position - f.origin
+			elseif fade > 0 and root then weaponFrom(f.character, root, f.from :: string) - f.origin
 			else Vector3.zero
 		local position = f.origin + f.direction * math.min(travelled, f.range) + shift * fade
 		-- Coming onto the server's way it points where it moves, not sideways along it.
 		local moving = f.direction - shift / WEAPON_BLEND
 		local heading = if fade > 0 and moving.Magnitude > 0.1 then moving.Unit else f.direction
-		local spin = CFrame.Angles(-(now - f.started) * f.spin, 0, 0)
 		f.dagger.CFrame = CFrame.lookAt(position, position + heading) * spin * f.turn
 	end
 end

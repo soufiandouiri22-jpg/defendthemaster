@@ -104,8 +104,8 @@ export type Motion = typeof(setmetatable(
 		-- clips give them no opacity, so they show as made and are put away for a dance.
 		plain: { [BasePart]: number },
 		-- The rigid components' joints by their part's name, with the part's size as made (and its mesh's, in the
-		-- newest packs).
-		props: { [string]: { motor: Motor6D, size: Vector3, meshSize: Vector3? } },
+		-- newest packs) and the component they belong to.
+		props: { [string]: { motor: Motor6D, size: Vector3, meshSize: Vector3?, component: Instance } },
 		base: Clip?,
 		previous: Clip?,
 		baseBlend: number,
@@ -218,7 +218,7 @@ local function takeWeapon(self: Motion, d: Instance)
 	if d:IsA("Bone") then
 		self.bones[d.Name] = d
 	elseif d:IsA("Motor6D") and d.Name == "ComponentBinding" and d.Part1 then
-		self.props[d.Part1.Name] = { motor = d, size = d.Part1.Size }
+		self.props[d.Part1.Name] = { motor = d, size = d.Part1.Size, component = component }
 	elseif d:IsA("MeshPart") then
 		local meshes = self.meshes[component.Name] or {}
 		self.meshes[component.Name] = meshes
@@ -711,9 +711,15 @@ function Motion.step(self: Motion, dt: number)
 end
 
 function Motion.apply(self: Motion, pose: Pose)
+	-- A hero whose long hair would swing through his cape turns his head only this much of what the clips turn it
+	-- (his "HeadTurn" attribute, a Look's HeadTurn, HeroLook.dress).
+	local headTurn = self.character:GetAttribute("HeadTurn")
 	for name, transform in pose.body do
 		local joint = self.joints[name]
 		if joint then
+			if name == "Head" and type(headTurn) == "number" then
+				transform = CFrame.new():Lerp(transform, headTurn)
+			end
 			(joint.instance :: any).Transform = joint.before * transform * joint.after
 		end
 	end
@@ -722,8 +728,15 @@ function Motion.apply(self: Motion, pose: Pose)
 	end
 	for name, prop in self.props do
 		local p = pose.props[name]
-		if p then
+		-- A weapon with the "Turning" attribute (radians a second, HeroLook) turns slowly round its own axis.
+		local turning = prop.component:GetAttribute("Turning")
+		if type(turning) == "number" then
+			local spin = CFrame.Angles(0, os.clock() * turning % (2 * math.pi), 0)
+			prop.motor.Transform = (if p then p.world else CFrame.identity) * spin
+		elseif p then
 			prop.motor.Transform = p.world
+		end
+		if p then
 			local scale = Vector3.new(math.max(p.scale.X, 1e-4), math.max(p.scale.Y, 1e-4), math.max(p.scale.Z, 1e-4))
 			local part = prop.motor.Part1 :: BasePart
 			local mesh = part:FindFirstChild("Geometry")
@@ -744,8 +757,11 @@ function Motion.apply(self: Motion, pose: Pose)
 			end
 		end
 	end
+	-- A weapon with the "Away" attribute is out of his hand (Astryn's globe thrown, HeroControls) and not shown.
+	local weapons = self.character:FindFirstChild("Weapons")
 	for name, meshes in self.meshes do
-		local opacity = pose.opacity[name] or 0
+		local component = weapons and weapons:FindFirstChild(name)
+		local opacity = if component and component:GetAttribute("Away") then 0 else pose.opacity[name] or 0
 		for _, mesh in meshes do
 			mesh.Transparency = 1 - opacity
 		end

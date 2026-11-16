@@ -270,6 +270,51 @@ function HeroKit.landingStrikes(landing: Vector3, radius: number, body: Body): b
 	return HeroKit.flat(body.position - landing).Magnitude - body.radius <= radius
 end
 
+-- Whether `character`'s hero's projectiles fly on through the ground (Config's Projectile.ThroughGround).
+-- How fast a weapon that flies itself (Projectile.Returns) comes back into the hand, against its speed out: the same
+-- on the server, which strikes with it on the way back (a shot's `Back`), and on the clients, which draw it.
+HeroKit.RETURN_SPEED = 0.8
+
+function HeroKit.throughGround(character: Model): boolean
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	return settings ~= nil and settings.Projectile ~= nil and settings.Projectile.ThroughGround == true
+end
+
+-- Within how many studs a seeking shot turns twice as hard, and harder still nearer.
+local SEEK_CLOSE = 12
+
+-- A seeking shot's way (a Throw's `Seek`) flying along `direction` from `from`, turned towards `to` over `dt` seconds
+-- at `turn` radians a second, turning harder the nearer it is so it cannot circle round its enemy: the same on the
+-- server, which strikes with it, and on the clients, which draw it.
+function HeroKit.seek(direction: Vector3, from: Vector3, to: Vector3, turn: number, dt: number): Vector3
+	local want = to - from
+	local distance = want.Magnitude
+	if distance < 0.05 then
+		return direction
+	end
+	want = want.Unit
+	local most = turn * dt * (1 + SEEK_CLOSE / math.max(distance, 1))
+	local angle = math.acos(math.clamp(direction:Dot(want), -1, 1))
+	if angle <= most then
+		return want
+	end
+	local axis = direction:Cross(want)
+	if axis.Magnitude < 1e-4 then
+		axis = Vector3.yAxis
+	end
+	return CFrame.fromAxisAngle(axis.Unit, most):VectorToWorldSpace(direction)
+end
+
+-- Which of `count` seeking shots goes at which of `targets` (nearest first): one each while there are enough, round
+-- again from the nearest when there are fewer (two of three at the nearer of two, all at one); none when there is none.
+function HeroKit.seekShare<T>(targets: { T }, count: number): { T? }
+	local share = {}
+	for n = 1, count do
+		share[n] = if #targets > 0 then targets[(n - 1) % #targets + 1] else nil
+	end
+	return share
+end
+
 -- The directions of a fan of `count` projectiles over `spread` degrees round `direction` (round the vertical).
 function HeroKit.fan(direction: Vector3, count: number, spread: number): { Vector3 }
 	local directions = {}
