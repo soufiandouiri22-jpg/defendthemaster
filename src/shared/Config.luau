@@ -2965,7 +2965,8 @@ Config.Heroes = {
 			NeckAccessory = "11332941936",
 			-- The mask wraps the whole head, so the head under it is hidden.
 			HideHead = true,
-			Skin = Color3.fromRGB(226, 218, 208),
+			-- His hands the cool white-grey of his shirt's strip, as in his portrait (owner, 2026-11-20).
+			Skin = Color3.fromRGB(205, 205, 212),
 		},
 		Portrait = { Image = "rbxassetid://119243757457995", Face = { 180, 40, 620 } },
 		-- The ability bar's icons per key (Art/Icons/Kraeven, each a GenerateImage drawing on green in

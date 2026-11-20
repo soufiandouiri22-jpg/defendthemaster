@@ -37,9 +37,12 @@ local AWAY = EDGE + CLEAR + ARROW - FOOT + BOB + REACH
 local HOLD = EDGE + CLEAR - FOOT + ARROW / 2
 -- Seconds on the Play page before the first hint.
 local FIRST_WAIT = 1.5
--- Seconds the last hint takes to shrink away after GOT IT, and the first to pop up; how fast the bubble glides on to
--- the next hint (a rate: the share of the way left it closes each moment).
-local LEAVE, ARRIVE, GLIDE = 0.14, 0.24, 10
+-- Seconds the last hint takes to shrink away after GOT IT (the first shows at once at its full size; owner,
+-- 2026-11-20); how fast the bubble glides on to the next hint (a rate: the share of the way left it closes each moment).
+local LEAVE, GLIDE = 0.14, 10
+-- Where the bubble waits while no hint shows. It is never made invisible: a frame shown again is drawn one frame
+-- where it last stood before it moves (the top left corner, where it was made), so it only ever moves.
+local OFF = UDim2.fromOffset(-10000, -10000)
 local KEY = 54
 
 type Hint = {
@@ -164,12 +167,6 @@ local function rows(object: GuiObject, origin: Vector2): (number, number)
 	return top, top + object.AbsoluteSize.Y + 2 * grow
 end
 
--- How big a hint is `t` seconds after it popped up: from a little smaller, past its size and back.
-local function popped(t: number): number
-	local k = math.clamp(t / ARRIVE, 0, 1) - 1
-	return 0.8 + 0.2 * (1 + 2.70158 * k ^ 3 + 1.70158 * k ^ 2)
-end
-
 -- The first hint not seen yet of those for before his first match or of those for after it.
 local function nextHint(data: Profile.Data?, seen: { [string]: boolean }): Hint?
 	if not data then
@@ -196,7 +193,7 @@ function Hints.start(menu: ScreenGui)
 	local bubble = UiStyle.frame(gui, UDim2.fromOffset(WIDTH, HEIGHT))
 	bubble.Name = "Hint"
 	bubble.BackgroundColor3 = W.Parchment
-	bubble.Visible = false
+	bubble.Position = OFF
 	UiStyle.corner(bubble, 16)
 	UiStyle.stroke(bubble, C.Gold, EDGE)
 	local size = Instance.new("UIScale")
@@ -235,7 +232,6 @@ function Hints.start(menu: ScreenGui)
 
 	local seen: { [string]: boolean } = {}
 	local shown: Hint? = nil
-	local shownAt = 0
 	local leftAt: number? = nil
 	local readyAt = math.huge
 	-- Where the bubble's top middle is on the screen while it shows, gliding to where its hint wants it.
@@ -266,7 +262,7 @@ function Hints.start(menu: ScreenGui)
 				return
 			end
 			leftAt = nil
-			bubble.Visible = false
+			bubble.Position = OFF
 			at = nil
 		end
 		local top = menu:FindFirstChild("Top") :: GuiObject?
@@ -276,7 +272,7 @@ function Hints.start(menu: ScreenGui)
 		local hint = if onPlay then nextHint(ProfileClient.get(), seen) else nil
 		local target = hint and hint.target(menu)
 		if not hint or not target or not target.Visible or target.AbsoluteSize.X <= 0 then
-			bubble.Visible = false
+			bubble.Position = OFF
 			at = nil
 			readyAt = math.max(readyAt, now + FIRST_WAIT)
 			if not hint then
@@ -292,9 +288,6 @@ function Hints.start(menu: ScreenGui)
 		end
 		if shown ~= hint then
 			shown = hint
-			if not at then
-				shownAt = now
-			end
 			if press then
 				press.Scale = 1
 			end
@@ -310,9 +303,7 @@ function Hints.start(menu: ScreenGui)
 			end
 			UiSound.play("Pick", 0.6)
 		end
-		bubble.Visible = true
-
-		size.Scale = scale * popped(now - shownAt)
+		size.Scale = scale
 		local screen = gui.AbsoluteSize
 		-- Absolute positions count from under Roblox's top bar; this screen starts above it.
 		local centre = target.AbsolutePosition - gui.AbsolutePosition + target.AbsoluteSize / 2
@@ -323,7 +314,7 @@ function Hints.start(menu: ScreenGui)
 		local goal = Vector2.new(x, if below then lower + AWAY * scale else upper - AWAY * scale - HEIGHT * scale)
 		local spot = if at then at:Lerp(goal, 1 - math.exp(-GLIDE * dt)) else goal
 		at = spot
-		-- It grows from the side its arrow is on, so it pops up out of the arrow.
+		-- It shrinks away towards the side its arrow is on.
 		local anchor = if below then 0 else 1
 		bubble.AnchorPoint = Vector2.new(0.5, anchor)
 		bubble.Position = UDim2.fromOffset(spot.X, spot.Y + anchor * HEIGHT * scale)
