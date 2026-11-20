@@ -1,8 +1,9 @@
--- The lobby's one-time hints after the player's first match (Config.FirstMatch): one at a time on the Play page, a
--- parchment bubble with a bobbing gold arrow pointing at what it is about (the EMOTE button, with the G key that opens
--- the wheel in a match; the Pass tab; the Ranked tab); GOT IT marks it seen in the profile (MenuService's HintSeen,
--- data.SeenHints) and the bubble glides on to the next, after the last it shrinks away. Laid on the screen in its own
--- pixels, over the menu but under its pop-ups.
+-- The lobby's one-time hints: one at a time on the Play page, a parchment bubble with a bobbing gold arrow pointing at
+-- what it is about. Before the player's first match only the two he needs to start (the Heroes tab and PLAY), so he
+-- is in a match at once; after it (Config.FirstMatch) the rest, when what he won there gives them meaning (the EMOTE
+-- button, with the G key that opens the wheel in a match; the Shop, the Pass and the Ranked tabs; owner, 2026-11-16).
+-- GOT IT marks it seen in the profile (MenuService's HintSeen, data.SeenHints) and the bubble glides on to the next,
+-- after the last it shrinks away. Laid on the screen in its own pixels, over the menu but under its pop-ups.
 
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
@@ -43,6 +44,8 @@ local KEY = 54
 
 type Hint = {
 	id: string,
+	-- Shown before his first match, not after it (all others only after it).
+	first: boolean?,
 	title: string,
 	text: (data: Profile.Data) -> string,
 	target: (menu: ScreenGui) -> GuiObject?,
@@ -62,6 +65,31 @@ end
 
 local HINTS: { Hint } = {
 	{
+		id = "Heroes",
+		first = true,
+		title = "YOUR HEROES",
+		text = function()
+			return "Open HEROES to see every hero and their abilities, and choose who you play."
+		end,
+		target = function(menu)
+			return find(menu, { "Top", "Tabs", "Row", "Heroes" })
+		end,
+		outline = function(menu)
+			return find(menu, { "Top", "Tabs" })
+		end,
+	},
+	{
+		id = "Play",
+		first = true,
+		title = "READY TO FIGHT",
+		text = function()
+			return "Press PLAY to join a match. Defend your Master and bring down theirs!"
+		end,
+		target = function(menu)
+			return find(menu, { "Pages", "Play", "PlayArea", "PlayButton" })
+		end,
+	},
+	{
 		id = "Emote",
 		title = "YOUR EMOTES",
 		text = function(data)
@@ -74,6 +102,19 @@ local HINTS: { Hint } = {
 			return find(menu, { "Pages", "Play", "Emote" })
 		end,
 		key = { name = "G", text = "Hold in a match" },
+	},
+	{
+		id = "ShopTab",
+		title = "THE SHOP",
+		text = function()
+			return "Spend the coins you win in matches on new heroes: a featured one, and new ones every day."
+		end,
+		target = function(menu)
+			return find(menu, { "Top", "Tabs", "Row", "Shop" })
+		end,
+		outline = function(menu)
+			return find(menu, { "Top", "Tabs" })
+		end,
 	},
 	{
 		id = "Pass",
@@ -129,13 +170,14 @@ local function popped(t: number): number
 	return 0.8 + 0.2 * (1 + 2.70158 * k ^ 3 + 1.70158 * k ^ 2)
 end
 
--- The first hint not seen yet, for a player who has played a match.
+-- The first hint not seen yet of those for before his first match or of those for after it.
 local function nextHint(data: Profile.Data?, seen: { [string]: boolean }): Hint?
-	if not data or Profile.newGames(data) == 0 then
+	if not data then
 		return nil
 	end
+	local first = Profile.newGames(data) == 0
 	for _, hint in HINTS do
-		if not data.SeenHints[hint.id] and not seen[hint.id] then
+		if (hint.first == true) == first and not data.SeenHints[hint.id] and not seen[hint.id] then
 			return hint
 		end
 	end

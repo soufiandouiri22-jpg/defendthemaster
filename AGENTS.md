@@ -66,6 +66,8 @@ shop (08), cursors (09). Talk to the owner in Dutch.
 - Every image for the owner (concepts, screenshots, designs) goes into the chat itself, embedded with its file path,
   not only named or saved (owner, 2026-10-26). Play captures are saved as a file first so they can be shown:
   `Tools/StudioShot/studio_shot.sh <out.png>` saves Studio's viewport, also when Studio is behind other windows.
+- Gameplay with its sound is recorded by `Tools/Record/record.sh start [name]` and `... stop`: the largest Roblox window
+  (Studio or the player) with only Roblox's own sound, 60 fps MP4, into `.local/recordings/`.
 - Every file the owner has to use (imports, images, documents) is named by its full absolute path, never a relative
   one (owner, 2026-10-28).
 - New Meshy models: first a concept (image-to-image) the owner approves, then 3D. Never generate without his go.
