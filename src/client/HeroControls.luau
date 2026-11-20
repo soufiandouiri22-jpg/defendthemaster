@@ -40,6 +40,7 @@ local LightningEffects = require(script.Parent.LightningEffects)
 local Scope = require(script.Parent.Scope)
 local ShadowEffects = require(script.Parent.ShadowEffects)
 local UiSound = require(script.Parent.UiSound)
+local WingEffects = require(script.Parent.WingEffects)
 
 local HeroControls = {}
 
@@ -209,6 +210,7 @@ local function paletteOf(settings: any): ShadowEffects.Palette?
 		elseif kind == "Ice" then ShadowEffects.Ice
 		elseif kind == "Dust" then ShadowEffects.Dust
 		elseif kind == "Wind" then ShadowEffects.Wind
+		elseif kind == "Smoke" then ShadowEffects.Smoke
 		else nil
 end
 
@@ -227,7 +229,13 @@ local function landLater(character: Model, landing: Vector3, kit: any)
 			local below = Workspace:Raycast(landing, Vector3.new(0, -(height + 2), 0), groundRay)
 			local ground = if below then below.Position else landing - Vector3.new(0, height, 0)
 			local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
-			if settings and settings.Effects == "Fire" then
+			if kit.Wings then
+				-- He comes down out of the sky on his wings: the ultimate's slam in his colours, not a leap's shockwave.
+				ShadowEffects.slam(ground, kit.Radius, paletteOf(settings) or ShadowEffects.Blue)
+				shakeNear(ground, 1)
+				slamSound(character)
+				return
+			elseif settings and settings.Effects == "Fire" then
 				FireEffects.shockwave(ground, kit.Radius)
 			else
 				ShadowEffects.shockwave(ground, kit.Radius, paletteOf(settings))
@@ -236,6 +244,33 @@ local function landLater(character: Model, landing: Vector3, kit: any)
 			slamSound(character)
 		end
 	end)
+end
+
+-- A leap on wings (its `Wings`, WingEffects) from now on, diving at `landing`: its rising clip played at its
+-- `MotionSpeed` to last till the dive, and the dive's `Spin`: its clip from `From`, started there again each time it
+-- reaches `To` (`Loops` times), then on to its end, so it comes to its `Hit` as he lands.
+local function soarLater(character: Model, kit: any, landing: Vector3)
+	if kit.MotionSpeed then
+		HeroAnimator.setSpeed(character, kit.MotionSpeed)
+	end
+	WingEffects.spread(character, kit, landing)
+	local spin = kit.Spin
+	local lap = spin.To - spin.From
+	local start = kit.Land - (spin.Hit - spin.From) - spin.Loops * lap
+	for i = 0, spin.Loops do
+		task.delay(start + i * lap, function()
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			local playing = HeroAnimator.playing(character)
+			if
+				not humanoid
+				or humanoid.Health <= 0
+				or (playing and playing ~= kit.Motion and playing ~= spin.Motion)
+			then
+				return
+			end
+			HeroAnimator.play(character, spin.Motion, 1, spin.From, "Grounded")
+		end)
+	end
 end
 
 -- A flurry's slams where the hero stands, at each of its `Hits` from `kit.Slam` seconds from now on, and the smaller
@@ -977,6 +1012,9 @@ local function cast(key: string)
 		}
 		slow(humanoid, (kit.Busy or kit.Land) + RECOVER, 0)
 		landLater(character, to, kit)
+		if kit.Wings then
+			soarLater(character, kit, to)
+		end
 	elseif kit.Kind == "Strike" then
 		local last = kit.Busy or kit.Strikes[#kit.Strikes]
 		busyUntil = now + last + RECOVER
@@ -1205,7 +1243,7 @@ local function updateLeap()
 			return
 		end
 		local along = math.clamp((t - l.takeoff) / math.max(l.land - l.takeoff, 1e-3), 0, 1)
-		local under = l.from:Lerp(l.to, along * along * (3 - 2 * along))
+		local under = l.from:Lerp(l.to, HeroKit.leapAlong(l.lift, along))
 		root.CFrame = CFrame.new(under + Vector3.new(0, HeroKit.lift(l.lift, t), 0)) * root.CFrame.Rotation
 		root.AssemblyLinearVelocity = Vector3.zero
 		if t >= l.lift.Land then
@@ -1318,6 +1356,9 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	end
 	if kit.Kind == "Leap" and landing then
 		landLater(character, landing, kit)
+		if kit.Wings then
+			soarLater(character, kit, landing)
+		end
 	elseif kit.Kind == "Strike" and landing then
 		holdLater(character, kit)
 		strikeLater(character, landing, kit)
@@ -1501,6 +1542,15 @@ local function heldPart(character: Model, name: string): BasePart?
 		and (if component:IsA("BasePart") then component else component:FindFirstChildWhichIsA("BasePart", true))
 end
 
+-- The component of his weapons a projectile (`look`, Config's Projectile) is: of a pair, the one in his left hand for a
+-- projectile on his left side (`side` below 0, the server's), else the one in his right.
+local function componentOf(look: any, side: number?): string
+	if type(look.Component) == "table" then
+		return look.Component[if (side or 0) < 0 then 2 else 1]
+	end
+	return look.Component
+end
+
 -- How many of each held weapon are out of the hand, flying: the one in the hand is hidden ("Away", Shared.Motion) till
 -- the last is back.
 local out: { [Instance]: number } = setmetatable({}, { __mode = "k" }) :: any
@@ -1514,7 +1564,7 @@ local function putAway(part: BasePart, by: number)
 	component:SetAttribute("Away", if count > 0 then true else nil)
 end
 
-local projectileModel: (settings: any, scale: number) -> BasePart
+local projectileModel: (settings: any, scale: number, side: number?) -> BasePart
 -- His weapon that flies itself (Projectile.Returns, Astryn's globe) out of his hand at the kit's Orbit `From`, out
 -- `Radius` studs at `Height` over his root, `Turns` times round him (less is the other way) as he spins in the clip,
 -- till `To`, and back into his hand over `Back` seconds; hidden in his hand meanwhile. The server strikes
@@ -1522,7 +1572,7 @@ local projectileModel: (settings: any, scale: number) -> BasePart
 orbitLater = function(character: Model, kit: any)
 	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
 	local look = settings and settings.Projectile
-	local held = look and look.Returns and heldPart(character, look.Component)
+	local held = look and look.Returns and heldPart(character, componentOf(look))
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local hips = character:FindFirstChild("LowerTorso") :: BasePart?
 	if not held or not root or not hips then
@@ -1593,7 +1643,7 @@ local ERUPT_RISE = 0.2
 eruptLater = function(character: Model, ground: Vector3, kit: any)
 	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
 	local look = settings and settings.Projectile
-	local held = look and look.Returns and heldPart(character, look.Component)
+	local held = look and look.Returns and heldPart(character, componentOf(look))
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not held or not root or not humanoid then
@@ -1703,7 +1753,7 @@ eruptLater = function(character: Model, ground: Vector3, kit: any)
 	end)
 end
 
-projectileModel = function(settings: any, scale: number): BasePart
+projectileModel = function(settings: any, scale: number, side: number?): BasePart
 	local look = settings.Projectile
 	local part: BasePart
 	if look.Orb then
@@ -1731,7 +1781,7 @@ projectileModel = function(settings: any, scale: number): BasePart
 		-- set their meshes.
 		local pack = ReplicatedStorage[settings.Pack]
 		local components = pack.Rig:FindFirstChild("Components") or pack.Components
-		local template = components[look.Component]:FindFirstChildWhichIsA("MeshPart", true)
+		local template = components[componentOf(look, side)]:FindFirstChildWhichIsA("MeshPart", true)
 		part = template:Clone() :: MeshPart
 		for _, d in part:GetChildren() do
 			if d:IsA("JointInstance") then
@@ -1759,9 +1809,31 @@ projectileModel = function(settings: any, scale: number): BasePart
 		trail.Lifetime = 0.25
 		trail.Color = ColorSequence.new(look.Trail[1], look.Trail[2])
 		trail.Transparency = NumberSequence.new(look.TrailFade or 0.35, 1)
-		trail.LightEmission = 0.4
+		trail.LightEmission = if look.Smoke then 0 else 0.4
 		trail.FaceCamera = true
 		trail.Parent = part
+	end
+	if look.Smoke then
+		local smoke = Instance.new("ParticleEmitter")
+		smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		smoke.Color = ColorSequence.new(look.Smoke[1], look.Smoke[2])
+		smoke.LightEmission = 0
+		smoke.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1.4 * scale),
+			NumberSequenceKeypoint.new(1, 3.4 * scale),
+		})
+		smoke.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.15),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		smoke.Lifetime = NumberRange.new(0.6, 1)
+		smoke.Rate = 110
+		smoke.Speed = NumberRange.new(0.5, 1.5)
+		smoke.SpreadAngle = Vector2.new(180, 180)
+		smoke.Drag = 3
+		smoke.Rotation = NumberRange.new(0, 360)
+		smoke.RotSpeed = NumberRange.new(-60, 60)
+		smoke.Parent = part
 	end
 	if look.Glow then
 		local light = Instance.new("PointLight")
@@ -1819,11 +1891,13 @@ local function onProjectile(
 		model, spin = GunEffects.round(round, scale or 1)
 		model.Parent = effects()
 	else
-		model, spin = projectileModel(settings, scale or 1), settings.Projectile.Spin or 0
+		model, spin = projectileModel(settings, scale or 1, side), settings.Projectile.Spin or 0
 	end
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	-- A weapon that flies itself (`Returns`) leaves from where its hand holds it, hidden there till it is back.
-	local held = if settings.Projectile.Returns then heldPart(character, settings.Projectile.Component) else nil
+	local held = if settings.Projectile.Returns
+		then heldPart(character, componentOf(settings.Projectile, side))
+		else nil
 	if held then
 		putAway(held, 1)
 	end

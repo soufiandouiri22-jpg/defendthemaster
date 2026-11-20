@@ -568,7 +568,14 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 				now
 			))
 			or (kit.M2.Slam and gap <= kit.M2.SlamRadius - 2 and maybe(b, "M2", target.position, now))
-			or (not kit.M2.Slam and open and gap <= kit.M2.Range - 4 and maybe(
+			-- A ring of blows round him with no slam (Astryn's circling globe) strikes him once he is in it.
+			or (not kit.M2.Slam and not kit.M2.ProjectileSpeed and gap <= kit.M2.Range - 2 and maybe(
+				b,
+				"M2",
+				target.position,
+				now
+			))
+			or (kit.M2.ProjectileSpeed and open and gap <= kit.M2.Range - 4 and maybe(
 				b,
 				"M2",
 				aimAt(root.Position, target, gap, kit.M2.ProjectileSpeed),
@@ -861,7 +868,7 @@ local function carry(b: Bot, now: number)
 	if m.lift then
 		local align = holder(root)
 		local along = math.clamp((t - m.takeoff) / math.max(m.land - m.takeoff, 1e-3), 0, 1)
-		local under = m.from:Lerp(m.to, along * along * (3 - 2 * along))
+		local under = m.from:Lerp(m.to, HeroKit.leapAlong(m.lift, along))
 		align.Position = under + Vector3.new(0, HeroKit.lift(m.lift, t), 0)
 		align.Enabled = true
 		if t >= m.lift.Land then
@@ -1077,9 +1084,16 @@ function BotService.start(layout: Layout, heroes: { [string]: { string } }?)
 		end
 		elapsed = math.min(elapsed - TICK, TICK)
 		walls.FilterDescendantsInstances = HeroKit.leapIgnore()
+		-- One bot's error is reported but never stops the others, which all think in this one loop: an error in it
+		-- once stood every bot after it still while it lasted.
 		for _, b in table.clone(bots) do
-			follow(b)
-			think(b, now)
+			local ok, problem = xpcall(function()
+				follow(b)
+				think(b, now)
+			end, debug.traceback)
+			if not ok then
+				task.spawn(error, problem, 0)
+			end
 		end
 	end)
 end

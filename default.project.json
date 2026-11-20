@@ -122,6 +122,15 @@
 					"$path": "Vendor/CelestialCaster/Animations/Included Rig.rbxmx"
 				}
 			},
+			"TwinbladeFighter": {
+				"$className": "Folder",
+				"ComponentPlayer": {
+					"$path": "Vendor/TwinbladeFighter/Animations/Component Playback.rbxm"
+				},
+				"Rig": {
+					"$path": "Vendor/TwinbladeFighter/Animations/Included Rig.rbxmx"
+				}
+			},
 			"DanceCollection": {
 				"$className": "Folder",
 				"$ignoreUnknownInstances": true,

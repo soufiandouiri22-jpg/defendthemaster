@@ -401,6 +401,42 @@ PACKS = {
             "Dash": (["A84c4477603c4"], 0.7),
         },
     },
+    "TwinbladeFighter": {
+        "folder": ROOT / "Vendor/TwinbladeFighter/Sounds",
+        "clips": [
+            # Kraeven's attacks (Config.Heroes.Kraeven.Kit) and the clips under them.
+            "RA-TBF-023", "RA-TBF-024", "RA-TBF-025", "RA-TBF-060", "RA-TBF-044", "RA-TBF-012", "RA-TBF-055",
+            "RA-TBF-063", "RA-TBF-005", "RA-TBF-006", "RA-TBF-007", "RA-TBF-002", "RA-TBF-011", "RA-TBF-013",
+            "RA-TBF-033",
+        ],
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "m", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # His ultimate plays 055 from its spin on (0.73 s), past its own sound (Sound 01 from 0.20 s), started there
+        # again for every turn of his dive (Config's Spin), and its rising clip (012) has none: each turn whooshes as
+        # the spin in Sound 01 (0.55 to 0.85 s in, the clip's 0.75 s on), the last on into its blow (0.9 s in, the
+        # clip's 1.10 s, its hit at 1.18 s), and he strikes the ground as 060's two swords come down, its Sound 01
+        # from just before its loudest (1.35 s). His dash (063 at 1.3 times) moves him from 0.05 to 0.34 s, but its
+        # own rush only swells from 0.35 s (its cue at 0.37 s in the clip, loudest 0.09 s into the recording), as he
+        # stops: muted there and played as the Dash event, as he sets off, its first 1.3 s (Rush, cut where it has died down).
+        "mute": ["RA-TBF-063"],
+        "parts": {
+            "Rush": ("A3e2fd557bce5", 0.0, 1.3),
+            "Spin": ("A15b0d406fd18", 0.55, 0.85),
+            "Blow": ("A15b0d406fd18", 0.9, 2.13),
+            "Slam": ("A49ba1a250dd2", 1.25, 2.76),
+        },
+        "extra": {
+            "RA-TBF-055": [(0.735, ["Spin"], 0.8), (1.1, ["Blow"], 0.9)],
+        },
+        "events": {
+            "Slam": (["Slam"], 1.0),
+            "Dash": (["Rush"], 0.9),
+        },
+    },
     "GreataxeBerserker": {
         "folder": ROOT / "Vendor/GreataxeBerserker/Sounds",
         # The Masters' clips (Config.Master), by their names in ReplicatedStorage.GreataxeBerserker. The stance has no

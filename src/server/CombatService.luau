@@ -1031,8 +1031,9 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 					return
 				end
 				local struck = {}
-				for _, shot in fan do
-					launch(player, state, team, shot, kit, strength(kit.Damage), magic, struck)
+				for i, shot in fan do
+					local side = if #fan > 1 then 1 - 2 * (i - 1) / (#fan - 1) else 0
+					launch(player, state, team, shot, kit, strength(kit.Damage), magic, struck, nil, nil, side)
 				end
 			end)
 		end

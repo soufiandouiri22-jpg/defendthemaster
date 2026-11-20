@@ -184,21 +184,26 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	if not root then
 		return
 	end
+	-- A black aura (Kraeven's) cannot glow: dark smoke round him instead, its sparks pale, a dark pool under him.
+	local dark = math.max(colour.R, colour.G, colour.B) < 0.15
 	local attachment = Instance.new("Attachment")
 	attachment.Name = "Aura"
 	attachment.Parent = root
 
 	local wisps = Instance.new("ParticleEmitter")
 	wisps.Name = "Wisps"
-	wisps.Texture = "rbxasset://textures/particles/fire_main.dds"
-	wisps.Color = if fire
-		then ColorSequence.new({
+	wisps.Texture = if dark
+		then "rbxasset://textures/particles/smoke_main.dds"
+		else "rbxasset://textures/particles/fire_main.dds"
+	wisps.Color = if dark
+		then ColorSequence.new(Color3.fromRGB(34, 32, 40), colour)
+		elseif fire then ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 220, 110)),
 			ColorSequenceKeypoint.new(0.4, colour),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 30, 10)),
 		})
 		else ColorSequence.new(colour:Lerp(WHITE, 0.25), colour)
-	wisps.LightEmission = 0.8
+	wisps.LightEmission = if dark then 0 else 0.8
 	wisps.LightInfluence = 0
 	wisps.Size = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0.6),
@@ -224,8 +229,10 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	local embers = Instance.new("ParticleEmitter")
 	embers.Name = "Embers"
 	embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-	embers.Color = ColorSequence.new(Color3.fromRGB(255, 220, 140), Color3.fromRGB(255, 150, 60))
-	embers.LightEmission = 1
+	embers.Color = if dark
+		then ColorSequence.new(Color3.fromRGB(200, 200, 215), Color3.fromRGB(110, 110, 130))
+		else ColorSequence.new(Color3.fromRGB(255, 220, 140), Color3.fromRGB(255, 150, 60))
+	embers.LightEmission = if dark then 0.4 else 1
 	embers.LightInfluence = 0
 	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) })
 	embers.Lifetime = NumberRange.new(1.8, 3)
@@ -235,7 +242,7 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	embers.Acceleration = Vector3.new(0, 1.2, 0)
 	embers.Parent = attachment
 
-	if fire then
+	if fire or dark then
 		local smoke = Instance.new("ParticleEmitter")
 		smoke.Name = "Smoke"
 		smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
@@ -262,11 +269,13 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 		smoke.Parent = attachment
 	end
 
-	local light = Instance.new("PointLight")
-	light.Color = colour
-	light.Brightness = if fire then 3 else 1.6
-	light.Range = 11
-	light.Parent = attachment
+	if not dark then
+		local light = Instance.new("PointLight")
+		light.Color = colour
+		light.Brightness = if fire then 3 else 1.6
+		light.Range = 11
+		light.Parent = attachment
+	end
 
 	-- A glow on the podium under him.
 	local glow = Instance.new("Part")
@@ -279,9 +288,9 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	glow.Shape = Enum.PartType.Cylinder
 	glow.Size = Vector3.new(0.05, 4.6, 4.6)
 	glow.CFrame = at * CFrame.new(0, 0.03, 0) * CFrame.Angles(0, 0, math.rad(90))
-	glow.Material = Enum.Material.Neon
+	glow.Material = if dark then Enum.Material.SmoothPlastic else Enum.Material.Neon
 	glow.Color = colour
-	glow.Transparency = if fire then 0.6 else 0.82
+	glow.Transparency = if dark then 0.45 elseif fire then 0.6 else 0.82
 	glow.Parent = model
 end
 

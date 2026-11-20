@@ -21,8 +21,9 @@ local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
 -- Korrund's (Effects "Red", owner 2026-11-03: no violet on him); Blue is the samurai's, her blue aura (Effects "Blue");
 -- Dust is Haldrek's, who has no aura (Effects "Dust", owner 2026-11-05): sand and dust thrown up, nothing violet;
 -- Wind is plain white wind, for a hero without an aura (Effects "Wind", owner 2026-11-05); Ice is Astryn's icy blue,
--- paler than the samurai's (Effects "Ice", owner 2026-11-14).
-export type Palette = { main: Color3, deep: Color3, bright: Color3, sparks: { string }? }
+-- paler than the samurai's (Effects "Ice", owner 2026-11-14); Smoke is Kraeven's black smoke, as his aura (Effects
+-- "Smoke", owner 2026-11-20), `dark`: nothing of it glows or lights up round it, so the black shows.
+export type Palette = { main: Color3, deep: Color3, bright: Color3, sparks: { string }?, dark: boolean? }
 local SHADOWS: Palette = { main = SHADOW, deep = DEEP, bright = BRIGHT }
 local SPARK = "rbxasset://textures/particles/sparkles_main.dds"
 ShadowEffects.Light = {
@@ -57,6 +58,12 @@ ShadowEffects.Wind = {
 	deep = Color3.fromRGB(118, 126, 140),
 	bright = Color3.fromRGB(255, 255, 255),
 } :: Palette
+ShadowEffects.Smoke = {
+	main = Color3.fromRGB(30, 28, 34),
+	deep = Color3.fromRGB(6, 6, 8),
+	bright = Color3.fromRGB(96, 94, 104),
+	dark = true,
+} :: Palette
 
 local function effects(): Folder
 	local folder = Workspace:FindFirstChild("Effects") :: Folder?
@@ -83,8 +90,8 @@ local function throwSparks(
 		local sparks = Instance.new("ParticleEmitter")
 		sparks.Texture = texture
 		sparks.Color = ColorSequence.new(colours.bright, colours.main)
-		sparks.LightEmission = if colours.sparks then 0 else 1
-		sparks.LightInfluence = if colours.sparks then 0 else 1
+		sparks.LightEmission = if colours.sparks or colours.dark then 0 else 1
+		sparks.LightInfluence = if colours.sparks or colours.dark then 0 else 1
 		sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, size), NumberSequenceKeypoint.new(1, 0) })
 		sparks.EmissionDirection = Enum.NormalId.Top
 		if colours.sparks then
@@ -122,7 +129,7 @@ local function smoke(
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Texture = SMOKE
 	emitter.Color = ColorSequence.new(colours.main, colours.deep)
-	emitter.LightEmission = 0.3
+	emitter.LightEmission = if colours.dark then 0 else 0.3
 	emitter.Size = size
 	emitter.Transparency = NumberSequence.new(0.15, 1)
 	emitter.Lifetime = life
@@ -225,12 +232,14 @@ function ShadowEffects.shockwave(ground: Vector3, radius: number, palette: Palet
 		NumberRange.new(0.5, 0.9),
 		palette
 	)
-	local light = Instance.new("PointLight")
-	light.Color = colours.main
-	light.Range = radius * 2
-	light.Brightness = 4
-	light.Parent = centre
-	TweenService:Create(light, TweenInfo.new(0.5), { Brightness = 0 }):Play()
+	if not colours.dark then
+		local light = Instance.new("PointLight")
+		light.Color = colours.main
+		light.Range = radius * 2
+		light.Brightness = 4
+		light.Parent = centre
+		TweenService:Create(light, TweenInfo.new(0.5), { Brightness = 0 }):Play()
+	end
 
 	task.delay(1.5, function()
 		ring:Destroy()
@@ -283,12 +292,14 @@ function ShadowEffects.slam(ground: Vector3, radius: number, palette: Palette?)
 		sparks.Acceleration = Vector3.new(0, -40, 0)
 	end)
 
-	local light = Instance.new("PointLight")
-	light.Color = colours.bright
-	light.Range = radius * 2
-	light.Brightness = 3
-	light.Parent = centre
-	TweenService:Create(light, TweenInfo.new(0.45), { Brightness = 0 }):Play()
+	if not colours.dark then
+		local light = Instance.new("PointLight")
+		light.Color = colours.bright
+		light.Range = radius * 2
+		light.Brightness = 3
+		light.Parent = centre
+		TweenService:Create(light, TweenInfo.new(0.45), { Brightness = 0 }):Play()
+	end
 
 	task.delay(2, function()
 		shade:Destroy()

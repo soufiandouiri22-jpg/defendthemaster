@@ -145,6 +145,9 @@ return {
 	DeepThud = "rbxassetid://1843025759",
 	ZapAttack = "rbxassetid://9120985853",
 	Thunder = "rbxassetid://9116282875",
+	-- The crow's two caws as Kraeven's wings burst out for his ultimate: the last two of Dragon Studio's "Creepy Crow
+	-- Caw" (Pixabay 322991, Docs/Third_Party.md), cut and uploaded with Tools/upload_audio.py (owner's pick, 2026-11-20).
+	CrowCaw = "rbxassetid://113703778726136",
 	-- Candidates for the sound of every hit (Config.Combat.HitSounds): the game's own dry crunches, wide,
 	-- deeper, and deeper with a sharp crack (Art/Sounds/Hit.wav, HitLow.wav and HitRaw.wav, made and uploaded by
 	-- Tools/hit_sound.py; the owner's picks, 2026-10-29).

@@ -5,15 +5,16 @@ Vendor/Elementalist/, the Scythe Wielder (the reaper) into Vendor/ScytheWielder/
 Vendor/GreatswordKnight/, the Trickster Caster (the jester) into Vendor/TricksterCaster/, the Wildguard (Korrund)
 into Vendor/Wildguard/, the Katana Swordsman (the samurai) into Vendor/KatanaSwordsman/, the Gunslinger into
 Vendor/Gunslinger/, the Arena Fighter (Haldrek) into Vendor/ArenaFighter/ and the Lancer (the spear warrior) into
-Vendor/Lancer/ and the Celestial Caster (the star mage) into Vendor/CelestialCaster/, each with its animations and its
-sounds; and the Dance Collection (the emotes, Config.Emotes) into Vendor/DanceCollection/, animations only.
+Vendor/Lancer/, the Celestial Caster (the star mage) into Vendor/CelestialCaster/ and the Twinblade Fighter (Kraeven)
+into Vendor/TwinbladeFighter/, each with its animations and its sounds; and the Dance Collection (the emotes,
+Config.Emotes) into Vendor/DanceCollection/, animations only.
 
 Their licence forbids sharing the files, so Vendor/ stays out of git: run this once on a new machine with the ZIPs
 in ~/Downloads. Rojo serves each pack's playback module and rig from there (default.project.json).
 
     python3 Tools/vendor_shadow_duelist.py [ShadowDuelist] [Ranger] [Elementalist] [ScytheWielder] [GreatswordKnight]
         [TricksterCaster] [Wildguard] [KatanaSwordsman] [Gunslinger] [ArenaFighter] [Lancer] [CelestialCaster]
-        [DanceCollection]
+        [TwinbladeFighter] [DanceCollection]
 """
 
 import pathlib
@@ -49,6 +50,8 @@ PACKS = {
     "RobloxAnimations-Lancer-Sounds-v1.3.1.zip": ("Lancer", "Sounds"),
     "RobloxAnimations-Celestial-Caster-v1.2.0.zip": ("CelestialCaster", "Animations"),
     "RobloxAnimations-Celestial-Caster-Sounds-v1.3.1.zip": ("CelestialCaster", "Sounds"),
+    "RobloxAnimations-Twinblade-Fighter-v1.2.0.zip": ("TwinbladeFighter", "Animations"),
+    "RobloxAnimations-Twinblade-Fighter-Sounds-v1.3.1.zip": ("TwinbladeFighter", "Sounds"),
     "RobloxAnimations-Dance-Collection-v1.1.0.zip": ("DanceCollection", "Animations"),
 }
 

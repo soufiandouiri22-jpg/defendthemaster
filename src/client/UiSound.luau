@@ -22,7 +22,8 @@ local UiSound = {}
 -- The buy phase's sting swells twice: a plain kill plays its first swell, the bigger kills its second, to its end.
 -- The bigger kills but one play the first roll of the drum sting, up to its loudest beat and that beat's tail; the
 -- biggest the boom, whole and louder.
--- A `steady` effect is never sunk under an announcement (Preferences.STEADY).
+-- A `steady` effect is never sunk under an announcement (Preferences.STEADY). One with `echo` rings out as in a cave:
+-- echoed and with a long reverb (owner, 2026-11-20).
 type Cue = {
 	asset: string,
 	start: number,
@@ -31,6 +32,7 @@ type Cue = {
 	near: number?,
 	far: number?,
 	steady: boolean?,
+	echo: boolean?,
 }
 local BOOM: Cue = { asset = Assets.FightBoom, start = 0, gain = 2 }
 local CUES: { [string]: Cue } = {
@@ -115,6 +117,13 @@ local CUES: { [string]: Cue } = {
 	NetThrow = { asset = Assets.ClothSwing, start = 0, length = 0.32, gain = 1.1, near = 12, far = 70 },
 	RuneGate = { asset = Assets.MagicExit, start = 0.15, length = 1.5, gain = 0.8, near = 14, far = 90 },
 	JumpPad = { asset = Assets.PowerClunk, start = 0, length = 0.3, gain = 0.8, near = 10, far = 60 },
+
+	-- Kraeven's ultimate (WingEffects): a crow's two creepy caws as his wings burst out, each beat
+	-- of his wings that lifts him (the falcon's wing flaps the armory's cloth also is), and the shimmer of their
+	-- light falling apart as he lands.
+	CrowCaw = { asset = Assets.CrowCaw, start = 0, length = 2.33, gain = 1.4, near = 16, far = 100, echo = true },
+	WingBeat = { asset = Assets.ClothSwing, start = 0, length = 0.32, gain = 1.6, near = 14, far = 80 },
+	WingsFade = { asset = Assets.FallingShimmer, start = 0.4, length = 2.5, gain = 0.9, near = 14, far = 80 },
 
 	-- Each shock of Brontar's zap and each bolt of his strike from the sky (Config.Heroes.Brontar.Kit.E and R): only
 	-- the sharp attack at the start of Pro Sound Effects' "Zaps Sharp Attack 1" (owner, 2026-10-31), without the hum
@@ -244,6 +253,23 @@ local function start(
 	end
 	sound.SoundId = cue.asset
 	sound.Volume = (volume or 1) * (cue.gain or 1)
+	if cue.echo then
+		local echo = Instance.new("EchoSoundEffect")
+		echo.Delay = 0.3
+		echo.Feedback = 0.45
+		echo.DryLevel = 0
+		echo.WetLevel = -5
+		echo.Priority = 1
+		echo.Parent = sound
+		local reverb = Instance.new("ReverbSoundEffect")
+		reverb.DecayTime = 2.5
+		reverb.Density = 1
+		reverb.Diffusion = 1
+		reverb.DryLevel = 0
+		reverb.WetLevel = -7
+		reverb.Priority = 0
+		reverb.Parent = sound
+	end
 	local length = cue.length
 	if length then
 		sound.PlaybackRegionsEnabled = true

@@ -49,6 +49,7 @@ local SOUNDS = {
 	HitBodyImpact = true,
 	ZapAttack = true,
 	Thunder = true,
+	CrowCaw = true,
 }
 
 local Pictures = {}

@@ -42,16 +42,34 @@ end
 
 -- How high an Ascend (`kit`) holds the hero above where he cast it, `t` seconds after: easing up from RiseStart to
 -- RiseEnd, hanging at Rise, and easing down from Fall to Land; with `Dive` falling ever faster till he hits the ground.
+-- With `Flaps` (seconds) each beat of his wings lifts him an equal share, eased up from it to the next beat (the last
+-- to RiseEnd), so he rises in surges.
 function HeroKit.lift(kit: any, t: number): number
 	local function ease(a: number): number
 		a = math.clamp(a, 0, 1)
 		return a * a * (3 - 2 * a)
 	end
 	if t < kit.Fall then
+		if kit.Flaps then
+			local up = 0
+			for i, at in kit.Flaps do
+				local nextAt = kit.Flaps[i + 1] or kit.RiseEnd
+				up += ease((t - at) / (nextAt - at)) / #kit.Flaps
+			end
+			return kit.Rise * up
+		end
 		return kit.Rise * ease((t - kit.RiseStart) / (kit.RiseEnd - kit.RiseStart))
 	end
 	local fall = math.clamp((t - kit.Fall) / (kit.Land - kit.Fall), 0, 1)
 	return kit.Rise * (1 - if kit.Dive then fall * fall else ease(fall))
+end
+
+-- How far along from where he leapt to where he lands a leap that lifts him (`kit`, its Rise) has carried him over
+-- the ground, `along` the share of its time from its Takeoff to its Land: eased in and out, or with `Dive` ever faster
+-- as he falls, so a dive from his hang goes straight at the spot.
+function HeroKit.leapAlong(kit: any, along: number): number
+	along = math.clamp(along, 0, 1)
+	return if kit.Dive then along * along else along * along * (3 - 2 * along)
 end
 
 -- Whether the hits of `kit` go where the crosshair points as each lands or leaves his hand rather than where it

@@ -934,7 +934,11 @@ Config.Minions = {
 -- or after it, holding him till `Busy`; without `Damage` his landing strikes no one and shows no shockwave, and its
 -- `Radius` is where his swings reach round the spot. With `InPlace` its motion plays without its own travel over the
 -- ground, as the game carries him; with a `Rise` the game lifts him as an Ascend does (HeroKit.lift) on his way, its
--- motion played `InPlace = "Grounded"`, so a clip that leaps high stays in his camera's view.
+-- motion played `InPlace = "Grounded"`, so a clip that leaps high stays in his camera's view. A leap that lifts him
+-- goes over the ground only from its `Takeoff`; with `Dive` straight from his hang at the spot, ever faster
+-- (HeroKit.leapAlong). With `Wings` (WingEffects: `Span`, `Color`) wings of light carry him up, beating at its
+-- `Flaps`, its motion played at `MotionSpeed` till its `Spin` takes over: that clip from `From`, again from there each
+-- time it reaches `To` (`Loops` times), then on to its end, reaching its `Hit` as he lands (HeroControls).
 -- A `Guard` (a Flurry's at its `Slam`, a Leap's where he lands) braces him: he takes `Share` less damage for `Time`
 -- seconds (Damage.mitigated), with an iron sheen round him.
 -- With `Mirror` a key's `Motion` plays left for right (Shared.Motion), its body only, not the pack's weapons.
@@ -971,8 +975,9 @@ Config.Minions = {
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first; with
 -- `From` seen leaving the far end of that weapon or part of his weapons as the clip holds it, or that bone of them (a
 -- kit's `ShotsFrom` may name another). With `Returns` the component is the weapon he holds itself: it leaves his hand,
--- comes back into it after it stops, and is not seen in his hand meanwhile. `Frost` (a colour) dresses it in icy
--- starlight instead of a trail. With `ThroughAll` it flies on through the ground, walls and everything else in its
+-- comes back into it after it stops, and is not seen in his hand meanwhile; a pair of components (`{ right, left }`)
+-- is a weapon in each hand, a fan's projectiles on his right side the first, on his left the second. `Frost` (a
+-- colour) dresses it in icy starlight instead of a trail. With `ThroughAll` it flies on through the ground, walls and everything else in its
 -- way, and seeks enemies behind them too. With `Gun`
 -- they are a gun's
 -- rounds (GunEffects: "Revolver", "Bomb", "Rifle"), with a flash at the barrel and a strike where they stop; a kit's
@@ -2929,6 +2934,157 @@ Config.Heroes = {
 				Start = 0.03,
 				Move = 0.28,
 				Stop = 0.4,
+			},
+		},
+	},
+	-- Kraeven (a working name; owner, 2026-11-20): a new assassin in a black beaked mask, a black jacket over a grey
+	-- shirt and dark trousers, with the RobloxAnimations Twinblade Fighter pack. A test entry for now: his kit is a
+	-- placeholder until the owner picks every key's motion in the showroom.
+	Kraeven = {
+		Role = "Assassin",
+		Description = "A beaked mask in the dark, and then nothing.",
+		Showcase = {
+			Motion = "RA-TBF-075",
+			Enter = { Motion = "RA-TBF-074", Then = "Breathe" },
+			-- A black aura (owner, 2026-11-20): dark smoke round him (Lobby.Showcase).
+			Aura = Color3.fromRGB(12, 12, 14),
+		},
+		-- Black smoke as his aura (owner, 2026-11-20): his dash, slams and the ultimate's landing (ShadowEffects.Smoke).
+		Effects = "Smoke",
+		Health = 880,
+		Scales = "Attack",
+		Look = {
+			-- Extraterrestrial Productions' "Mike Dalton" mask, shirt and pants, one outfit.
+			Shirt = 74148184639298,
+			Pants = 102951813597332,
+			HatAccessory = "81497634067503",
+			-- On trial (owner, 2026-11-20): Muwii UGC's "Black Cape" and the "Plague Doctor Scarf".
+			BackAccessory = "129261109820873",
+			NeckAccessory = "11332941936",
+			-- The mask wraps the whole head, so the head under it is hidden.
+			HideHead = true,
+			Skin = Color3.fromRGB(226, 218, 208),
+		},
+		Pack = "TwinbladeFighter",
+		-- The pack's two swords, one in each hand, drawn and sheathed as the clips say.
+		Weapons = { "SwordRight", "SwordLeft" },
+		-- His swords themselves are his E's shots, each out of its own hand and back into it, tumbling end over end
+		-- with a dark trail and black smoke behind them (`Smoke`: its colours, unlit).
+		Projectile = {
+			Component = { "SwordRight", "SwordLeft" },
+			Returns = true,
+			Spin = 18,
+			Trail = { Color3.fromRGB(40, 38, 46), Color3.fromRGB(8, 8, 10) },
+			Smoke = { Color3.fromRGB(34, 32, 40), Color3.fromRGB(6, 6, 8) },
+		},
+		Motions = {
+			Idle = "RA-TBF-015",
+			Run = "RA-TBF-005",
+			RunLeft = "RA-TBF-006",
+			RunRight = "RA-TBF-007",
+			Back = "RA-TBF-002",
+			Takeoff = "RA-TBF-011",
+			Air = "RA-TBF-012",
+			Land = "RA-TBF-013",
+			Death = "RA-TBF-033",
+		},
+		-- His numbers set against the other assassins, Shadowren and Kaeda (owner, 2026-11-20): the same health as
+		-- Kaeda, his combo and dash as theirs; what reaches round him or through a line of enemies a little weaker
+		-- than their blows on one, and his ultimate, which strikes everyone where he lands, weaker on one than theirs
+		-- (about 260) but a little stronger than a warrior's leap (Mortael's 240 over 12 studs), as it is seen coming.
+		-- M1 and Dash are still placeholders until the owner picks their motions in the showroom: the pack's three
+		-- basic attacks, each striking as its swing sounds loudest (its cue at 0.30 s, loudest 0.06 s on), as fast as
+		-- Shadowren's and Kaeda's cuts, and one quick move, timed as their dashes.
+		Kit = {
+			M1 = {
+				Kind = "Combo",
+				Speed = 1.25,
+				Ratio = 0.6,
+				Reset = 1.5,
+				Hits = {
+					{ Motion = "RA-TBF-023", Hit = 0.36, Recover = 0.2, Damage = 30, Range = 7, Angle = 110 },
+					{ Motion = "RA-TBF-024", Hit = 0.36, Recover = 0.2, Damage = 35, Range = 7, Angle = 110 },
+					{ Motion = "RA-TBF-025", Hit = 0.36, Recover = 0.2, Damage = 60, Range = 7, Angle = 110 },
+				},
+			},
+			-- Twice round low with both swords, then a spinning hop and both brought down as he lands (060, owner
+			-- 2026-11-20; the tips fastest at 0.27, 0.62 and 1.13 s, measured on the pack's rig), in place: three blows
+			-- to everyone round him, 90 in all, as Shadowren's leap (90) and a little less than Kaeda's three ahead of
+			-- her (96), as it strikes all round him; a warrior's (Renka's four round her, 120) stronger.
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-TBF-060",
+				Indicator = "Ring",
+				Cooldown = 8,
+				Hits = { 0.27, 0.62, 1.13 },
+				Damage = 30,
+				Ratio = 0.3,
+				Range = 8,
+				Angle = 360,
+			},
+			-- Both swords thrown at once where the swords leave his hands in the clip (044, owner 2026-11-20: gone from
+			-- 0.58 to 1.52 s), on through everyone in their way to 24 studs out and back into his hands as the clip has
+			-- them again (out at 60 and back at 48 a second, 0.9 s), striking again for half on the way back: 60 out
+			-- (both swords strike each enemy once) and up to 120 to one who stays in their way, against Shadowren's one
+			-- dagger of 110 from 40 studs out, as his reach only 24 studs and the most only if the enemy does not step
+			-- aside.
+			E = {
+				Kind = "Throw",
+				Motion = "RA-TBF-044",
+				Indicator = "Arrow",
+				Cooldown = 9,
+				Release = 0.58,
+				Count = 2,
+				Spread = 8,
+				ProjectileSpeed = 60,
+				Range = 24,
+				Width = 2,
+				Pierce = true,
+				Back = 0.5,
+				Damage = 60,
+				Ratio = 0.6,
+			},
+			-- Wings of see-through blue light (owner, 2026-11-20): two great wings burst out of his back, two beats lift
+			-- him 34 studs up (Flaps), he hangs a moment, then dives straight at the spot aimed at, spinning round and round
+			-- (055's spin from 0.73 to 0.90 s, twice over and on into its blow at 1.18 s) and comes down on it with
+			-- both swords: one blow to everyone within 9 studs of where he lands, 230: less than Kaeda's and Shadowren's
+			-- ultimates on one (260, 264, mostly on one), as it strikes all there, reaches 30 studs and is seen coming
+			-- for two seconds; a little less round than Mortael's leap (240 over 12 studs).
+			R = {
+				Kind = "Leap",
+				Motion = "RA-TBF-012",
+				MotionSpeed = 0.65,
+				InPlace = "Grounded",
+				Indicator = "Zone",
+				Cooldown = 40,
+				Range = 30,
+				Radius = 9,
+				Damage = 230,
+				Ratio = 1.2,
+				Rise = 34,
+				RiseStart = 0.25,
+				RiseEnd = 1.15,
+				Flaps = { 0.25, 0.7 },
+				Fall = 1.41,
+				Takeoff = 1.41,
+				Land = 2.2,
+				Dive = true,
+				Busy = 2.6,
+				Spin = { Motion = "RA-TBF-055", From = 0.73, To = 0.9, Hit = 1.18, Loops = 2 },
+				Wings = { Span = 26, Color = Color3.fromRGB(80, 170, 255) },
+			},
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-TBF-063",
+				Speed = 1.3,
+				Cooldown = 5,
+				Range = 16,
+				Width = 4,
+				Damage = 20,
+				Ratio = 0.3,
+				Start = 0.05,
+				Move = 0.34,
+				Stop = 0.6,
 			},
 		},
 	},
