@@ -2943,6 +2943,8 @@ Config.Heroes = {
 	Kraeven = {
 		Role = "Assassin",
 		Description = "A beaked mask in the dark, and then nothing.",
+		-- Every player's for now, to play and test him (owner, 2026-11-20); who is sold and for what comes later.
+		Starter = true,
 		Showcase = {
 			Motion = "RA-TBF-075",
 			Enter = { Motion = "RA-TBF-074", Then = "Breathe" },
@@ -2964,6 +2966,16 @@ Config.Heroes = {
 			-- The mask wraps the whole head, so the head under it is hidden.
 			HideHead = true,
 			Skin = Color3.fromRGB(226, 218, 208),
+		},
+		Portrait = { Image = "rbxassetid://119243757457995", Face = { 180, 40, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Kraeven, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Kraeven, keyed by Tools/key_icons.py --glow).
+		Icons = {
+			M1 = "rbxassetid://79306258063289",
+			M2 = "rbxassetid://128120282904157",
+			E = "rbxassetid://93728098920083",
+			R = "rbxassetid://133321031021143",
+			Dash = "rbxassetid://87285768801481",
 		},
 		Pack = "TwinbladeFighter",
 		-- The pack's two swords, one in each hand, drawn and sheathed as the clips say.
@@ -3085,6 +3097,114 @@ Config.Heroes = {
 				Start = 0.05,
 				Move = 0.34,
 				Stop = 0.6,
+			},
+		},
+	},
+	-- Taurok (a working name; owner, 2026-11-20): a minotaur tank with the RobloxAnimations Greataxe Berserker pack
+	-- and its greataxe. On trial: his kit is a placeholder until the owner picks his motions in the showroom.
+	Taurok = {
+		Role = "Tank",
+		Description = "A bull of a man with an axe to match.",
+		Showcase = {
+			Motion = "RA-GBK-071",
+			Enter = { Motion = "RA-GBK-070", Then = "Breathe" },
+			Aura = false,
+		},
+		Health = 1500,
+		Scales = "Attack",
+		Effects = "Dust",
+		Look = {
+			-- The Muscular Blocky body, bare but for his waist cloth (owner, 2026-11-20: "7c"): the Mighty Minotaur
+			-- head, the Fur Undead King Cape round his shoulders and the Burned Warlord's waist.
+			Torso = 75153377014971,
+			LeftArm = 89863084035546,
+			RightArm = 101592760495627,
+			LeftLeg = 124840996613668,
+			RightLeg = 137803549309644,
+			HatAccessory = "62685648",
+			BackAccessory = "108216642043334",
+			WaistAccessory = "113421047975788",
+			BlankFace = true,
+			Skin = Color3.fromRGB(120, 80, 56),
+			-- The cape is made for a slimmer body: bigger, and lower so the horns clear it.
+			Fit = { ["Fur Undead King CapeAccessory"] = { Scale = 1.12, Lower = 0.25 } },
+		},
+		Pack = "GreataxeBerserker",
+		-- The pack's greataxe in his right hand, drawn and put away as the clips say.
+		Weapons = { "Greataxe" },
+		Motions = {
+			Idle = "RA-GBK-015",
+			Run = "RA-GBK-005",
+			RunLeft = "RA-GBK-006",
+			RunRight = "RA-GBK-007",
+			Back = "RA-GBK-002",
+			Takeoff = "RA-GBK-011",
+			Air = "RA-GBK-012",
+			Land = "RA-GBK-013",
+			Death = "RA-GBK-033",
+		},
+		Kit = {
+			M1 = {
+				Kind = "Combo",
+				Speed = 0.85,
+				Ratio = 0.53,
+				Reset = 1.8,
+				Hits = {
+					{ Motion = "RA-GBK-023", Hit = 0.4, Recover = 0.4, Damage = 37, Range = 7, Angle = 140 },
+					{ Motion = "RA-GBK-024", Hit = 0.4, Recover = 0.4, Damage = 42, Range = 7, Angle = 120 },
+					{ Motion = "RA-GBK-025", Hit = 0.4, Recover = 0.5, Damage = 63, Range = 7, Angle = 160 },
+				},
+			},
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-GBK-040",
+				Indicator = "Ring",
+				Cooldown = 9,
+				Hits = { 0.5 },
+				Damage = 60,
+				Ratio = 0.3,
+				Range = 8,
+				Angle = 360,
+			},
+			E = {
+				Kind = "Flurry",
+				Motion = "RA-GBK-036",
+				InPlace = true,
+				Indicator = "Cone",
+				Cooldown = 10,
+				Hits = { 0.6 },
+				Damage = 70,
+				Ratio = 0.45,
+				Range = 9,
+				Angle = 120,
+			},
+			R = {
+				Kind = "Flurry",
+				Motion = "RA-GBK-059",
+				Indicator = "Ring",
+				Cooldown = 40,
+				Hits = { 0.8 },
+				Slam = 0.8,
+				SlamRadius = 10,
+				SlamDamage = 120,
+				SlamRatio = 0.5,
+				Damage = 60,
+				Ratio = 0.2,
+				Range = 9,
+				Angle = 360,
+			},
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-GBK-058",
+				Speed = 1.2,
+				Cooldown = 9,
+				Range = 12,
+				Width = 4,
+				Damage = 20,
+				Ratio = 0.2,
+				Start = 0.05,
+				Move = 0.35,
+				Stop = 0.5,
 			},
 		},
 	},
@@ -3269,6 +3389,7 @@ Config.Bots = {
 		"Haldrek",
 		"Renka",
 		"Astryn",
+		"Kraeven",
 	},
 	Sight = 25,
 	Taken = 20,

@@ -143,6 +143,10 @@
 			},
 			"GreataxeBerserker": {
 				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"ComponentPlayer": {
+					"$path": "Vendor/GreataxeBerserker/Build/ComponentPlayer"
+				},
 				"Rig": {
 					"$path": "Vendor/GreataxeBerserker/ANM-KBX-RA-GBK-0023/Included Rig.rbxmx"
 				},

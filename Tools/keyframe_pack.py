@@ -4,7 +4,7 @@ Shared.Motion plays: a ComponentPlayer as the newer packs have, with the pack ri
 clips as keyframe data (Data) and its player Shared.KeyframePlayer.
 
     python3 Tools/keyframe_pack.py Elementalist|GreatswordKnight|TricksterCaster|Wildguard|ArenaFighter|Lancer|
-        CelestialCaster|DanceCollection
+        CelestialCaster|GreataxeBerserker|DanceCollection
 
 Writes Vendor/<pack>/Build/ (kept out of git with the rest of Vendor/), which Rojo serves as ReplicatedStorage.<pack>
 (default.project.json). The weapon lives in the place, in ReplicatedStorage.<pack>.Components (Rojo cannot set a
@@ -117,6 +117,17 @@ PACKS = {
                 "c1": [-0.0083, 1.57142, -0.19428, 1, 0, 0, 0, 1, 0, 0, 0, 1],
             },
         ],
+    },
+    # The whole Greataxe Berserker (the minotaur; the Masters play its older single clips): its clips with the greataxe,
+    # which hangs from the right hand (Included Rig Joints.json, Weapon Attachment.json).
+    "GreataxeBerserker": {
+        "clips": "Individual Animations/with-greataxe",
+        "weapon": {
+            "name": "Greataxe",
+            "parent": "RightHand",
+            "c0": [0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, -1],
+            "c1": [-0.39605, 0.53653, -0.00028, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
     },
     # The Dance Collection (the emotes, Config.Emotes): body clips only, played on any hero (Motion.lend).
     "DanceCollection": {

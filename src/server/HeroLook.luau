@@ -39,6 +39,11 @@ function HeroLook.description(name: string): HumanoidDescription
 	description.MoodAnimation = look.Mood or 0
 	-- A torso from the catalog, for rigid clothing made to fit one (the Girl Torso under Astryn's coat).
 	description.Torso = look.Torso or 0
+	-- Arms and legs from the catalog, a body bundle's own (Muscular Blocky's thick arms and legs).
+	description.LeftArm = look.LeftArm or 0
+	description.RightArm = look.RightArm or 0
+	description.LeftLeg = look.LeftLeg or 0
+	description.RightLeg = look.RightLeg or 0
 	for _, part in BODY_COLOURS do
 		(description :: any)[part] = look.Skin
 	end
@@ -406,6 +411,26 @@ function HeroLook.dress(character: Model, hero: string)
 		local handle = accessory and accessory:FindFirstChild("Handle")
 		if handle and handle:IsA("BasePart") then
 			handle.Size = Vector3.new(handle.Size.X * wider, handle.Size.Y, handle.Size.Z * wider)
+		end
+	end
+	-- A catalog accessory made for a slimmer body (a fur collar on thick arms) is made `Scale` times bigger all
+	-- round and hangs `Lower` studs lower (Look.Fit, by the accessory's name).
+	for name, fit in look.Fit or {} do
+		local accessory = character:FindFirstChild("Accessory (" .. name .. ")")
+		local handle = accessory and accessory:FindFirstChild("Handle")
+		local attachment = handle and handle:FindFirstChildOfClass("Attachment")
+		if handle and handle:IsA("BasePart") and attachment then
+			local scale = fit.Scale or 1
+			handle.Size *= scale
+			attachment.Position = attachment.Position * scale + Vector3.new(0, fit.Lower or 0, 0)
+			local weld = handle:FindFirstChild("AccessoryWeld")
+			if weld and weld:IsA("Weld") then
+				if weld.Part0 == handle then
+					weld.C0 = attachment.CFrame
+				else
+					weld.C1 = attachment.CFrame
+				end
+			end
 		end
 	end
 	if look.Held then
