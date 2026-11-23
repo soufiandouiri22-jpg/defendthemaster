@@ -1645,8 +1645,9 @@ Config.Heroes = {
 			Crackle = true,
 			Skin = Color3.fromRGB(234, 184, 146),
 		},
-		-- His face to the right, so the blade of his sword shows beside it (owner, 2026-10-31).
-		Portrait = { Image = "rbxassetid://70793868914813", Face = { 300, 20, 620 } },
+		-- A GenerateImage painting in the other heroes' blocky style from his Edit look (owner, 2026-11-23; the realistic
+		-- knight before, rbxassetid://70793868914813, looked too much like AI: Art/Portraits/concepts/brontar_old.png).
+		Portrait = { Image = "rbxassetid://120683276115735", Face = { 210, 20, 620 } },
 		-- The ability bar's icons per key (Art/Icons/Brontar, each a GenerateImage drawing on magenta in
 		-- Art/Icons/keyed/Brontar, keyed by Tools/key_icons.py --glow); his dash shows him, as every hero's does.
 		Icons = {
