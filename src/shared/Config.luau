@@ -3632,7 +3632,8 @@ Config.Season = {
 -- see the welcome screen (Lobby.Welcome): the owner's DraivoGames (11859499496) again since 2026-11-14 (owner). The
 -- accounts of `AlwaysNew` are new to the game again every time they come into the lobby from outside the game
 -- (ProfileService): their next matches are their first, with its tips and bonus (Config.FirstMatch), to try them in
--- the real game; their totals and rank stay (owner, 2026-11-11).
+-- the real game; their totals and rank stay (owner, 2026-11-11). The accounts of `AllHeroes` own every hero, a new
+-- one as soon as it is in the game (ProfileService): the owner's main account, mast3r (owner, 2026-11-23).
 Config.Account = {
 	StartCoins = 500,
 	First = 300,
@@ -3640,6 +3641,7 @@ Config.Account = {
 	Plateau = 30,
 	AlwaysWelcome = { 11859499496 },
 	AlwaysNew = { 11859499496 },
+	AllHeroes = { 11859499496 },
 }
 
 -- Ranked (Shared.Ranks), as League of Legends (Docs/League_Reference.md): the tiers in order, the first `Divided` with

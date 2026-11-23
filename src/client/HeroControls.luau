@@ -80,6 +80,8 @@ type Leap = {
 	aloft: boolean?,
 	-- Where a Grounded dash cast in the air found him: he comes down from there to `from` in its windup.
 	down: Vector3?,
+	-- Whether a leap or dash has taken off, from where he was then (`from`).
+	off: boolean?,
 }
 
 -- A jump pad's throw (HeroControls.launch): from where to where his root goes, how high over the higher of the two,
@@ -1266,6 +1268,15 @@ local function updateLeap()
 			root.AssemblyLinearVelocity = Vector3.zero
 		end
 		return
+	end
+	-- Cast in a jump, he falls on through its windup: he leaps from where that left him, not from where he cast it, and
+	-- dashes the same way from there.
+	if not l.down and not l.off then
+		l.off = true
+		if l.sharp then
+			l.to += root.Position - l.from
+		end
+		l.from = root.Position
 	end
 	local alpha = math.clamp((t - l.takeoff) / (l.land - l.takeoff), 0, 1)
 	alpha = if l.sharp then 1 - (1 - alpha) ^ 2 else alpha * alpha * (3 - 2 * alpha)

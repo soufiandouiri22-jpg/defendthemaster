@@ -131,6 +131,15 @@ local function testEmotes(data: Profile.Data)
 	end
 end
 
+-- The accounts of Config.Account.AllHeroes own every hero, new ones too, whenever they come in.
+local function allHeroes(player: Player, data: Profile.Data)
+	if table.find(Config.Account.AllHeroes, player.UserId) then
+		for name in Config.Heroes do
+			data.Heroes[name] = true
+		end
+	end
+end
+
 local function load(player: Player)
 	local profile = store:StartSessionAsync("Player_" .. player.UserId, {
 		Cancel = function()
@@ -158,6 +167,7 @@ local function load(player: Player)
 	newSeason(profile.Data)
 	welcome(player, profile.Data)
 	makeNew(player, profile.Data)
+	allHeroes(player, profile.Data)
 	testEmotes(profile.Data)
 	sessions[player] = profile
 	player:SetAttribute("ProfileLoaded", true)
