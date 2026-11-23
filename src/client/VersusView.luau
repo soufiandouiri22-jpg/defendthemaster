@@ -88,7 +88,7 @@ local HEROES_ARRIVE = 5
 
 local TIPS = {
 	"An ability you can raise glows on your bar: spend your points before you forget them.",
-	"A boost comes to the middle every few minutes, the Sun Crown first. Take it, and do not drop it.",
+	"The Sun Crown comes to the middle every few minutes. Take it, and do not drop it.",
 	"Standing on your own pad heals you once you are out of the fight for a moment.",
 	"Your Master is the match: if he falls, it is over. Do not leave him alone too long.",
 	"Shop in the buy phase: nobody can attack before the fight begins.",

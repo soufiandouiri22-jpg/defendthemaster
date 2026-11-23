@@ -653,8 +653,8 @@ Config.Match = {
 }
 
 -- The boosts, the objective on the plateau in the middle (BoostService, owner 2026-11-02), one at a time: the first
--- appears `FirstAt` seconds into the fight and is always `First`; after it they come in rounds of all of `List`
--- shuffled, never the same twice in a row. A boost floats `Float` studs over the plateau's top until the first hero
+-- appears `FirstAt` seconds into the fight and is always `First`; after it they come in rounds of all of `Order`
+-- shuffled, never the same twice in a row unless `Order` has only one. A boost floats `Float` studs over the plateau's top until the first hero
 -- to touch it (within `Reach` studs) takes it, however long that takes. While a hero carries it, he gets its
 -- `Carrier` and the rest of his team its `Team`, wherever they are: `Effect` "Damage" deals that share more, "Shield"
 -- takes that share less, "Speed" walks that share faster, "Cooldown" shortens cooldowns by that share, and "Heal"
@@ -676,7 +676,9 @@ Config.Boosts = {
 	Gap = 60,
 	Warn = 15,
 	First = "SunCrown",
-	Order = { "SunCrown", "MoonShield", "WindGem", "StarHourglass", "LifeHeart" },
+	-- Only the Sun Crown, every time (owner, 2026-11-23: one boost keeps it simple). The others stay in `List`, with
+	-- their models and pictures, for later: { "SunCrown", "MoonShield", "WindGem", "StarHourglass", "LifeHeart" }.
+	Order = { "SunCrown" },
 	Texts = {
 		Own = "YOU HAVE THE %s",
 		Ally = "YOUR TEAM HAS THE %s",

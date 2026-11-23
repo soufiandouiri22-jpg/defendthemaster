@@ -59,7 +59,7 @@ local function shuffled(): { string }
 end
 
 -- The next boost: the first is always SETTINGS.First, then every round deals all of them shuffled, never the one in
--- play now (Workspace's "BoostKind", also when it was set by hand to test one) again.
+-- play now (Workspace's "BoostKind", also when it was set by hand to test one) again, unless there is only one.
 local function deal(): string
 	local shown = Workspace:GetAttribute("BoostKind")
 	if #round == 0 then
@@ -69,7 +69,7 @@ local function deal(): string
 			table.insert(round, 1, SETTINGS.First)
 		end
 	end
-	if round[1] == shown and dealt then
+	if round[1] == shown and dealt and #SETTINGS.Order > 1 then
 		if #round == 1 then
 			round = shuffled()
 			table.remove(round, table.find(round, shown) :: number)
