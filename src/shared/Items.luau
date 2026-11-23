@@ -146,19 +146,19 @@ function Items.effect(actor: Instance, kind: string): (number?, any)
 end
 
 -- With the Wind Gem's speed while his team carries it (Boosts), and slower while a net statue's net holds him (his
--- "Netted" attribute, until when in server time, HazardService).
+-- "Netted" attribute, until when in server time, HazardService), and faster in a Fury (his "FuryHaste", CombatService).
 function Items.walkSpeed(actor: Instance): number
 	local speed = (Config.Combat.WalkSpeed + Items.stats(actor).MoveSpeed) * (1 + Boosts.bonus(actor, "Speed"))
 	local netted = actor:GetAttribute("Netted")
 	if netted and netted > Workspace:GetServerTimeNow() then
 		speed *= Config.NetStatues.Slow
 	end
-	return speed
+	return speed * (actor:GetAttribute("FuryHaste") or 1)
 end
 
--- How much faster than the kit's `Speed` the M1 combo plays.
+-- How much faster than the kit's `Speed` the M1 combo plays, faster still in a Fury (his "FuryAttack").
 function Items.attackSpeed(actor: Instance): number
-	return 1 + Items.stats(actor).AttackSpeed
+	return (1 + Items.stats(actor).AttackSpeed) * (actor:GetAttribute("FuryAttack") or 1)
 end
 
 -- What the parts of `id` that are in `pool` (slot to item, taken out as they are used) leave to pay; their slots go

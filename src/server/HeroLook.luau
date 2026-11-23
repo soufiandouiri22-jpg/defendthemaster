@@ -23,6 +23,7 @@ function HeroLook.description(name: string): HumanoidDescription
 	description.FaceAccessory = look.FaceAccessory or ""
 	description.HatAccessory = look.HatAccessory or ""
 	description.BackAccessory = look.BackAccessory or ""
+	description.FrontAccessory = look.FrontAccessory or ""
 	description.ShouldersAccessory = look.ShouldersAccessory or ""
 	description.NeckAccessory = look.NeckAccessory or ""
 	description.WaistAccessory = look.WaistAccessory or ""

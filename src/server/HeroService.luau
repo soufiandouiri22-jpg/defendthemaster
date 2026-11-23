@@ -77,6 +77,10 @@ end
 -- and speed, with his level and items; "AttackSpeed" is his items' speed-up of the M1 combo, for every client. It
 -- becomes a "Combatant" once it is in the world (HeroService.enlist).
 function HeroService.prepare(character: Model, hero: string, team: string, actor: Instance): Humanoid?
+	-- A Fury he died in ends with him (CombatService).
+	actor:SetAttribute("FuryHaste", nil)
+	actor:SetAttribute("FuryAttack", nil)
+	actor:SetAttribute("FuryPower", nil)
 	character:SetAttribute("Team", team)
 	character:SetAttribute("Level", Leveling.level(actor :: any))
 	character:SetAttribute("AttackSpeed", Items.attackSpeed(actor))

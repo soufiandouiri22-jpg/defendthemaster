@@ -851,9 +851,10 @@ local function dashMotion(character: Model, from: Vector3, to: Vector3, kit: any
 	end)
 end
 
--- A vanishing trick's flick of the hand (`kit`, Kind "Vanish"), cut off at its `Stop`; hiding him is the server's.
+-- A vanishing trick's flick of the hand (`kit`, Kind "Vanish") or a fury's roar (Kind "Fury"), at its `Speed`, cut off
+-- at its `Stop`; hiding him or speeding him up is the server's.
 local function vanishMotion(character: Model, kit: any)
-	HeroAnimator.play(character, kit.Motion, 1)
+	HeroAnimator.play(character, kit.Motion, kit.Speed or 1)
 	task.delay(kit.Stop, function()
 		if HeroAnimator.playing(character) == kit.Motion then
 			HeroAnimator.stop(character)
@@ -968,6 +969,12 @@ local function cast(key: string)
 				humanoid.WalkSpeed = Items.walkSpeed(player)
 			end
 		end)
+		vanishMotion(character, kit)
+		return
+	elseif kit.Kind == "Fury" then
+		-- He stands while he works himself up, and walks at his speed after, the fury's once the server has it.
+		busyUntil = now + kit.Cast + RECOVER
+		slow(humanoid, kit.Cast, 0)
 		vanishMotion(character, kit)
 		return
 	elseif kit.Kind == "Rain" then
@@ -1329,7 +1336,7 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 			dashMotion(character, from, landing, kit)
 		end
 		return
-	elseif kit.Kind == "Vanish" then
+	elseif kit.Kind == "Vanish" or kit.Kind == "Fury" then
 		vanishMotion(character, kit)
 		return
 	elseif kit.Kind == "Snipe" then
@@ -2275,6 +2282,13 @@ function HeroControls.start()
 	end);
 	(net:WaitForChild("HeroHeadshot") :: RemoteEvent).OnClientEvent:Connect(Scope.headshot)
 	Scope.start()
+	-- His Fury speeds him up and ends (CombatService), unless a motion has him slowed, which gives him his speed back.
+	player:GetAttributeChangedSignal("FuryHaste"):Connect(function()
+		local _, _, humanoid = hero()
+		if humanoid and humanoid.WalkSpeed >= Config.Combat.WalkSpeed then
+			humanoid.WalkSpeed = Items.walkSpeed(player)
+		end
+	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then

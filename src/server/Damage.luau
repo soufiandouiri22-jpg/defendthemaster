@@ -110,6 +110,8 @@ function Damage.outgoing(attacker: Instance, amount: number, magic: boolean, tar
 	if character then
 		amount *= 1 + Boosts.bonus(attacker, "Damage")
 	end
+	-- His Fury (CombatService).
+	amount *= attacker:GetAttribute("FuryPower") or 1
 	return amount
 end
 

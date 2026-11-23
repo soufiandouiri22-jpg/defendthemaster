@@ -66,7 +66,7 @@ function HeroSounds.bank(name: string): Bank?
 	return banks[name] or nil
 end
 
-local function play(root: BasePart, bank: Bank, id: string, volume: number)
+local function play(root: BasePart, bank: Bank, id: string, volume: number, speed: number?)
 	local region = bank.Regions[id]
 	if not region then
 		return
@@ -75,6 +75,7 @@ local function play(root: BasePart, bank: Bank, id: string, volume: number)
 	sound.SoundId = bank.Asset
 	sound.PlaybackRegionsEnabled = true
 	sound.PlaybackRegion = NumberRange.new(region[1], region[1] + region[2])
+	sound.PlaybackSpeed = speed or 1
 	local own = root.Parent ~= nil and root.Parent == Players.LocalPlayer.Character
 	sound.Volume = volume * VOLUME * (if own then 1 else OTHERS)
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered
@@ -83,7 +84,7 @@ local function play(root: BasePart, bank: Bank, id: string, volume: number)
 	sound.SoundGroup = Preferences.group("Effects")
 	sound.Parent = root
 	sound:Play()
-	Debris:AddItem(sound, region[2] + 0.5)
+	Debris:AddItem(sound, region[2] / sound.PlaybackSpeed + 0.5)
 	if own and os.clock() < watchUntil then
 		Trace.mark("sound.play", { id = id, loaded = sound.IsLoaded, volume = sound.Volume })
 		task.delay(0.25, function()
@@ -114,8 +115,8 @@ function HeroSounds.step(walker: Instance, at: BasePart, bank: Bank, volume: num
 	end
 end
 
--- Plays a clip's cue on `character`: one of its recordings (from the pack `cue.Bank`'s when it names one), or the next
--- footstep.
+-- Plays a clip's cue on `character`: one of its recordings (from the pack `cue.Bank`'s when it names one, `cue.Speed`
+-- times as fast when it has one), or the next footstep.
 function HeroSounds.cue(character: Model, bank: Bank, cue: any)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
@@ -126,7 +127,7 @@ function HeroSounds.cue(character: Model, bank: Bank, cue: any)
 	elseif cue.Sounds and #cue.Sounds > 0 then
 		local from = if cue.Bank then HeroSounds.bank(cue.Bank) else bank
 		if from then
-			play(root, from, cue.Sounds[math.random(#cue.Sounds)], cue.Volume)
+			play(root, from, cue.Sounds[math.random(#cue.Sounds)], cue.Volume, cue.Speed)
 		end
 	end
 end

@@ -500,6 +500,9 @@ local function strike(b: Bot, key: string, target: Target, gap: number, now: num
 		return gap <= ability.Range - 1 and maybe(b, key, target.position, now)
 	elseif ability.Kind == "Strike" or ability.Kind == "Rain" then
 		return gap <= ability.Range - 2 and maybe(b, key, target.position, now)
+	elseif ability.Kind == "Fury" then
+		-- A fury (Bjorn's R) speeds him up for the fight beside him.
+		return gap <= ability.Range and maybe(b, key, target.position, now)
 	end
 	return false
 end

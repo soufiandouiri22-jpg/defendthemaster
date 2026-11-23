@@ -973,6 +973,12 @@ Config.Minions = {
 -- A "Vanish" makes him unseen by his enemies for `Duration` seconds (his "Hidden" attribute, the client's Vanish), and
 -- faint to his own team, till he attacks again; no hero's attack strikes him meanwhile. He stands still for its first `Cast`
 -- seconds, its motion cut off at `Stop`, and then runs `Haste` times as fast while he stays unseen.
+-- A "Fury" works him up: he stands for its first `Cast` seconds, its motion played at `Speed` and cut off at `Stop`
+-- (seconds), and for `Duration`
+-- seconds from the cast walks `Haste` times and swings his M1 combo `AttackSpeed` times as fast (Items, his actor's
+-- "FuryHaste" and "FuryAttack"), and every hit of his strikes `Power` times as hard (his actor's "FuryPower",
+-- Damage.outgoing), in a burning aura of its `Color` (his character's "Fury", FuryEffects). Bots use it
+-- on a hero within its `Range`.
 -- A "Snipe" brings up a rifle and looks through its scope; a click fires one bullet across the arena (Corvin's R).
 -- `Projectile` is how his projectiles look in flight: a component of his pack, `Turn`ed to fly point first; with
 -- `From` seen leaving the far end of that weapon or part of his weapons as the clip holds it, or that bone of them (a
@@ -3104,34 +3110,51 @@ Config.Heroes = {
 			},
 		},
 	},
-	-- Taurok (a working name; owner, 2026-11-20): a minotaur tank with the RobloxAnimations Greataxe Berserker pack
-	-- and its greataxe. On trial: his kit is a placeholder until the owner picks his motions in the showroom.
-	Taurok = {
+	-- Bjorn (owner, 2026-11-23; Taurok, a working name, while he was a minotaur): a viking tank with the
+	-- RobloxAnimations Greataxe Berserker pack and its greataxe; his M1 and dash the owner's (2026-11-23).
+	Bjorn = {
 		Role = "Tank",
 		Description = "A bull of a man with an axe to match.",
 		Showcase = {
 			Motion = "RA-GBK-071",
-			Enter = { Motion = "RA-GBK-070", Then = "Breathe" },
-			Aura = false,
+			-- His weapon pose's own entrance, ending in the pose he holds; 3.3 s long, played faster to end about when
+			-- the others' do (2.7 s).
+			Enter = { Motion = "RA-GBK-070", Speed = 1.25, Then = "Breathe" },
+			-- Red, as his fury's (owner, 2026-11-23).
+			Aura = Color3.fromRGB(220, 36, 30),
 		},
 		Health = 1500,
 		Scales = "Attack",
-		Effects = "Dust",
+		Effects = "Red",
 		Look = {
-			-- The Muscular Blocky body, bare but for his waist cloth (owner, 2026-11-20: "7c"): the Mighty Minotaur
-			-- head, the Fur Undead King Cape round his shoulders and the Burned Warlord's waist.
-			Torso = 75153377014971,
-			LeftArm = 89863084035546,
-			RightArm = 101592760495627,
-			LeftLeg = 124840996613668,
-			RightLeg = 137803549309644,
-			HatAccessory = "62685648",
-			BackAccessory = "108216642043334",
-			WaistAccessory = "113421047975788",
+			-- II_Lion801's whole Viking of Valhalla set, helmet, chestplate, pauldrons and cape, with Exo's Clothing's
+			-- Viking Pants, on UGC bodies' Muscle Blocky body in his brown (owner, 2026-11-23, of ten sets): a body
+			-- no bigger than the plain one, so the armour sits on it. Before it: the Mighty Minotaur head on
+			-- Clockset's Muscular Blocky body ("7c", 2026-11-20), whose thick arms the catalog armour stood off, and
+			-- the Fur Undead King Cape, whose fur collar is one rigid piece with it.
+			Torso = 95509766428762,
+			LeftArm = 77247553431224,
+			RightArm = 134754172076665,
+			LeftLeg = 89563508650489,
+			RightLeg = 87248574988494,
+			HatAccessory = "8721962095",
+			FrontAccessory = "8724021813",
+			ShouldersAccessory = "8721847569,8721863142",
+			BackAccessory = "8721937027",
+			Pants = 5563249288,
 			BlankFace = true,
 			Skin = Color3.fromRGB(120, 80, 56),
-			-- The cape is made for a slimmer body: bigger, and lower so the horns clear it.
-			Fit = { ["Fur Undead King CapeAccessory"] = { Scale = 1.12, Lower = 0.25 } },
+		},
+		-- No beard under his helmet: the white fur is his chestplate's collar.
+		Portrait = { Image = "rbxassetid://129406166059463", Face = { 235, 60, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Bjorn, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Bjorn, keyed by Tools/key_icons.py --glow).
+		Icons = {
+			M1 = "rbxassetid://124684925092764",
+			M2 = "rbxassetid://133215694527693",
+			E = "rbxassetid://73464689401458",
+			R = "rbxassetid://131789301706823",
+			Dash = "rbxassetid://89506102957610",
 		},
 		Pack = "GreataxeBerserker",
 		-- The pack's greataxe in his right hand, drawn and put away as the clips say.
@@ -3159,43 +3182,61 @@ Config.Heroes = {
 					{ Motion = "RA-GBK-025", Hit = 0.4, Recover = 0.5, Damage = 63, Range = 7, Angle = 160 },
 				},
 			},
+			-- He spins round twice with his axe out (044, owner 2026-11-23: fastest at 0.62 and 0.88 s, 6 studs out),
+			-- striking everyone round him each time, then brings it down onto the ground before him (1.47 s): the slam
+			-- strikes everyone round him with its shockwave, harder, as Haldrek's and Korrund's M2 slams do (80).
 			M2 = {
 				Kind = "Flurry",
-				Motion = "RA-GBK-040",
+				Motion = "RA-GBK-044",
 				Indicator = "Ring",
 				Cooldown = 9,
-				Hits = { 0.5 },
-				Damage = 60,
-				Ratio = 0.3,
+				Hits = { 0.62, 0.88, 1.47 },
+				Slam = 1.47,
+				SlamRadius = 10,
+				SlamDamage = 80,
+				SlamRatio = 0.4,
+				Damage = 20,
+				Ratio = 0.15,
 				Range = 8,
 				Angle = 360,
 			},
+			-- Two sweeps round him (035, owner 2026-11-23: the axe fastest at 0.35 and 0.88 s), then a hop onto the
+			-- spot aimed at (off the ground at 0.97 s) and the axe into the ground as he comes down (1.65 s), striking
+			-- everyone round it with its shockwave; the clip in place as the game carries him. About 90 on one foe, more
+			-- than the other tanks' E (60 to 70) for its sweeps landing only up close (owner, 2026-11-23, from 110).
 			E = {
-				Kind = "Flurry",
-				Motion = "RA-GBK-036",
+				Kind = "Leap",
+				Motion = "RA-GBK-035",
 				InPlace = true,
-				Indicator = "Cone",
+				Indicator = "Zone",
 				Cooldown = 10,
-				Hits = { 0.6 },
-				Damage = 70,
-				Ratio = 0.45,
-				Range = 9,
-				Angle = 120,
+				Range = 12,
+				Radius = 8,
+				Damage = 50,
+				Ratio = 0.3,
+				Takeoff = 0.97,
+				Land = 1.65,
+				Swings = { Hits = { 0.35, 0.88 }, Damage = 20, Ratio = 0.15, Range = 7 },
 			},
+			-- He roars himself into a fury (056, owner 2026-11-23, over 050): after it he runs half again and swings his
+			-- M1 three quarters again as fast, every hit a quarter harder: some 400 more on one foe, against the other
+			-- tanks' 150 to 210 of their R, a little overpowered by the owner's wish (2026-11-23), burning in a
+			-- red aura like a super saiyan's. The roar plays nearly whole, a quarter faster, as long as the growl under
+			-- it, sped up with it (owner, 2026-11-23: Tools/hero_sounds.py's `rate`), and his fury lasts seven seconds
+			-- after it.
 			R = {
-				Kind = "Flurry",
-				Motion = "RA-GBK-059",
-				Indicator = "Ring",
+				Kind = "Fury",
+				Motion = "RA-GBK-056",
+				Speed = 1.25,
 				Cooldown = 40,
-				Hits = { 0.8 },
-				Slam = 0.8,
-				SlamRadius = 10,
-				SlamDamage = 120,
-				SlamRatio = 0.5,
-				Damage = 60,
-				Ratio = 0.2,
-				Range = 9,
-				Angle = 360,
+				Cast = 1.75,
+				Stop = 1.9,
+				Duration = 8.75,
+				Haste = 1.5,
+				AttackSpeed = 1.75,
+				Power = 1.25,
+				Color = Color3.fromRGB(235, 40, 30),
+				Range = 10,
 			},
 			Dash = {
 				Kind = "Dash",

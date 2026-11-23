@@ -1105,6 +1105,35 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 				humanoid.WalkSpeed = Items.walkSpeed(player)
 			end
 		end)
+	elseif kit.Kind == "Fury" then
+		-- He stands while he works himself up; slow gives him his faster speed afterwards. His items' speed-up of the
+		-- M1 for every client ("AttackSpeed") takes the fury's in and out with it.
+		state.busyUntil = now + kit.Cast + RECOVER
+		motionEvent:FireAllClients(character, key, 0)
+		slow(state, kit.Cast, 0)
+		player:SetAttribute("FuryHaste", kit.Haste)
+		player:SetAttribute("FuryAttack", kit.AttackSpeed)
+		player:SetAttribute("FuryPower", kit.Power)
+		character:SetAttribute("Fury", true)
+		character:SetAttribute("AttackSpeed", Items.attackSpeed(player))
+		task.delay(kit.Duration, function()
+			if not character:GetAttribute("Fury") then
+				return
+			end
+			character:SetAttribute("Fury", nil)
+			-- Dead and back meanwhile, he is out of it already (HeroService.prepare).
+			if Actors.character(player) ~= character then
+				return
+			end
+			player:SetAttribute("FuryHaste", nil)
+			player:SetAttribute("FuryAttack", nil)
+			player:SetAttribute("FuryPower", nil)
+			character:SetAttribute("AttackSpeed", Items.attackSpeed(player))
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.WalkSpeed >= Config.Combat.WalkSpeed then
+				humanoid.WalkSpeed = Items.walkSpeed(player)
+			end
+		end)
 	elseif kit.Kind == "Ascend" then
 		-- He hangs in the air (his client lifts him, a bot BotService) and cannot walk till he stands again.
 		state.busyUntil = now + kit.Land + RECOVER
