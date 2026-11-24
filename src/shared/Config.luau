@@ -3266,6 +3266,9 @@ Config.Heroes = {
 	Zahra = {
 		Role = "Assassin",
 		Description = "Veiled steps, sharp rings.",
+		-- Every player's, in the game (owner, 2026-11-24).
+		Starter = true,
+		-- On the podium she comes in with her chakrams (061, Weapon pose enter) into her weapon pose.
 		Showcase = {
 			Motion = "RA-BLD-062",
 			Enter = { Motion = "RA-BLD-061", Then = "Breathe" },
@@ -3646,6 +3649,7 @@ Config.Bots = {
 		"Renka",
 		"Astryn",
 		"Kraeven",
+		"Zahra",
 	},
 	Sight = 25,
 	Taken = 20,
