@@ -131,6 +131,15 @@
 					"$path": "Vendor/TwinbladeFighter/Animations/Included Rig.rbxmx"
 				}
 			},
+			"BladeDancer": {
+				"$className": "Folder",
+				"ComponentPlayer": {
+					"$path": "Vendor/BladeDancer/Animations/Component Playback.rbxm"
+				},
+				"Rig": {
+					"$path": "Vendor/BladeDancer/Animations/Included Rig.rbxmx"
+				}
+			},
 			"DanceCollection": {
 				"$className": "Folder",
 				"$ignoreUnknownInstances": true,

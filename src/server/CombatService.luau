@@ -42,6 +42,8 @@ local RECOVER = 0.12
 -- A command may come this much before the hero is free, as the network does not deliver at an even pace.
 local EARLY = 0.12
 local DASH_STEP = 0.03
+-- How often a Strike's rolling weapons (its Roll) strike those they reach on their way.
+local ROLL_STEP = 0.05
 
 type State = {
 	actor: Instance,
@@ -815,20 +817,42 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		-- A hit may play faster or slower than the rest of the combo (its own Speed).
 		local speed = kit.Speed * (hit.Speed or 1) * Items.attackSpeed(player)
 		-- Following on, it may start part-way into its clip (the kit's `Follow`, the weapon still up); the first is
-		-- held back as long, so the hits keep their pace.
-		local start = if following and kit.Follow then kit.Follow else 0
-		local length = (Motion.meta(settings.Pack, hit.Motion).duration - start) / speed
+		-- held back as long, so the hits keep their pace. A hit cut out of one clip with the others plays its part.
+		local start, stop, cut = HeroKit.comboPart(kit, hit, following, Motion.meta(settings.Pack, hit.Motion).duration)
+		local length = (stop - start) / speed
 		local eclipse = if state.eclipse then 1 + (Items.effect(player, "Eclipse") or 0) else 1
 		state.eclipse = false
 		state.combo = step
-		state.comboUntil = now + kit.Reset - start / speed
-		state.busyUntil = now + (hit.Hit + (hit.Recover or 0) + (kit.Follow or 0) - start) / speed + RECOVER
+		state.comboUntil = now + kit.Reset - (if cut then 0 else start) / speed
+		state.busyUntil = now
+			+ (hit.Hit + (hit.Recover or 0) + (if cut then 0 else kit.Follow or 0) - start) / speed
+			+ RECOVER
 		motionEvent:FireAllClients(character, key, step, nil, start)
 		slow(state, length, Config.Combat.AttackWalkSpeed)
 		later(state, (hit.Hit - start) / speed, function()
 			local amount = strength(hit.Damage) * eclipse
-			if hit.ProjectileSpeed then
-				launch(player, state, team, aimedNow(), hit, amount, magic, nil, true)
+			if hit.ProjectileSpeed and (hit.Count or 1) > 1 then
+				-- Count shots fanned over Spread degrees, one out of each hand, striking each enemy once.
+				local fan = HeroKit.fan(aimedNow(), hit.Count, hit.Spread or 0)
+				local struck = {}
+				for i, way in fan do
+					launch(
+						player,
+						state,
+						team,
+						way,
+						hit,
+						amount,
+						magic,
+						struck,
+						true,
+						nil,
+						1 - 2 * (i - 1) / (#fan - 1)
+					)
+				end
+			elseif hit.ProjectileSpeed then
+				-- Out of the hand on its `Side` (1 his right, -1 his left) when he holds a weapon in each.
+				launch(player, state, team, aimedNow(), hit, amount, magic, nil, true, nil, hit.Side)
 			else
 				strikeCone(player, state, team, aimedNow(), hit.Range, hit.Angle, amount, magic, true)
 			end
@@ -1052,6 +1076,31 @@ local function act(player: Instance, key: string, aim: Vector3): (boolean, Vecto
 		state.busyUntil = now + last + RECOVER
 		motionEvent:FireAllClients(character, key, 0, spot)
 		slow(state, last + RECOVER, 0)
+		local roll = kit.Roll
+		if roll then
+			-- Its weapons roll through the ground from his feet to the spot from `Release` to the first strike,
+			-- `Gap` studs apart, striking once for `Damage` everyone they roll through (within `Width` of either).
+			local way = HeroKit.flat(spot - root.Position)
+			local toward = if way.Magnitude > 0.5 then way.Unit else HeroKit.flat(root.CFrame.LookVector).Unit
+			local aside = Vector3.new(-toward.Z, 0, toward.X) * roll.Gap / 2
+			local from = root.Position + toward * 2.5
+			local rolled = {}
+			local rolling = kit.Strikes[1] - roll.Release
+			for at = roll.Release, kit.Strikes[1] - 1e-3, ROLL_STEP do
+				later(state, at, function()
+					local f = math.clamp((at + ROLL_STEP - roll.Release) / rolling, 0, 1)
+					local centre = from:Lerp(spot, f)
+					for _, lane in { centre + aside, centre - aside } do
+						for _, enemy in enemiesNear(team, lane, roll.Width) do
+							if not rolled[enemy.instance] and HeroKit.landingStrikes(lane, roll.Width, enemy) then
+								rolled[enemy.instance] = true
+								damage(player, character, enemy, strength(roll.Damage, roll.Ratio), magic)
+							end
+						end
+					end
+				end)
+			end
+		end
 		for i, at in kit.Strikes do
 			later(state, at, function()
 				for _, enemy in enemiesNear(team, spot, kit.Radius) do

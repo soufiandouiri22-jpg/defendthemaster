@@ -15,13 +15,14 @@
 -- clocks pass them: the action's, and the base's while no action covers it.
 --
 -- A clip of another pack (Motion.lend: the emotes' dances) plays on any hero through that pack's player: every pack's
--- rig is the same R15 rig, so its poses fit the hero's joints as his own pack's do.
+-- rig is the same R15 rig, but not every pack frames its joints alike (the Greataxe Berserker's and the Greatsword
+-- Knight's root joint is turned round), so each of its poses is carried from that pack's joint frames into the hero's
+-- pack's; taken as it comes, a dance would play back to front.
 --
 -- The clips in Motion.mirrored play mirrored, left for right: the packs' rigs are symmetric (each left joint's frames
 -- the right one's reflected across the body's middle), so the left joint takes the right one's pose reflected, and the
 -- other way round. Only the body is mirrored, not the pack's weapons; a hero whose weapons are his own, held in a hand
 -- (HeroLook's Held), keeps it in that hand.
-
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -33,6 +34,12 @@ local PACK_ROOT_HEIGHT = 2.35
 local BASE_FADE = 0.15
 local ACTION_FADE_IN = 0.08
 local ACTION_FADE_OUT = 0.2
+-- How far, in a clip's seconds, from where it stands a combo's next hit may start to carry the clip on (Motion.carryOn).
+local CARRY_ON = 0.15
+-- How far, in a clip's seconds, a clip ended short of its end (Motion.endAt) plays on at full weight before it fades
+-- out, for a combo's next hit coming in a frame late to carry it on without his body sinking toward the base for that
+-- frame (Bunny's legs shook at her second throw, owner 2026-11-24).
+local END_GRACE = 0.1
 -- A foot stepping into the base pose (Motion.stepInto) lifts its knee up to this many degrees.
 local STEP_LIFT = 28
 -- Breathing (Motion.breathe): one breath in this many seconds, the chest and the head tipping this many degrees, coming
@@ -72,6 +79,8 @@ type Clip = {
 	hold: boolean,
 	-- Where it stands still, short of its end (Motion.stopAt).
 	stopAt: number?,
+	-- Where it ends, short of its end, fading back to the base (Motion.endAt).
+	endAt: number?,
 	-- Played left for right (Motion.mirrored).
 	mirror: boolean,
 	-- Played over and over until stopped, when it loops (Motion.keepPlaying).
@@ -80,7 +89,12 @@ type Clip = {
 	following: { id: string, at: number?, inPlace: boolean }?,
 	-- The pack player it is sampled from.
 	player: any,
+	-- For a lending pack's clip, how each joint's pose is carried into the hero's pack's joint frames.
+	carry: Carry?,
 }
+
+-- By the part a joint moves, the frames to put before and after a lending pack's pose of it.
+type Carry = { [string]: { before: CFrame, after: CFrame } }
 
 export type Cue = { Time: number, [string]: any }
 
@@ -93,7 +107,10 @@ type Joint = {
 export type Motion = typeof(setmetatable(
 	{} :: {
 		character: Model,
+		packName: string,
 		player: any,
+		-- How the poses of each lending pack's clips are carried into his pack's, by that pack's name.
+		carried: { [string]: Carry },
 		joints: { [string]: Joint },
 		-- The part the root joint moves (the pack rig's lower torso), and how the pack turns that joint's frame.
 		rootPart: string?,
@@ -112,6 +129,9 @@ export type Motion = typeof(setmetatable(
 		action: Clip?,
 		actionWeight: number,
 		lastAction: Pose?,
+		-- The clip over the base last ended short of its end (Motion.endAt), played on while he fades out of it, as one
+		-- of a combo's hits carries it on so (Motion.carryOn).
+		ended: Clip?,
 		-- Stepping from the pose the clip over the base ended in into the base (Motion.stepInto).
 		stepping: { from: Pose, time: number, left: number, right: number }?,
 		-- Seconds since he began to breathe (Motion.breathe).
@@ -155,14 +175,42 @@ function Motion.lend(prefix: string, packName: string)
 	lent[prefix] = packName
 end
 
--- The player that samples clip `id` for `self`: a lending pack's, or the hero's own.
-local function playerOf(self: Motion, id: string): any
+-- The player that samples clip `id` for `self`: a lending pack's, with its name, or the hero's own.
+local function playerOf(self: Motion, id: string): (any, string?)
 	for prefix, name in lent do
 		if string.sub(id, 1, #prefix) == prefix then
-			return pack(name).player
+			return pack(name).player, name
 		end
 	end
-	return self.player
+	return self.player, nil
+end
+
+-- Each body joint's two frames on the rig of the pack `name`, by the part it moves.
+local function framesOf(name: string): { [string]: { c0: CFrame, c1: CFrame } }
+	local frames = {}
+	for _, j in pack(name).config.body_joints do
+		frames[j.part1] = { c0 = frame(j.c0), c1 = frame(j.c1) }
+	end
+	return frames
+end
+
+-- How a pose of the lending pack `lender`'s rig becomes one of `self`'s pack's rig that sets each body part in the
+-- same place: before * pose * after, with C0 * pose * C1⁻¹ kept the same from one rig to the other.
+local function carryFrom(self: Motion, lender: string): Carry
+	local cached = self.carried[lender]
+	if cached then
+		return cached
+	end
+	local own, theirs = framesOf(self.packName), framesOf(lender)
+	local carry: Carry = {}
+	for part, f in theirs do
+		local o = own[part]
+		if o then
+			carry[part] = { before = o.c0:Inverse() * f.c0, after = f.c1:Inverse() * o.c1 }
+		end
+	end
+	self.carried[lender] = carry
+	return carry
 end
 
 -- How far the character's root part stands from where the pack rig's would on the same ground, as a CFrame to put
@@ -234,7 +282,9 @@ function Motion.new(character: Model, packName: string): Motion
 	local p = pack(packName)
 	local self = setmetatable({
 		character = character,
+		packName = packName,
 		player = p.player,
+		carried = {},
 		joints = {},
 		rootPart = nil,
 		rootTurn = CFrame.identity,
@@ -248,6 +298,7 @@ function Motion.new(character: Model, packName: string): Motion
 		action = nil,
 		actionWeight = 0,
 		lastAction = nil,
+		ended = nil,
 		stepping = nil,
 		breathing = nil,
 		low = false,
@@ -328,6 +379,15 @@ function Motion.sample(self: Motion, clip: Clip): Pose
 			opacity[name] = p.opacity
 		end
 		props = converted
+	end
+	local carry = clip.carry
+	if carry then
+		local carried = {}
+		for name, cf in body do
+			local c = carry[name]
+			carried[name] = if c then c.before * cf * c.after else cf
+		end
+		body = carried
 	end
 	local root = self.rootPart and body[self.rootPart]
 	if clip.inPlace and root then
@@ -437,10 +497,11 @@ local function stepped(from: Pose, to: Pose, w: number, feet: { [string]: number
 end
 
 local function newClip(self: Motion, id: string, speed: number, time: number?): Clip
-	local player = playerOf(self, id)
+	local player, lender = playerOf(self, id)
 	local _, meta = player.Sample(nil, id, 0)
 	return {
 		player = player,
+		carry = if lender and lender ~= self.packName then carryFrom(self, lender) else nil,
 		repeating = false,
 		id = id,
 		time = time or 0,
@@ -524,6 +585,7 @@ function Motion.play(
 	hold: boolean?
 ): number
 	self.action = newClip(self, id, speed, startTime)
+	self.ended = nil
 	self.action.inPlace = inPlace == true or inPlace == "Grounded"
 	self.action.grounded = inPlace == "Grounded"
 	self.action.hold = hold == true
@@ -553,6 +615,23 @@ function Motion.stop(self: Motion)
 	end
 end
 
+-- Plays the clip `id` on at `speed` without an end, if it is the one played over the base, or the one just ended and
+-- not yet faded out of, and stands about `from` seconds in; returns whether it did. A combo's hit cut out of one clip
+-- right after the last carries on so, as one movement: played again from there and eased into, he slowed for the
+-- ease (Bunny's second throw, owner 2026-11-24).
+function Motion.carryOn(self: Motion, id: string, from: number, speed: number): boolean
+	local clip = self.action or (if self.actionWeight > 0 then self.ended else nil)
+	if not clip or clip.id ~= id or math.abs(clip.time - from) > CARRY_ON then
+		return false
+	end
+	clip.endAt = nil
+	clip.speed = speed
+	self.action = clip
+	self.ended = nil
+	self.lastAction = nil
+	return true
+end
+
 -- Plays `id` after the clip played over the base, as its clock passes `at` seconds or at its end, unless another is
 -- played over the base by then.
 function Motion.chain(self: Motion, id: string, at: number?, inPlace: boolean)
@@ -569,6 +648,14 @@ end
 function Motion.stopAt(self: Motion, seconds: number)
 	if self.action then
 		self.action.stopAt = seconds
+	end
+end
+
+-- Lets the clip played over the base end `seconds` in, fading back to the base as at its end (a combo's hit cut out
+-- of a clip with the others).
+function Motion.endAt(self: Motion, seconds: number)
+	if self.action then
+		self.action.endAt = seconds
 	end
 end
 
@@ -590,6 +677,7 @@ function Motion.stepInto(self: Motion, left: number, right: number)
 	self.action = nil
 	self.actionWeight = 0
 	self.lastAction = nil
+	self.ended = nil
 end
 
 -- Eases over `seconds` from the pose he stands in now into whatever is played from now on (a dance and back), instead
@@ -627,6 +715,10 @@ function Motion.step(self: Motion, dt: number)
 		pose = blend(self:sample(self.previous), pose, self.baseBlend)
 	end
 
+	local last = self.ended
+	if not self.action and last and self.actionWeight > 0 then
+		last.time = math.min(last.time + dt * last.speed, last.meta.duration)
+	end
 	local action = self.action
 	if action then
 		advance(self, action, dt * action.speed, true)
@@ -639,7 +731,10 @@ function Motion.step(self: Motion, dt: number)
 			action.time = action.stopAt
 			action.speed = 0
 		end
-		if action.time >= action.meta.duration and not action.hold and not action.repeating then
+		if action.endAt and action.time >= action.endAt + END_GRACE then
+			self:stop()
+			self.ended = action
+		elseif action.time >= action.meta.duration and not action.hold and not action.repeating then
 			self:stop()
 		else
 			self.actionWeight = math.min(1, self.actionWeight + dt / ACTION_FADE_IN)
@@ -648,8 +743,9 @@ function Motion.step(self: Motion, dt: number)
 	end
 	if not self.action and self.actionWeight > 0 then
 		self.actionWeight = math.max(0, self.actionWeight - dt / ACTION_FADE_OUT)
-		if self.lastAction then
-			pose = blend(pose, self.lastAction, self.actionWeight)
+		local from = if last and not self.action then self:sample(last) else self.lastAction
+		if from then
+			pose = blend(pose, from, self.actionWeight)
 		end
 	end
 	local stepping = self.stepping

@@ -7,15 +7,16 @@ into Vendor/Wildguard/, the Katana Swordsman (the samurai) into Vendor/KatanaSwo
 Vendor/Gunslinger/, the Arena Fighter (Haldrek) into Vendor/ArenaFighter/ and the Lancer (the spear warrior) into
 Vendor/Lancer/, the Celestial Caster (the star mage) into Vendor/CelestialCaster/ and the Twinblade Fighter (Kraeven)
 into Vendor/TwinbladeFighter/, each with its animations and its sounds; the whole Greataxe Berserker (the minotaur)
-into Vendor/GreataxeBerserker/Animations/, its sounds and the Masters' clips from Tools/vendor_kitsblox.py; and the
-Dance Collection (the emotes, Config.Emotes) into Vendor/DanceCollection/, animations only.
+into Vendor/GreataxeBerserker/Animations/, its sounds and the Masters' clips from Tools/vendor_kitsblox.py; the
+Dance Collection (the emotes, Config.Emotes) into Vendor/DanceCollection/ and the Blade Dancer (the bunny with the
+chakrams) into Vendor/BladeDancer/, animations only.
 
 Their licence forbids sharing the files, so Vendor/ stays out of git: run this once on a new machine with the ZIPs
 in ~/Downloads. Rojo serves each pack's playback module and rig from there (default.project.json).
 
     python3 Tools/vendor_shadow_duelist.py [ShadowDuelist] [Ranger] [Elementalist] [ScytheWielder] [GreatswordKnight]
         [TricksterCaster] [Wildguard] [KatanaSwordsman] [Gunslinger] [ArenaFighter] [Lancer] [CelestialCaster]
-        [TwinbladeFighter] [GreataxeBerserker] [DanceCollection]
+        [TwinbladeFighter] [GreataxeBerserker] [DanceCollection] [BladeDancer]
 """
 
 import pathlib
@@ -55,6 +56,7 @@ PACKS = {
     "RobloxAnimations-Twinblade-Fighter-Sounds-v1.3.1.zip": ("TwinbladeFighter", "Sounds"),
     "RobloxAnimations-Greataxe-Berserker-v1.2.0.zip": ("GreataxeBerserker", "Animations"),
     "RobloxAnimations-Dance-Collection-v1.1.0.zip": ("DanceCollection", "Animations"),
+    "RobloxAnimations-Blade-Dancer-v1.2.0.zip": ("BladeDancer", "Animations"),
 }
 
 

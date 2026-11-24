@@ -916,8 +916,12 @@ Config.Minions = {
 -- lands at its time in the motion, on the server. For every hero, every swing, shot and throw goes where the crosshair
 -- points, upwards and downwards as well (owner, 2026-10-29); a leap lands on the spot aimed at, a dash keeps to the
 -- ground. Indicators (design 06): "Arrow" (a skillshot), "Zone" (a range
--- round the hero and the spot aimed at), "Cone", "Ring" (what a slam round him reaches). A combo hit with a `ProjectileSpeed` is a shot instead of a swing;
--- a combo hit's `Recover` is the seconds after its hit before the next. A "Throw" lets go at its `Release` (or each of its
+-- round the hero and the spot aimed at), "Cone", "Ring" (what a slam round him reaches). A combo hit with a `ProjectileSpeed` is a shot instead of a swing,
+-- out of the hand on its `Side` (1 his right, -1 his left) of a weapon in each, or `Count` shots fanned over
+-- `Spread` degrees, one out of each hand;
+-- a combo hit's `Recover` is the seconds after its hit before the next. Combo hits may share one clip, each playing
+-- only its part of it, from its `From` (its `Again` when the combo comes round to it) to its `Until` (seconds into it),
+-- its `Hit` counted from the clip's start. A "Throw" lets go at its `Release` (or each of its
 -- `Releases`), `Count` projectiles fanned over `Spread` degrees; each stops at the first enemy in its way, or with
 -- `Pierce` strikes everyone it passes once; a shot of a weapon that flies itself back (Projectile.Returns) with a `Back`
 -- strikes everyone on its way back too, with that share of its damage, once each and only once it has left those it was
@@ -952,15 +956,19 @@ Config.Minions = {
 -- Strike's `Knockback` throws those its first strike reaches away from the spot. One that `Erupt`s strikes from the
 -- ground instead (IceEffects, HeroControls): his Projectile that Returns goes into the ground at `Dive`, bursts up out
 -- of it on the spot at the first strike on a pillar of ice `Height` studs tall, grown `Grow` times, which shatters at
--- `Shatter`, and comes back to his hand over `Back` seconds. A Strike's `Busy` keeps him in it till that many seconds,
--- when its motion goes on past its last strike.
+-- `Shatter`, and comes back to his hand over `Back` seconds. One that `Roll`s sends his pair of Projectiles that Return
+-- through the ground instead (RiftEffects, HeroControls): out of his hands at `From`, down into the ground before him
+-- at `Release`, `Gap` studs apart, grown `Grow` times and sunk `Sink` of their height, rolling to the spot by the first
+-- strike, cutting a rift, and back to his hands over `Back` seconds; they strike everyone within `Width` of either on
+-- the way once for their own `Damage` and `Ratio`. A Strike's `Busy` keeps him in it till that many seconds, when its
+-- motion goes on past its last strike.
 -- A "Flurry" with `Zap` shoots lightning from the point of his weapon at each of its `Hits` (LightningEffects.zap),
 -- each at one enemy the sweep reaches, the nearest `Targets` taking them in turn (HeroKit.zapTarget), or straight
 -- ahead to its `Range` when it reaches no one. A Flurry's `Beam` is a laser beam `Width` studs thick from his upper
 -- body along its sweep, from `From` to `To` seconds into its motion (HeroControls). A Flurry's `Orbit` sends his
 -- Projectile that Returns out of his hand at `From` (out over `Out` seconds) to circle `Radius` studs round him at
 -- `Height`, `Turns` times round at one speed (less than 0 the other way) with his spin in the clip, till `To` and back
--- over `Back` seconds;
+-- over `Back` seconds; a pair (one in each hand) on opposite sides of him, the left one `Lag` seconds after the right;
 -- its Hits reach all round him (Angle 360, Range a little past Radius). Every one of a Flurry's `Hits` from
 -- its `Slam` on strikes the ground: SlamDamage all round him, SlamRadius studs, with a shockwave. Its `Pulses` (seconds
 -- into its motion) are smaller waves through the ground after, each striking everyone within SlamRadius for
@@ -985,7 +993,7 @@ Config.Minions = {
 -- kit's `ShotsFrom` may name another). With `Returns` the component is the weapon he holds itself: it leaves his hand,
 -- comes back into it after it stops, and is not seen in his hand meanwhile; a pair of components (`{ right, left }`)
 -- is a weapon in each hand, a fan's projectiles on his right side the first, on his left the second. `Frost` (a
--- colour) dresses it in icy starlight instead of a trail. With `ThroughAll` it flies on through the ground, walls and everything else in its
+-- colour) dresses it in icy starlight instead of a trail; `Stars` (a colour) leaves little stars behind it. With `ThroughAll` it flies on through the ground, walls and everything else in its
 -- way, and seeks enemies behind them too. With `Gun`
 -- they are a gun's
 -- rounds (GunEffects: "Revolver", "Bomb", "Rifle"), with a flash at the barrel and a strike where they stop; a kit's
@@ -3250,6 +3258,200 @@ Config.Heroes = {
 				Start = 0.05,
 				Move = 0.35,
 				Stop = 0.5,
+			},
+		},
+	},
+	-- Bunny (a working name; owner, 2026-11-23): a veiled desert dancer with chakrams, with the RobloxAnimations Blade
+	-- Dancer pack and its two chakrams. A test entry for now: her kit is a placeholder until the owner picks every
+	-- key's motion in the showroom.
+	Bunny = {
+		Role = "Assassin",
+		Description = "Soft ears, sharp rings.",
+		Showcase = {
+			Motion = "RA-BLD-062",
+			Enter = { Motion = "RA-BLD-061", Then = "Breathe" },
+			Aura = false,
+		},
+		Health = 880,
+		Scales = "Attack",
+		-- Sand and dust, as she has no aura (owner, 2026-11-24).
+		Effects = "Dust",
+		Look = {
+			-- A desert dancer (owner, 2026-11-24, over a green corset, two onesies and a hooded robe): Bd Fashion's black
+			-- and gold belly dancer sultana, Hiba UGC's Arabian hair with gold coins, Dynasty of Dragons' black face
+			-- veil with its gold beads, and over it only minokumi's dark eyes of the serious casual anime face.
+			Shirt = 112393415929653,
+			Pants = 93810180906158,
+			-- Steam's Community's Smooth Blocky R15 body, the blocky body with its edges rounded (owner, 2026-11-24:
+			-- hers alone).
+			Torso = 91364201662405,
+			LeftArm = 81785761585418,
+			RightArm = 102025976079543,
+			LeftLeg = 124276967612941,
+			RightLeg = 109643147973606,
+			HairAccessory = "136166032337446",
+			FaceAccessory = "108171657382323",
+			Head = 110160949877175,
+			Mood = 14618207727,
+			-- As it comes, the veil covers half her eyes.
+			Fit = { VeilMask = { Lower = 0.32 } },
+			Skin = Color3.fromRGB(205, 160, 120),
+		},
+		Pack = "BladeDancer",
+		-- The pack's two chakrams, one in each hand, drawn and put away as the clips say.
+		Weapons = { "ChakramRight", "ChakramLeft" },
+		-- His chakrams themselves are his shots (owner, 2026-11-23: every attack throws them), each out of its own
+		-- hand and back into it, rolling on edge as they fly, in the pack's own colours, with no glow or stars (owner,
+		-- 2026-11-24: she has no aura) but a white trail, so her throws are seen (owner, 2026-11-24).
+		Projectile = {
+			Component = { "ChakramRight", "ChakramLeft" },
+			Returns = true,
+			Spin = 20,
+			Turn = CFrame.Angles(0, math.pi / 2, 0),
+			Trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 205) },
+		},
+		Motions = {
+			Idle = "RA-BLD-015",
+			Run = "RA-BLD-005",
+			RunLeft = "RA-BLD-006",
+			RunRight = "RA-BLD-007",
+			Back = "RA-BLD-002",
+			Takeoff = "RA-BLD-011",
+			Air = "RA-BLD-012",
+			Land = "RA-BLD-013",
+			Death = "RA-BLD-031",
+		},
+		Kit = {
+			-- One clip, 038 (Chakram technique 6), cut into its first two throws (owner, 2026-11-24: not its third):
+			-- each click plays one of them, the second from where she crouches down after the first (0.83 s) to the
+			-- next crouch (1.5 s). Her right chakram rising out of the first crouch (0.47 s), her left out of the
+			-- second (1.13 s), each on through every enemy in its way and back, striking again for half on the way
+			-- back, as Astryn's globe. Each hit's Recover ends as its part does. Coming round again, the first starts
+			-- at the clip's first crouch (0.2 s), the pose nearest where the second leaves her (owner, 2026-11-24: from
+			-- the clip's start she rose and crouched again, as a throw that failed). Its numbers a placeholder, Astryn's.
+			M1 = {
+				Kind = "Combo",
+				Speed = 1.2,
+				Ratio = 0.35,
+				Reset = 1.5,
+				Hits = {
+					{
+						Motion = "RA-BLD-038",
+						Again = 0.2,
+						Until = 0.83,
+						Hit = 0.47,
+						Recover = 0.22,
+						Damage = 20,
+						Range = 26,
+						ProjectileSpeed = 100,
+						Width = 2,
+						Pierce = true,
+						Back = 0.5,
+						Side = 1,
+					},
+					{
+						Motion = "RA-BLD-038",
+						From = 0.83,
+						Until = 1.5,
+						Hit = 1.13,
+						Recover = 0.23,
+						Damage = 22,
+						Range = 26,
+						ProjectileSpeed = 100,
+						Width = 2,
+						Pierce = true,
+						Back = 0.5,
+						Side = -1,
+					},
+				},
+			},
+			-- Twice round (045, Chakram technique 13; owner, 2026-11-24) with both chakrams out of her hands circling
+			-- round her as saw blades, as the clip lets them go (her right at 0.33 s, her left at 0.47) and has them
+			-- back (1.23 s): four blows to everyone round her as they go round, 100 in all, a little more than
+			-- Kraeven's three (90), on a smaller ring.
+			M2 = {
+				Kind = "Flurry",
+				Motion = "RA-BLD-045",
+				Indicator = "Ring",
+				Cooldown = 8,
+				Hits = { 0.45, 0.65, 0.85, 1.05 },
+				Damage = 25,
+				Ratio = 0.25,
+				Range = 8,
+				Angle = 360,
+				Orbit = {
+					From = 0.33,
+					Lag = 0.14,
+					To = 0.9,
+					Out = 0.12,
+					Back = 0.33,
+					Radius = 5.5,
+					Height = 0.5,
+					Turns = -1.5,
+				},
+			},
+			-- Once round and both chakrams thrown at once (043, Chakram technique 11; owner, 2026-11-24), as the clip
+			-- lets them go (0.8 s), each at one of the two nearest enemies round her within its Range (none: both to
+			-- the crosshair; one: both at it), on through it and back, striking again for half on the way back, as
+			-- Astryn's E: 55 each, about Kraeven's two swords (60), as they seek their enemies.
+			E = {
+				Kind = "Throw",
+				Motion = "RA-BLD-043",
+				Indicator = "Ring",
+				Cooldown = 10,
+				Release = 0.8,
+				Count = 2,
+				Spread = 30,
+				Seek = { Angle = 360, Turn = 8 },
+				ProjectileSpeed = 100,
+				Range = 28,
+				Width = 2,
+				Pierce = true,
+				Back = 0.5,
+				Damage = 55,
+				Ratio = 0.55,
+			},
+			-- Both chakrams thrown down into the ground (053, Chakram ability 8; owner, 2026-11-24, after Astryn's
+			-- Frostroot Eruption): out of her hands as the clip lifts them over her head (0.2 s), down into the ground
+			-- before her as she throws them (0.4 s), grown five times, standing on edge half sunk, and rolling side by
+			-- side to the spot aimed at, cutting a rift through the ground; 60 to everyone they roll through and 200
+			-- as they strike the spot together (0.85 s), then back into her hands as the clip has them again (1.3 s).
+			-- 260 at most, as Kraeven's 230 and Kaeda's 260.
+			R = {
+				Kind = "Strike",
+				Motion = "RA-BLD-053",
+				Indicator = "Zone",
+				Cooldown = 40,
+				Range = 30,
+				Radius = 8,
+				Strikes = { 0.85 },
+				Busy = 1.5,
+				Damage = 200,
+				Ratio = 1,
+				Roll = {
+					From = 0.2,
+					Release = 0.4,
+					Back = 0.4,
+					Grow = 5,
+					Gap = 4,
+					Sink = 0.25,
+					Width = 3,
+					Damage = 60,
+					Ratio = 0.3,
+				},
+			},
+			Dash = {
+				Kind = "Dash",
+				Motion = "RA-BLD-055",
+				Speed = 1.3,
+				Cooldown = 5,
+				Range = 16,
+				Width = 4,
+				Damage = 20,
+				Ratio = 0.3,
+				Start = 0.05,
+				Move = 0.34,
+				Stop = 0.6,
 			},
 		},
 	},

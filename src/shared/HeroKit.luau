@@ -353,6 +353,18 @@ function HeroKit.turned(kit: any, n: number, direction: Vector3): Vector3
 		else direction
 end
 
+-- Where combo `kit`'s hit `hit` starts and ends in its clip of `duration` seconds, at speed 1, `following` on from the
+-- last hit or not; and whether it is cut out of one clip with the others (its `From` and `Until`), playing only its
+-- own part of it, from its `Again` instead when the combo comes round to it (past the clip's lead-in from standing,
+-- where the last hit left him). Else it starts part-way in following on (the kit's `Follow`, the weapon still up)
+-- and plays to the clip's end.
+function HeroKit.comboPart(kit: any, hit: any, following: boolean, duration: number): (number, number, boolean)
+	if hit.From or hit.Until or hit.Again then
+		return if following and hit.Again then hit.Again else hit.From or 0, hit.Until or duration, true
+	end
+	return if following and kit.Follow then kit.Follow else 0, duration, false
+end
+
 -- When a Flurry (`kit`) has struck for the last time, seconds into it: its last hit, pulse or the end of its beam. He
 -- may act again just after (owner, 2026-11-06), as after every other ability, or as the motion ends if that comes
 -- first; the rest of its motion plays out unless he does.

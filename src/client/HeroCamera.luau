@@ -54,6 +54,8 @@ local scopeFov: number? = nil
 local zoomFov = NORMAL_FOV
 local scoping = 0
 local hidden = false
+-- Whether the hero turns to the point under the crosshair now rather than along the camera's look (HeroCamera.faceAimWhile).
+local facingAim: (() -> boolean)? = nil
 
 local camRay = RaycastParams.new()
 camRay.FilterType = Enum.RaycastFilterType.Exclude
@@ -98,6 +100,13 @@ end
 
 function HeroCamera.aim(): Vector3
 	return aimPoint
+end
+
+-- While `test` says so (his attack plays, HeroControls), the hero turns to the point under the crosshair, as every
+-- attack turns him at its start, instead of along the camera's look: from over his shoulder the two part by up to
+-- some 20 degrees, and turning him back each time shook him at every hit of a combo (owner, 2026-11-24).
+function HeroCamera.faceAimWhile(test: () -> boolean)
+	facingAim = test
 end
 
 -- The instance under the crosshair (a part of a character or a minion's view), if any.
@@ -273,6 +282,10 @@ local function update(dt: number)
 		humanoid.AutoRotate = false
 		local _, current, _ = root.CFrame:ToEulerAnglesYXZ()
 		local goal = math.rad(yaw)
+		local toAim = HeroKit.flat(aimPoint - root.Position)
+		if facingAim and facingAim() and toAim.Magnitude > 1 then
+			goal = math.atan2(-toAim.X, -toAim.Z)
+		end
 		local delta = (goal - current + math.pi) % (2 * math.pi) - math.pi
 		local turned = current + delta * (1 - (1 - TURN) ^ (dt * 60))
 		root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, turned, 0)

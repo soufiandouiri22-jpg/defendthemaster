@@ -415,9 +415,9 @@ function HeroLook.dress(character: Model, hero: string)
 		end
 	end
 	-- A catalog accessory made for a slimmer body (a fur collar on thick arms) is made `Scale` times bigger all
-	-- round and hangs `Lower` studs lower (Look.Fit, by the accessory's name).
+	-- round and hangs `Lower` studs lower (Look.Fit, by the accessory's name, with or without "Accessory (…)").
 	for name, fit in look.Fit or {} do
-		local accessory = character:FindFirstChild("Accessory (" .. name .. ")")
+		local accessory = character:FindFirstChild("Accessory (" .. name .. ")") or character:FindFirstChild(name)
 		local handle = accessory and accessory:FindFirstChild("Handle")
 		local attachment = handle and handle:FindFirstChildOfClass("Attachment")
 		if handle and handle:IsA("BasePart") and attachment then

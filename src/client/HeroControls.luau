@@ -37,6 +37,8 @@ local Items = require(ReplicatedStorage.Shared.Items)
 local Leveling = require(ReplicatedStorage.Shared.Leveling)
 local IceEffects = require(script.Parent.IceEffects)
 local LightningEffects = require(script.Parent.LightningEffects)
+local Motion = require(ReplicatedStorage.Shared.Motion)
+local RiftEffects = require(script.Parent.RiftEffects)
 local Scope = require(script.Parent.Scope)
 local ShadowEffects = require(script.Parent.ShadowEffects)
 local UiSound = require(script.Parent.UiSound)
@@ -318,6 +320,8 @@ end
 -- first bolt and rolls on under the rest (its crack comes THUNDER_CRACK seconds into UiSound's Thunder).
 -- A Strike's `Erupt`: its globe through the ground and up out of it on the spot (defined with the projectiles below).
 local eruptLater: (character: Model, ground: Vector3, kit: any) -> ()
+-- A Strike's `Roll`: his pair of weapons rolling through the ground to the spot (defined with the projectiles below).
+local rollLater: (character: Model, ground: Vector3, kit: any) -> ()
 
 local function strikeLater(character: Model, spot: Vector3, kit: any)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -331,6 +335,9 @@ local function strikeLater(character: Model, spot: Vector3, kit: any)
 	local ground = if below then below.Position else spot - Vector3.new(0, height, 0)
 	if kit.Erupt then
 		eruptLater(character, ground, kit)
+		return
+	elseif kit.Roll then
+		rollLater(character, ground, kit)
 		return
 	end
 	LightningEffects.warn(ground, kit.Radius, kit.Strikes[#kit.Strikes])
@@ -479,6 +486,7 @@ local BEAM_CHEST = 0.8
 -- in his projectiles' colours with a glow where it strikes, and a crack as it starts.
 -- A Flurry's `Orbit`: its thrown weapon circling round him as he spins (defined with the projectiles below).
 local orbitLater: (character: Model, kit: any) -> ()
+local orbitOne: (character: Model, kit: any, settings: any, side: number?, from: number) -> ()
 
 local function beamLater(character: Model, kit: any)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -927,14 +935,24 @@ local function cast(key: string)
 		local step = if continuing then combo % #kit.Hits + 1 else 1
 		local hit = kit.Hits[step]
 		local speed = kit.Speed * (hit.Speed or 1) * Items.attackSpeed(player)
-		local start = if continuing and kit.Follow then kit.Follow else 0
-		combo, comboUntil = step, now + kit.Reset - start / speed
-		busyUntil = now + (hit.Hit + (hit.Recover or 0) + (kit.Follow or 0) - start) / speed + RECOVER
-		if start > 0 then
-			HeroAnimator.crossfade(character, FOLLOW_FADE)
+		local start, stop, cut =
+			HeroKit.comboPart(kit, hit, continuing, Motion.meta(settings.Pack, hit.Motion).duration)
+		combo, comboUntil = step, now + kit.Reset - (if cut then 0 else start) / speed
+		busyUntil = now
+			+ (hit.Hit + (hit.Recover or 0) + (if cut then 0 else kit.Follow or 0) - start) / speed
+			+ RECOVER
+		-- Carried on from the last hit where it ends in the same clip, else eased into from it, also when the combo
+		-- comes round to its first again.
+		if not (continuing and HeroAnimator.carryOn(character, hit.Motion, start, speed)) then
+			if start > 0 or continuing then
+				HeroAnimator.crossfade(character, FOLLOW_FADE)
+			end
+			HeroAnimator.play(character, hit.Motion, speed, start)
 		end
-		local length = HeroAnimator.play(character, hit.Motion, speed, start)
-		slow(humanoid, length, Config.Combat.AttackWalkSpeed)
+		if cut then
+			HeroAnimator.endAt(character, stop)
+		end
+		slow(humanoid, (stop - start) / speed, Config.Combat.AttackWalkSpeed)
 		return
 	end
 
@@ -1326,16 +1344,22 @@ local function onMotion(character: Model, key: string, step: number, landing: Ve
 	end
 	if kit.Kind == "Combo" then
 		local hit = kit.Hits[step]
-		-- A hit following on from the last may start part-way in (the kit's `Follow`), eased into.
-		if startTime and startTime > 0 then
-			HeroAnimator.crossfade(character, FOLLOW_FADE)
+		local speed = kit.Speed * (hit.Speed or 1) * (character:GetAttribute("AttackSpeed") or 1)
+		-- A hit following on from the last may start part-way in (the kit's `Follow`), eased into, as is one that
+		-- comes in while his last is still playing (the combo round to its first again); one starting where the last
+		-- ended in the same clip carries it on.
+		local carried = startTime ~= nil
+			and startTime > 0
+			and HeroAnimator.carryOn(character, hit.Motion, startTime, speed)
+		if not carried then
+			if (startTime and startTime > 0) or HeroAnimator.playing(character) ~= nil then
+				HeroAnimator.crossfade(character, FOLLOW_FADE)
+			end
+			HeroAnimator.play(character, hit.Motion, speed, startTime)
 		end
-		HeroAnimator.play(
-			character,
-			hit.Motion,
-			kit.Speed * (hit.Speed or 1) * (character:GetAttribute("AttackSpeed") or 1),
-			startTime
-		)
+		if hit.Until then
+			HeroAnimator.endAt(character, hit.Until)
+		end
 	elseif kit.Kind == "Dash" then
 		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -1585,32 +1609,49 @@ end
 local projectileModel: (settings: any, scale: number, side: number?) -> BasePart
 -- His weapon that flies itself (Projectile.Returns, Astryn's globe) out of his hand at the kit's Orbit `From`, out
 -- `Radius` studs at `Height` over his root, `Turns` times round him (less is the other way) as he spins in the clip,
--- till `To`, and back into his hand over `Back` seconds; hidden in his hand meanwhile. The server strikes
--- everyone round him at the Flurry's Hits.
+-- till `To`, and back into his hand over `Back` seconds; hidden in his hand meanwhile. A pair of weapons (one in each
+-- hand) circles on opposite sides of him, the right one from his right, the left one `Lag` seconds later from his
+-- left. The server strikes everyone round him at the Flurry's Hits.
 orbitLater = function(character: Model, kit: any)
 	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
 	local look = settings and settings.Projectile
-	local held = look and look.Returns and heldPart(character, componentOf(look))
+	if not look or not look.Returns then
+		return
+	end
+	local orbit = kit.Orbit
+	if type(look.Component) == "table" then
+		orbitOne(character, kit, settings, 1, orbit.From)
+		orbitOne(character, kit, settings, -1, orbit.From + (orbit.Lag or 0))
+	else
+		orbitOne(character, kit, settings, nil, orbit.From)
+	end
+end
+
+-- One weapon of an Orbit (orbitLater): of a pair, the one in his right hand (`side` 1) or his left (-1), out of it
+-- at `from`.
+orbitOne = function(character: Model, kit: any, settings: any, side: number?, from: number)
+	local held = heldPart(character, componentOf(settings.Projectile, side))
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local hips = character:FindFirstChild("LowerTorso") :: BasePart?
 	if not held or not root or not hips then
 		return
 	end
 	local orbit = kit.Orbit
-	task.delay(orbit.From, function()
+	task.delay(from, function()
 		if not root.Parent or HeroAnimator.playing(character) ~= kit.Motion then
 			return
 		end
-		local globe = projectileModel(settings, 1)
+		local globe = projectileModel(settings, 1, side)
 		putAway(held, 1)
 		local started = os.clock()
-		local circling = orbit.To - orbit.From
+		local circling = orbit.To - from
 		local backAt: number? = nil
 		-- Round at one even speed through his spin rather than with his hips, which the clip turns faster in its
-		-- last round; from his left as his hips face at the start, and on round, slowing, as it comes back.
-		local side = -hips.CFrame.RightVector
-		local start = math.atan2(side.X, side.Z)
-		local speed = orbit.Turns * 2 * math.pi / circling
+		-- last round; from his left as his hips face at the start (of a pair, the right one from his right), and on
+		-- round, slowing, as it comes back.
+		local aside = if side and side > 0 then hips.CFrame.RightVector else -hips.CFrame.RightVector
+		local start = math.atan2(aside.X, aside.Z)
+		local speed = orbit.Turns * 2 * math.pi / (orbit.To - orbit.From)
 		local connection
 		connection = RunService.RenderStepped:Connect(function()
 			local now = os.clock()
@@ -1643,7 +1684,10 @@ orbitLater = function(character: Model, kit: any)
 				local f = math.min(t / orbit.Out, 1)
 				position = held.Position:Lerp(ring, 1 - (1 - f) * (1 - f))
 			end
-			globe.CFrame = CFrame.new(position) * CFrame.Angles(0, t * 9, 0)
+			-- A pair's rings (Bunny's chakrams, flat across their Z) lie flat and whirl as saw blades.
+			globe.CFrame = if side
+				then CFrame.new(position) * CFrame.Angles(math.pi / 2, 0, t * 20)
+				else CFrame.new(position) * CFrame.Angles(0, t * 9, 0)
 		end)
 	end)
 end
@@ -1771,6 +1815,123 @@ eruptLater = function(character: Model, ground: Vector3, kit: any)
 	end)
 end
 
+-- How long a Strike's Roll weapons take from his hands down into the ground before him.
+local ROLL_DROP = 0.1
+
+-- His pair of weapons that fly themselves (Projectile.Returns, Bunny's chakrams) rolling through the ground to the
+-- spot `ground` (a Strike's `Roll`, seconds from the cast): at `From` they leave his hands, following them as the clip
+-- lifts them; at `Release` they come down into the ground before him, `Gap` studs apart, grown `Grow` times, standing
+-- on edge sunk `Sink` of their height into it, and roll side by side to the spot, cutting a rift through the ground
+-- behind them (RiftEffects), to strike there together at the first strike; then they fly back into his hands over
+-- `Back` seconds, shrinking. Cut short, they come straight back.
+rollLater = function(character: Model, ground: Vector3, kit: any)
+	local settings = Config.Heroes[character:GetAttribute("Hero") or ""]
+	local look = settings and settings.Projectile
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not look or not look.Returns or type(look.Component) ~= "table" or not root or not humanoid then
+		return
+	end
+	local roll = kit.Roll
+	local arrive = kit.Strikes[1]
+	local turn = look.Turn or CFrame.identity
+	local function going(): boolean
+		return root.Parent ~= nil and HeroAnimator.playing(character) == kit.Motion
+	end
+	task.delay(arrive, function()
+		if going() then
+			RiftEffects.impact(ground, kit.Radius)
+			ShadowEffects.slam(ground, kit.Radius, paletteOf(settings))
+			shakeNear(ground, 1)
+			slamSound(character)
+		end
+	end)
+	for _, side in { 1, -1 } do
+		local held = heldPart(character, componentOf(look, side))
+		if not held then
+			continue
+		end
+		task.delay(roll.From, function()
+			if not going() then
+				return
+			end
+			local disc = projectileModel(settings, 1, side)
+			local size = disc.Size
+			putAway(held, 1)
+			local started = os.clock()
+			local radius = size.Y / 2 * roll.Grow
+			local from, to, toward, dropFrom = Vector3.zero, Vector3.zero, Vector3.zero, Vector3.zero
+			local laid = false
+			local backFrom: CFrame? = nil
+			local backAt, backScale = 0, 1
+			local scale = 1
+			local connection
+			connection = RunService.RenderStepped:Connect(function()
+				local now = os.clock()
+				local t = roll.From + now - started
+				if not backFrom and (t >= arrive or not going() or not held:IsDescendantOf(Workspace)) then
+					backFrom, backAt, backScale = disc.CFrame, now, scale
+				end
+				local cframe
+				if backFrom then
+					local f = math.min((now - backAt) / roll.Back, 1)
+					local s = f * f * (3 - 2 * f)
+					scale = backScale + (1 - backScale) * s
+					cframe = CFrame.new(backFrom.Position:Lerp(held.Position, s))
+						* backFrom.Rotation
+						* CFrame.Angles(0, 0, -(now - backAt) * 14)
+					if f >= 1 or not held:IsDescendantOf(Workspace) then
+						connection:Disconnect()
+						disc.Size = size
+						retire(disc)
+						putAway(held, -1)
+						return
+					end
+				elseif t < roll.Release then
+					cframe = held.CFrame
+				else
+					if not laid then
+						laid = true
+						local feet = root.Position - Vector3.new(0, heightOf(root, humanoid), 0)
+						local way = HeroKit.flat(ground - feet)
+						toward = if way.Magnitude > 0.5 then way.Unit else HeroKit.flat(root.CFrame.LookVector).Unit
+						local aside = Vector3.new(-toward.Z, 0, toward.X) * side * roll.Gap / 2
+						local lift = Vector3.new(0, radius * (1 - 2 * roll.Sink), 0)
+						from = feet + toward * 2.5 + aside + lift
+						to = ground + aside + lift
+						dropFrom = held.Position
+						task.delay(ROLL_DROP, function()
+							if going() then
+								RiftEffects.rift(
+									from - lift,
+									to - lift,
+									math.max(size.Z * roll.Grow * 2, 1),
+									math.max(arrive - roll.Release - ROLL_DROP, 0.05)
+								)
+							end
+						end)
+					end
+					local into = t - roll.Release
+					if into < ROLL_DROP then
+						local f = into / ROLL_DROP
+						scale = 1 + (roll.Grow - 1) * (1 - (1 - f) * (1 - f))
+						cframe = CFrame.lookAt(dropFrom:Lerp(from, f * f), dropFrom:Lerp(from, f * f) + toward) * turn
+					else
+						scale = roll.Grow
+						local f = math.min((into - ROLL_DROP) / math.max(arrive - roll.Release - ROLL_DROP, 0.05), 1)
+						local position = from:Lerp(to, f)
+						-- Turned as far as it has rolled, its top going on ahead.
+						local rolled = (position - from).Magnitude / radius
+						cframe = CFrame.lookAt(position, position + toward) * turn * CFrame.Angles(0, 0, -rolled)
+					end
+				end
+				disc.Size = size * scale
+				disc.CFrame = cframe
+			end)
+		end)
+	end
+end
+
 projectileModel = function(settings: any, scale: number, side: number?): BasePart
 	local look = settings.Projectile
 	local part: BasePart
@@ -1814,7 +1975,7 @@ projectileModel = function(settings: any, scale: number, side: number?): BasePar
 	part.Transparency = if look.Orb and look.Orb.Swirl then 1 else 0
 	if look.Frost then
 		dressFrost(part, part.Size.Magnitude / math.sqrt(3), look.Frost)
-	else
+	elseif look.Trail then
 		local half = if look.TrailHalf then look.TrailHalf * scale else part.Size.Y * 0.3
 		local a0 = Instance.new("Attachment")
 		a0.Position = Vector3.new(0, half, 0)
@@ -1852,6 +2013,24 @@ projectileModel = function(settings: any, scale: number, side: number?): BasePar
 		smoke.Rotation = NumberRange.new(0, 360)
 		smoke.RotSpeed = NumberRange.new(-60, 60)
 		smoke.Parent = part
+	end
+	if look.Stars then
+		-- Little stars of its colour left behind it, twinkling out.
+		local stars = Instance.new("ParticleEmitter")
+		stars.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		stars.Color = ColorSequence.new(Color3.new(1, 1, 1), look.Stars)
+		stars.LightEmission = 1
+		stars.LightInfluence = 0
+		stars.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.5 * scale),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		stars.Lifetime = NumberRange.new(0.3, 0.6)
+		stars.Rate = 60
+		stars.Speed = NumberRange.new(0.5, 2)
+		stars.SpreadAngle = Vector2.new(180, 180)
+		stars.Rotation = NumberRange.new(0, 360)
+		stars.Parent = part
 	end
 	if look.Glow then
 		local light = Instance.new("PointLight")
@@ -2275,6 +2454,9 @@ function HeroControls.start()
 	-- Loaded now: a beam is gone before a picture first asked for by its sparkles arrives, so the first beam of a game
 	-- would shed none.
 	task.spawn(ContentProvider.PreloadAsync, ContentProvider, { Assets.CardStar, table.unpack(Assets.CardSuits) })
+	HeroCamera.faceAimWhile(function()
+		return os.clock() < busyUntil
+	end)
 	local net = ReplicatedStorage:WaitForChild("Net")
 	actionEvent = net:WaitForChild("HeroAction") :: RemoteEvent
 	(net:WaitForChild("HeroMotion") :: RemoteEvent).OnClientEvent:Connect(onMotion);

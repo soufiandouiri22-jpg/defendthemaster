@@ -256,6 +256,12 @@ function HeroAnimator.play(
 	return hero.motion:play(id, speed, startTime, inPlace)
 end
 
+-- Plays on the clip `id` `character`'s hero plays or just ended, standing about `from` seconds in (Motion.carryOn).
+function HeroAnimator.carryOn(character: Model, id: string, from: number, speed: number): boolean
+	local hero = heroes[character]
+	return hero ~= nil and not hero.dead and hero.motion:carryOn(id, from, speed)
+end
+
 -- Eases `character`'s hero over `seconds` from the pose he stands in now into what he plays next.
 function HeroAnimator.crossfade(character: Model, seconds: number)
 	local hero = heroes[character]
@@ -269,6 +275,14 @@ function HeroAnimator.stopAt(character: Model, seconds: number)
 	local hero = heroes[character]
 	if hero and not hero.dead then
 		hero.motion:stopAt(seconds)
+	end
+end
+
+-- Lets the clip `character`'s hero plays over its base end `seconds` in, back to its base (Motion.endAt).
+function HeroAnimator.endAt(character: Model, seconds: number)
+	local hero = heroes[character]
+	if hero and not hero.dead then
+		hero.motion:endAt(seconds)
 	end
 end
 
