@@ -3264,7 +3264,8 @@ Config.Heroes = {
 	-- Zahra (Bunny until 2026-11-24, owner): a veiled desert dancer with chakrams, with the RobloxAnimations Blade
 	-- Dancer pack and its two chakrams.
 	Zahra = {
-		Role = "Assassin",
+		-- The third archer (owner, 2026-11-24), with her chakrams for arrows.
+		Role = "Archer",
 		Description = "Veiled steps, sharp rings.",
 		-- Every player's, in the game (owner, 2026-11-24).
 		Starter = true,
@@ -3274,8 +3275,8 @@ Config.Heroes = {
 			Enter = { Motion = "RA-BLD-061", Then = "Breathe" },
 			Aura = false,
 		},
-		-- Between the archers (740, 760) and the assassins who fight up close (880): she strikes from 26 studs.
-		Health = 800,
+		-- An archer's, as Corvin's (740) and Rowan's (760).
+		Health = 750,
 		Scales = "Attack",
 		-- Sand and dust, as she has no aura (owner, 2026-11-24).
 		Effects = "Dust",
@@ -3337,8 +3338,8 @@ Config.Heroes = {
 			-- back, as Astryn's globe. Each hit's Recover ends as its part does. Coming round again, the first starts
 			-- at the clip's first crouch (0.2 s), the pose nearest where the second leaves her (owner, 2026-11-24: from
 			-- the clip's start she rose and crouched again, as a throw that failed). About 42 a second held down (63
-			-- with every chakram striking back), between Rowan's 48 and the close assassins' 70: below them, as she
-			-- strikes from afar, through a line, and twice; scaling with her Attack between a mage's and an archer's.
+			-- with every chakram striking back), between Corvin's 33 and Rowan's 48: an archer's, from nearer (26 studs
+			-- against their 34 and 36) but through a line and twice; scaling with her Attack a little under theirs.
 			M1 = {
 				Kind = "Combo",
 				Speed = 1.2,
@@ -3454,8 +3455,9 @@ Config.Heroes = {
 				Kind = "Dash",
 				Motion = "RA-BLD-055",
 				Speed = 1.3,
-				Cooldown = 5,
-				Range = 16,
+				-- An archer's, as Corvin's and Rowan's.
+				Cooldown = 6,
+				Range = 14,
 				Width = 4,
 				-- No dust behind her, as Corvin (owner, 2026-11-24).
 				Trail = false,
