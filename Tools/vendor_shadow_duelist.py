@@ -8,8 +8,8 @@ Vendor/Gunslinger/, the Arena Fighter (Haldrek) into Vendor/ArenaFighter/ and th
 Vendor/Lancer/, the Celestial Caster (the star mage) into Vendor/CelestialCaster/ and the Twinblade Fighter (Kraeven)
 into Vendor/TwinbladeFighter/, each with its animations and its sounds; the whole Greataxe Berserker (the minotaur)
 into Vendor/GreataxeBerserker/Animations/, its sounds and the Masters' clips from Tools/vendor_kitsblox.py; the
-Dance Collection (the emotes, Config.Emotes) into Vendor/DanceCollection/ and the Blade Dancer (the bunny with the
-chakrams) into Vendor/BladeDancer/, animations only.
+Dance Collection (the emotes, Config.Emotes) into Vendor/DanceCollection/, animations only, and the Blade Dancer
+(Zahra, with the chakrams) into Vendor/BladeDancer/, with its sounds.
 
 Their licence forbids sharing the files, so Vendor/ stays out of git: run this once on a new machine with the ZIPs
 in ~/Downloads. Rojo serves each pack's playback module and rig from there (default.project.json).
@@ -57,6 +57,7 @@ PACKS = {
     "RobloxAnimations-Greataxe-Berserker-v1.2.0.zip": ("GreataxeBerserker", "Animations"),
     "RobloxAnimations-Dance-Collection-v1.1.0.zip": ("DanceCollection", "Animations"),
     "RobloxAnimations-Blade-Dancer-v1.2.0.zip": ("BladeDancer", "Animations"),
+    "RobloxAnimations-Blade-Dancer-Sounds-v1.3.1.zip": ("BladeDancer", "Sounds"),
 }
 
 

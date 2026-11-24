@@ -478,6 +478,46 @@ PACKS = {
         "rate": {"RA-GBK-056": 1.25},
         "events": {},
     },
+    "BladeDancer": {
+        "folder": ROOT / "Vendor/BladeDancer/Sounds",
+        "clips": [
+            # Zahra's attacks (Config.Heroes.Zahra.Kit), the clips under them, her death and her podium's entrance.
+            "RA-BLD-038", "RA-BLD-045", "RA-BLD-043", "RA-BLD-053", "RA-BLD-055", "RA-BLD-005", "RA-BLD-006",
+            "RA-BLD-007", "RA-BLD-002", "RA-BLD-011", "RA-BLD-013", "RA-BLD-031", "RA-BLD-061",
+        ],
+        # Her steps are a woman's.
+        "footsteps": {"surface": "sand", "footwear": "boots", "character_variant": "f", "gait_variant": "f"},
+        "pick": {
+            "Clothing": lambda member, sound: any(
+                c.get("family") == "body_movement" and c.get("garment") == 1 for c in member["choices"]
+            ),
+        },
+        # Her M1 plays only the first two throws of 038, one a click, but its two recordings (from 0.0 and 0.6 s, 2.8
+        # and 3.4 s long) run through all three: they would lie over each other on every click. Each chakram swishes
+        # as it leaves her hand instead (the Release), as one of the basic attack's (023) three short swishes, loudest
+        # 0.04 s in. Her dash (055 at 1.3 times) moves her from 0.05 to 0.34 s and stops at 0.6, but its own rush
+        # swells for a second and is loudest 0.9 to 1.15 s in, after she has stopped: muted there and played as the
+        # Dash event, as she sets off, from 0.8 s in (Rush: loudest 0.1 to 0.35 s on, as she flies, cut where it has
+        # died down).
+        "mute": ["RA-BLD-038", "RA-BLD-055"],
+        "mixes": {
+            "Rush": [("A320b7afddb78", 0.8, 2.2)],
+        },
+        # The pack plays its techniques' shared start (Ab5c6cdc947da) and her R's own recording (053 has none in its
+        # clip; loud from 0.45 to 1.0 s, as she throws the chakrams down and they roll) as the move begins
+        # (additionalSounds, CustomEvent): the start softly, as the Arena Fighter's. Her R's chakrams strike the
+        # spot together (Config's Strikes, 1.2 s) as Shadowren's ultimate comes down: his slams, from his pack's
+        # file, where they begin.
+        "extra": {
+            "RA-BLD-045": [(0.0, ["Ab5c6cdc947da"], 0.2)],
+            "RA-BLD-043": [(0.0, ["Ab5c6cdc947da"], 0.2)],
+            "RA-BLD-053": [(0.0, ["A7c79c54b2634"], 0.9), (1.18, ["Slam1", "Slam2"], 0.9, "ShadowDuelist")],
+        },
+        "events": {
+            "Release": (["A59af2406c93e", "A60bbe21cc925", "Af374f5b984b1"], 0.6),
+            "Dash": (["Rush"], 0.9),
+        },
+    },
 }
 
 

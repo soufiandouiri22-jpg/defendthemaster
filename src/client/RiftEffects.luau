@@ -1,4 +1,4 @@
--- Bunny's ground on the client (her R, a Strike that Rolls, Config.Heroes.Bunny), with nothing that glows: she has no
+-- Zahra's ground on the client (her R, a Strike that Rolls, Config.Heroes.Zahra), with nothing that glows: she has no
 -- aura (owner, 2026-11-24). The rift her great chakrams cut through the ground as they roll, its torn edges thrown up
 -- in the colour of the ground there with dust, and the rocks and dust bursting up where they strike together.
 

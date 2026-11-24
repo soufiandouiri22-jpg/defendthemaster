@@ -1,7 +1,7 @@
 """Keys an icon drawn alone on a flat key colour (pure magenta, or green for purple icons; Meshy image-to-image from the
 icon on white, Art/Icons/keyed) into a square PNG with a clean transparent edge, and checks it.
 
-    python3 Tools/key_icons.py <keyed.png> <out.png> [--bottom] [--glow] [--like <old.png>]
+    python3 Tools/key_icons.py <keyed.png> <out.png> [--bottom] [--glow] [--clamp] [--like <old.png>]
     python3 Tools/key_icons.py --check <out.png> [<out.png> ...]
 
 Cutting icons out of white (Tools/cut_icons.py) could never be exact: silver and shine are as light as the
@@ -13,6 +13,9 @@ appears nowhere in the drawing leaves no doubt:
 - background walled in by the drawing is keyed like the rest, and anything not joined to the drawing is dropped;
 - the icon is cut at its bounds into a square with a margin, centred (or with --bottom standing on its foot; or with
   --like as large and in the same place as the icon it replaces), and scaled down premultiplied.
+
+--clamp keeps the key's own channel (green on green) nowhere above the larger of the other two, for white trails and
+glows drawn half over the key whose tint is not quite the key's hue; only for icons with none of the key's colour.
 
 --check fails an icon that still has a rim lighter than its outline, key colour on its edge, loose bits, or drawing
 on the border of its square.
@@ -61,7 +64,7 @@ def key_colour(rgb: np.ndarray) -> np.ndarray:
     return np.median(border, axis=0)
 
 
-def key(rgb: np.ndarray, glow: bool = False) -> np.ndarray:
+def key(rgb: np.ndarray, glow: bool = False, clamp: bool = False) -> np.ndarray:
     """RGBA of `rgb` keyed against the colour of its border."""
     k = key_colour(rgb)
     distance = np.linalg.norm(rgb - k, axis=2)
@@ -104,6 +107,11 @@ def key(rgb: np.ndarray, glow: bool = False) -> np.ndarray:
         soft &= np.clip(unmixed, 0, 255).mean(axis=2) >= GLOW_LIGHT
         alpha = np.where(soft, mixed, alpha)
         colour = np.where(soft[..., None], np.clip(unmixed, 0, 255), colour)
+    if clamp:
+        own = int(np.argmax(k))
+        others = [i for i in range(3) if i != own]
+        colour = colour.copy()
+        colour[..., own] = np.minimum(colour[..., own], colour[..., others].max(axis=2))
     return np.dstack([colour, alpha * 255]).astype(np.float32)
 
 
@@ -170,9 +178,9 @@ def square(rgba: np.ndarray, bottom: bool, like: Path | None = None) -> np.ndarr
     return out
 
 
-def make(source: Path, target: Path, bottom: bool, like: Path | None = None, glow: bool = False):
+def make(source: Path, target: Path, bottom: bool, like: Path | None = None, glow: bool = False, clamp: bool = False):
     rgb = np.asarray(Image.open(source).convert("RGB"), dtype=np.float32)
-    icon = bleed(premultiplied_resize(square(key(rgb, glow), bottom, like), SIZE))
+    icon = bleed(premultiplied_resize(square(key(rgb, glow, clamp), bottom, like), SIZE))
     target.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(icon).save(target)
     problems = check_one(icon, glow)
@@ -230,10 +238,11 @@ if __name__ == "__main__":
         sys.exit(0 if check([Path(p) for p in args[1:]]) else 1)
     bottom = "--bottom" in args
     glow = "--glow" in args
-    args = [a for a in args if a not in ("--bottom", "--glow")]
+    clamp = "--clamp" in args
+    args = [a for a in args if a not in ("--bottom", "--glow", "--clamp")]
     like = None
     if "--like" in args:
         at = args.index("--like")
         like = Path(args[at + 1])
         del args[at : at + 2]
-    make(Path(args[0]), Path(args[1]), bottom, like, glow)
+    make(Path(args[0]), Path(args[1]), bottom, like, glow, clamp)

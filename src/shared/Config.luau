@@ -3261,18 +3261,18 @@ Config.Heroes = {
 			},
 		},
 	},
-	-- Bunny (a working name; owner, 2026-11-23): a veiled desert dancer with chakrams, with the RobloxAnimations Blade
-	-- Dancer pack and its two chakrams. A test entry for now: her kit is a placeholder until the owner picks every
-	-- key's motion in the showroom.
-	Bunny = {
+	-- Zahra (Bunny until 2026-11-24, owner): a veiled desert dancer with chakrams, with the RobloxAnimations Blade
+	-- Dancer pack and its two chakrams.
+	Zahra = {
 		Role = "Assassin",
-		Description = "Soft ears, sharp rings.",
+		Description = "Veiled steps, sharp rings.",
 		Showcase = {
 			Motion = "RA-BLD-062",
 			Enter = { Motion = "RA-BLD-061", Then = "Breathe" },
 			Aura = false,
 		},
-		Health = 880,
+		-- Between the archers (740, 760) and the assassins who fight up close (880): she strikes from 26 studs.
+		Health = 800,
 		Scales = "Attack",
 		-- Sand and dust, as she has no aura (owner, 2026-11-24).
 		Effects = "Dust",
@@ -3282,13 +3282,6 @@ Config.Heroes = {
 			-- veil with its gold beads, and over it only minokumi's dark eyes of the serious casual anime face.
 			Shirt = 112393415929653,
 			Pants = 93810180906158,
-			-- Steam's Community's Smooth Blocky R15 body, the blocky body with its edges rounded (owner, 2026-11-24:
-			-- hers alone).
-			Torso = 91364201662405,
-			LeftArm = 81785761585418,
-			RightArm = 102025976079543,
-			LeftLeg = 124276967612941,
-			RightLeg = 109643147973606,
 			HairAccessory = "136166032337446",
 			FaceAccessory = "108171657382323",
 			Head = 110160949877175,
@@ -3296,6 +3289,18 @@ Config.Heroes = {
 			-- As it comes, the veil covers half her eyes.
 			Fit = { VeilMask = { Lower = 0.32 } },
 			Skin = Color3.fromRGB(205, 160, 120),
+		},
+		-- Art/Portraits/zahra.png: a GenerateImage painting from a Play shot of her
+		-- (Art/Portraits/concepts/zahra_ref.png) in the style of Kaeda's and Kraeven's portraits.
+		Portrait = { Image = "rbxassetid://83931862455158", Face = { 175, 30, 620 } },
+		-- The ability bar's icons per key (Art/Icons/Zahra, each a GenerateImage drawing on green in
+		-- Art/Icons/keyed/Zahra, keyed by Tools/key_icons.py --glow --clamp).
+		Icons = {
+			M1 = "rbxassetid://97120064158736",
+			M2 = "rbxassetid://107682184138690",
+			E = "rbxassetid://100736174459177",
+			R = "rbxassetid://125638782868598",
+			Dash = "rbxassetid://139383292059489",
 		},
 		Pack = "BladeDancer",
 		-- The pack's two chakrams, one in each hand, drawn and put away as the clips say.
@@ -3328,11 +3333,13 @@ Config.Heroes = {
 			-- second (1.13 s), each on through every enemy in its way and back, striking again for half on the way
 			-- back, as Astryn's globe. Each hit's Recover ends as its part does. Coming round again, the first starts
 			-- at the clip's first crouch (0.2 s), the pose nearest where the second leaves her (owner, 2026-11-24: from
-			-- the clip's start she rose and crouched again, as a throw that failed). Its numbers a placeholder, Astryn's.
+			-- the clip's start she rose and crouched again, as a throw that failed). About 42 a second held down (63
+			-- with every chakram striking back), between Rowan's 48 and the close assassins' 70: below them, as she
+			-- strikes from afar, through a line, and twice; scaling with her Attack between a mage's and an archer's.
 			M1 = {
 				Kind = "Combo",
 				Speed = 1.2,
-				Ratio = 0.35,
+				Ratio = 0.4,
 				Reset = 1.5,
 				Hits = {
 					{
@@ -3341,7 +3348,7 @@ Config.Heroes = {
 						Until = 0.83,
 						Hit = 0.47,
 						Recover = 0.22,
-						Damage = 20,
+						Damage = 22,
 						Range = 26,
 						ProjectileSpeed = 100,
 						Width = 2,
@@ -3355,7 +3362,7 @@ Config.Heroes = {
 						Until = 1.5,
 						Hit = 1.13,
 						Recover = 0.23,
-						Damage = 22,
+						Damage = 24,
 						Range = 26,
 						ProjectileSpeed = 100,
 						Width = 2,
@@ -3414,9 +3421,9 @@ Config.Heroes = {
 			-- Both chakrams thrown down into the ground (053, Chakram ability 8; owner, 2026-11-24, after Astryn's
 			-- Frostroot Eruption): out of her hands as the clip lifts them over her head (0.2 s), down into the ground
 			-- before her as she throws them (0.4 s), grown five times, standing on edge half sunk, and rolling side by
-			-- side to the spot aimed at, cutting a rift through the ground; 60 to everyone they roll through and 200
-			-- as they strike the spot together (0.85 s), then back into her hands as the clip has them again (1.3 s).
-			-- 260 at most, as Kraeven's 230 and Kaeda's 260.
+			-- side to the spot aimed at, cutting a rift through the ground, slowly, so they look heavy (owner,
+			-- 2026-11-24: in 0.35 s they rolled too fast); 60 to everyone they roll through and 200 as they strike
+			-- the spot together (1.2 s), then back into her hands. 260 at most, as Kraeven's 230 and Kaeda's 260.
 			R = {
 				Kind = "Strike",
 				Motion = "RA-BLD-053",
@@ -3424,8 +3431,8 @@ Config.Heroes = {
 				Cooldown = 40,
 				Range = 30,
 				Radius = 8,
-				Strikes = { 0.85 },
-				Busy = 1.5,
+				Strikes = { 1.2 },
+				Busy = 1.6,
 				Damage = 200,
 				Ratio = 1,
 				Roll = {
@@ -3447,6 +3454,8 @@ Config.Heroes = {
 				Cooldown = 5,
 				Range = 16,
 				Width = 4,
+				-- No dust behind her, as Corvin (owner, 2026-11-24).
+				Trail = false,
 				Damage = 20,
 				Ratio = 0.3,
 				Start = 0.05,

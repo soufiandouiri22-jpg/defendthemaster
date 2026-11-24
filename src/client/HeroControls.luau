@@ -1684,7 +1684,7 @@ orbitOne = function(character: Model, kit: any, settings: any, side: number?, fr
 				local f = math.min(t / orbit.Out, 1)
 				position = held.Position:Lerp(ring, 1 - (1 - f) * (1 - f))
 			end
-			-- A pair's rings (Bunny's chakrams, flat across their Z) lie flat and whirl as saw blades.
+			-- A pair's rings (Zahra's chakrams, flat across their Z) lie flat and whirl as saw blades.
 			globe.CFrame = if side
 				then CFrame.new(position) * CFrame.Angles(math.pi / 2, 0, t * 20)
 				else CFrame.new(position) * CFrame.Angles(0, t * 9, 0)
@@ -1818,7 +1818,7 @@ end
 -- How long a Strike's Roll weapons take from his hands down into the ground before him.
 local ROLL_DROP = 0.1
 
--- His pair of weapons that fly themselves (Projectile.Returns, Bunny's chakrams) rolling through the ground to the
+-- His pair of weapons that fly themselves (Projectile.Returns, Zahra's chakrams) rolling through the ground to the
 -- spot `ground` (a Strike's `Roll`, seconds from the cast): at `From` they leave his hands, following them as the clip
 -- lifts them; at `Release` they come down into the ground before him, `Gap` studs apart, grown `Grow` times, standing
 -- on edge sunk `Sink` of their height into it, and roll side by side to the spot, cutting a rift through the ground

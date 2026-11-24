@@ -38,7 +38,7 @@ local ACTION_FADE_OUT = 0.2
 local CARRY_ON = 0.15
 -- How far, in a clip's seconds, a clip ended short of its end (Motion.endAt) plays on at full weight before it fades
 -- out, for a combo's next hit coming in a frame late to carry it on without his body sinking toward the base for that
--- frame (Bunny's legs shook at her second throw, owner 2026-11-24).
+-- frame (Zahra's legs shook at her second throw, owner 2026-11-24).
 local END_GRACE = 0.1
 -- A foot stepping into the base pose (Motion.stepInto) lifts its knee up to this many degrees.
 local STEP_LIFT = 28
@@ -618,7 +618,7 @@ end
 -- Plays the clip `id` on at `speed` without an end, if it is the one played over the base, or the one just ended and
 -- not yet faded out of, and stands about `from` seconds in; returns whether it did. A combo's hit cut out of one clip
 -- right after the last carries on so, as one movement: played again from there and eased into, he slowed for the
--- ease (Bunny's second throw, owner 2026-11-24).
+-- ease (Zahra's second throw, owner 2026-11-24).
 function Motion.carryOn(self: Motion, id: string, from: number, speed: number): boolean
 	local clip = self.action or (if self.actionWeight > 0 then self.ended else nil)
 	if not clip or clip.id ~= id or math.abs(clip.time - from) > CARRY_ON then
