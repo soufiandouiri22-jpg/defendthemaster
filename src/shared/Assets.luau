@@ -148,6 +148,11 @@ return {
 	-- The crow's two caws as Kraeven's wings burst out for his ultimate: the last two of Dragon Studio's "Creepy Crow
 	-- Caw" (Pixabay 322991, Docs/Third_Party.md), cut and uploaded with Tools/upload_audio.py (owner's pick, 2026-11-20).
 	CrowCaw = "rbxassetid://113703778726136",
+	-- The wardens' beam (WardenView): gregorquendel's "Laser Charge" (Pixabay 175727, Docs/Third_Party.md), its burst
+	-- from 0.3 to 1 s run into its full beam from 3 to 6.3 s, whose last 0.25 s fade into its start so it loops from
+	-- `WardenLaserLoop` to the end, cut and uploaded with Tools/upload_audio.py (owner's pick, 2026-11-25).
+	WardenLaser = "rbxassetid://136879281458413",
+	WardenLaserLoop = { 0.83, 3.88 },
 	-- Candidates for the sound of every hit (Config.Combat.HitSounds): the game's own dry crunches, wide,
 	-- deeper, and deeper with a sharp crack (Art/Sounds/Hit.wav, HitLow.wav and HitRaw.wav, made and uploaded by
 	-- Tools/hit_sound.py; the owner's picks, 2026-10-29).

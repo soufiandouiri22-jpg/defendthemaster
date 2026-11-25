@@ -145,6 +145,12 @@ function ProgressService.hurtAt(victim: Model): number?
 	return if at > 0 then at else nil
 end
 
+-- When an enemy hero last hurt `victim` (os.clock), if one did since `victim` came back.
+function ProgressService.heroHurtAt(victim: Model): number?
+	local last = credit[victim]
+	return last and last.at
+end
+
 -- What killing `player`'s hero earns (Config.Economy): less after deaths without a kill, more on a kill streak.
 local function bounty(player: Instance): number
 	local economy = Config.Economy

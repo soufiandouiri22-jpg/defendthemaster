@@ -22,6 +22,7 @@ local Workspace = game:GetService("Workspace")
 local Assets = require(ReplicatedStorage.Shared.Assets)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Emote = require(ReplicatedStorage.Shared.Emote)
+local HeroSounds = require(script.Parent.Parent.HeroSounds)
 local LightningEffects = require(script.Parent.Parent.LightningEffects)
 local Motion = require(ReplicatedStorage.Shared.Motion)
 local Profile = require(ReplicatedStorage.Shared.Profile)
@@ -448,13 +449,23 @@ local function animate(entry: Entry, entering: boolean?)
 end
 
 -- Plays `entry`'s entrance (at its `Speed`): its clip from `From` up to `Until`, then he keeps that frame,
--- breathing, or steps into his pose, turning as he steps to the way it faces.
+-- breathing, or steps into his pose, turning as he steps to the way it faces. It sounds as its pack has it (the
+-- Entrances sounds, Tools/hero_sounds.py), his steps his own pack's, as loud as the player's own hero.
 local function playEntrance(entry: Entry)
 	local settings = Config.Heroes[entry.hero]
 	local enter = entrance(entry.hero)
 	local motion = entry.motion
 	if not (settings and enter and motion) then
 		return
+	end
+	local sounds = HeroSounds.bank("Entrances")
+	local cues = sounds and sounds.Cues[enter.Motion]
+	if sounds and cues then
+		local feet = HeroSounds.bank(settings.Pack)
+		motion.cues = { [enter.Motion] = cues }
+		motion.onCue = function(cue)
+			HeroSounds.cue(entry.model, sounds, cue, true, feet)
+		end
 	end
 	motion:play(enter.Motion, enter.Speed or 1, enter.From, true, true)
 	motion:stopAt(enter.Until or Motion.meta(settings.Pack, enter.Motion).duration)
@@ -468,6 +479,7 @@ local function playEntrance(entry: Entry)
 			if not motion:reached() then
 				return
 			end
+			motion.cues, motion.onCue = nil, nil
 			if enter.Then ~= "Pose" then
 				motion:breathe()
 				entry.update = nil

@@ -56,13 +56,18 @@ shop (08), cursors (09). Talk to the owner in Dutch.
 - Meshy models enter Studio only through File > Import 3D, as the unedited GLB from Meshy. Never EditableMesh or
   JSON imports (they have no MeshId and turn into boxes in Play), and never rebuild a model from Parts. The one
   change allowed is the blue team copies: `Tools/team_recolor.py` turns only the red pixels of the red piece's texture
-  blue, so gold, stone and wood match exactly (a Meshy retexture repaints everything).
+  blue, so gold, stone and wood match exactly (a Meshy retexture repaints everything). The one mesh edit, by the
+  owner's wish (2026-11-25): the knight statue's visor slit closed by `Tools/statue_slit.py` in Blender
+  (`statue_two_eyes.glb`, uploaded with `Tools/upload_model.py`; its MeshPart keeps the imported piece's texture and
+  settings; the unedited piece's mesh was rbxassetid://133895953856260).
 - After importing, check each piece: MeshId is a real `rbxassetid` (MeshContent source Uri), shape and texture are
   right, the front faces -Z. Set the pivot at the bottom centre and keep the pieces in `ServerStorage.ColosseumKit`.
   With a PrimaryPart, `Model.WorldPivot` is ignored: set `PrimaryPart.PivotOffset` instead. The imports come in at
   Meshy's metre size (about 1.9 studs); scale them with `Model:ScaleTo` when building.
 - After every step: screenshots from Play (not Edit), from the design's angle, next to the design; the owner approves;
   only then a local commit.
+- Stop and start Play again by yourself whenever a change needs it (new server or shared code, a test); never ask the
+  owner first (owner, 2026-11-25).
 - Every image for the owner (concepts, screenshots, designs) goes into the chat itself, embedded with its file path,
   not only named or saved (owner, 2026-10-26). Play captures are saved as a file first so they can be shown:
   `Tools/StudioShot/studio_shot.sh <out.png>` saves Studio's viewport, also when Studio is behind other windows.

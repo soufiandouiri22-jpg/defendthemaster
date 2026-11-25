@@ -93,6 +93,7 @@ local TIPS = {
 	"Your Master is the match: if he falls, it is over. Do not leave him alone too long.",
 	"Shop in the buy phase: nobody can attack before the fight begins.",
 	"Kills in a row are worth more. Stay alive to keep your streak.",
+	"Bring your minions to the enemy Master, then strike!",
 }
 
 type Entry = {

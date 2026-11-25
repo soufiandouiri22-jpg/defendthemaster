@@ -50,6 +50,7 @@ local SOUNDS = {
 	ZapAttack = true,
 	Thunder = true,
 	CrowCaw = true,
+	WardenLaser = true,
 }
 
 local Pictures = {}

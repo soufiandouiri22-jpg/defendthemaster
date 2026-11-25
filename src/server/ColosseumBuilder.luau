@@ -144,8 +144,9 @@ local function kit(parent: Instance, name: string, at: CFrame, scale: number, so
 	return m
 end
 
--- The knight statue's visor has three holes, its two eyes and the slit between them, each filled from inside: the
--- eyes with glowing red, the slit dark, so the visor shows two eyes and not three lights. Measured on its mesh with rays from in front (Art/Models/Colosseum/statue.glb, at its imported size, from the
+-- The knight statue's visor has two eye holes, each filled from inside with glowing red (the slit Meshy made between
+-- them is closed in its mesh, Art/Models/Colosseum/statue_two_eyes.glb by Tools/statue_slit.py, owner, 2026-11-25).
+-- Measured on its mesh with rays from in front (Art/Models/Colosseum/statue.glb, at its imported size, from the
 -- middle of its MeshPart; the visor faces -Z): each fill is a box in the plane of the stone round its hole (`Right`,
 -- `Up`, and `Back` out of the visor, which leans up to 27 degrees there), a little wider than the hole so its edges
 -- are in the stone, its front just behind the deepest stone round the hole so it never shows through it, and reaching
@@ -160,15 +161,6 @@ local STATUE_GLOW = {
 		Size = Vector3.new(0.0335, 0.042, 0.0573),
 	},
 	{
-		Name = "VisorSlit",
-		At = Vector3.new(-0.0001, 0.5366, -0.1231),
-		Right = Vector3.new(-0.9372, 0, 0.3489),
-		Up = Vector3.new(0.0061, 0.9999, 0.0165),
-		Back = Vector3.new(-0.3488, 0.0176, -0.937),
-		Size = Vector3.new(0.0176, 0.041, 0.0308),
-		Dark = true,
-	},
-	{
 		Name = "Eye",
 		At = Vector3.new(-0.0349, 0.5388, -0.11),
 		Right = Vector3.new(-0.9279, 0, 0.3729),
@@ -179,7 +171,6 @@ local STATUE_GLOW = {
 }
 -- Pure red: any green in it turns orange when it shines brighter than white.
 local EYE_RED = Color3.fromRGB(255, 0, 0)
-local SLIT_DARK = Color3.fromRGB(28, 22, 22)
 -- Each fill's front lies about INSET behind the visor, and its eye's glow GLOW_OUT before it (in the mesh's size).
 local INSET, GLOW_OUT = 0.0095, 0.012
 -- An eye's face shines EYE_SHINE times brighter than white, hotter in its middle. The bloom leaves a face's light
@@ -193,7 +184,7 @@ local EYE_GLOWS = {
 	{ Width = 1.5, Brightness = 1.6, Clear = 0.5 },
 }
 
--- Lights the eyes of the knight statue `m` from inside, and darkens the slit between them.
+-- Lights the eyes of the knight statue `m` from inside.
 local function statueEyes(m: Model?)
 	local body = m and m.PrimaryPart :: MeshPart?
 	if not body then
@@ -211,11 +202,6 @@ local function statueEyes(m: Model?)
 		fill.Size = hole.Size * scale
 		fill.CFrame = body.CFrame * CFrame.fromMatrix(hole.At * scale, hole.Right, hole.Up, hole.Back)
 		fill.Parent = m
-		if hole.Dark then
-			fill.Material = Enum.Material.SmoothPlastic
-			fill.Color = SLIT_DARK
-			continue
-		end
 		fill.Material = Enum.Material.Neon
 		fill.Color = EYE_RED
 		local face = Instance.new("SurfaceGui")

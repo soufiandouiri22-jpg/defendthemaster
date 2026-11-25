@@ -33,6 +33,7 @@ local MatchService = require(script.Parent.MatchService)
 local MinionService = require(script.Parent.MinionService)
 local ProgressService = require(script.Parent.ProgressService)
 local TraceService = require(script.Parent.TraceService)
+local WardenService = require(script.Parent.WardenService)
 
 local CombatService = {}
 
@@ -246,6 +247,7 @@ local function damage(player: Instance, character: Model, enemy: Enemy, amount: 
 	end
 	if model:GetAttribute("Hero") or model:GetAttribute("Master") then
 		MinionService.heroAttacked(character, model)
+		WardenService.struck(character, model)
 	end
 end
 

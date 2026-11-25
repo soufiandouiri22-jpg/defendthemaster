@@ -66,7 +66,8 @@ function HeroSounds.bank(name: string): Bank?
 	return banks[name] or nil
 end
 
-local function play(root: BasePart, bank: Bank, id: string, volume: number, speed: number?)
+-- `mine` sounds as the player's own hero does, at full strength.
+local function play(root: BasePart, bank: Bank, id: string, volume: number, speed: number?, mine: boolean?)
 	local region = bank.Regions[id]
 	if not region then
 		return
@@ -76,7 +77,7 @@ local function play(root: BasePart, bank: Bank, id: string, volume: number, spee
 	sound.PlaybackRegionsEnabled = true
 	sound.PlaybackRegion = NumberRange.new(region[1], region[1] + region[2])
 	sound.PlaybackSpeed = speed or 1
-	local own = root.Parent ~= nil and root.Parent == Players.LocalPlayer.Character
+	local own = mine == true or (root.Parent ~= nil and root.Parent == Players.LocalPlayer.Character)
 	sound.Volume = volume * VOLUME * (if own then 1 else OTHERS)
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered
 	sound.RollOffMinDistance = NEAR
@@ -105,29 +106,29 @@ function HeroSounds.watch(seconds: number)
 	watchUntil = os.clock() + seconds
 end
 
--- Plays `walker`'s next footstep on the sand from `at`, its contacts alternating.
-function HeroSounds.step(walker: Instance, at: BasePart, bank: Bank, volume: number)
+-- Plays `walker`'s next footstep on the sand from `at`, its contacts alternating; `mine` as the player's own hero's.
+function HeroSounds.step(walker: Instance, at: BasePart, bank: Bank, volume: number, mine: boolean?)
 	local next = (contact[walker] or 0) % #bank.Footsteps + 1
 	contact[walker] = next
 	local choices = bank.Footsteps[next]
 	if choices and #choices > 0 then
-		play(at, bank, choices[math.random(#choices)], volume)
+		play(at, bank, choices[math.random(#choices)], volume, nil, mine)
 	end
 end
 
 -- Plays a clip's cue on `character`: one of its recordings (from the pack `cue.Bank`'s when it names one, `cue.Speed`
--- times as fast when it has one), or the next footstep.
-function HeroSounds.cue(character: Model, bank: Bank, cue: any)
+-- times as fast when it has one), or the next footstep (from `feet` when given); `mine` as the player's own hero's.
+function HeroSounds.cue(character: Model, bank: Bank, cue: any, mine: boolean?, feet: Bank?)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
 		return
 	end
 	if cue.Footstep then
-		HeroSounds.step(character, root, bank, cue.Volume)
+		HeroSounds.step(character, root, feet or bank, cue.Volume, mine)
 	elseif cue.Sounds and #cue.Sounds > 0 then
 		local from = if cue.Bank then HeroSounds.bank(cue.Bank) else bank
 		if from then
-			play(root, from, cue.Sounds[math.random(#cue.Sounds)], cue.Volume, cue.Speed)
+			play(root, from, cue.Sounds[math.random(#cue.Sounds)], cue.Volume, cue.Speed, mine)
 		end
 	end
 end

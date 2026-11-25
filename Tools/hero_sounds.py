@@ -11,6 +11,8 @@ each recording sits in it (played with Sound.PlaybackRegion) and the cues per cl
     python3 Tools/hero_sounds.py upload ShadowDuelist    # uploads it and writes the Luau module
     python3 Tools/hero_sounds.py write ShadowDuelist     # only new cues: writes the module for the uploaded file
 
+`Entrances` instead of a pack builds the heroes' podium entrances (ENTRANCES) into one file of their own.
+
 The upload uses the Open Cloud API key in the macOS Keychain (service DefendTheMaster.RobloxOpenCloud), with the
 Assets read and write permissions; the key is never printed or written anywhere.
 """
@@ -521,6 +523,83 @@ PACKS = {
 }
 
 
+# Each pack's hero's entrance on the lobby's podium (Config.Heroes[hero].Showcase.Enter.Motion). Their cues and
+# recordings go into a file of their own (`Entrances`), so they took one upload, not one per pack, and left the packs'
+# files as they were; their footsteps are the hero's own pack's (Lobby/Showcase).
+ENTRANCES = {
+    "ShadowDuelist": "RA-SHD-075",
+    "Ranger": "RA-RNG-016",
+    "Elementalist": "RA-ELM-014",
+    "ScytheWielder": "RA-SCW-064",
+    "GreatswordKnight": "RA-GSK-070",
+    "TricksterCaster": "RA-TRC-017",
+    "Wildguard": "RA-WGD-016",
+    "KatanaSwordsman": "RA-KAT-079",
+    "Gunslinger": "RA-GSL-068",
+    "ArenaFighter": "RA-ARF-055",
+    "Lancer": "RA-LAN-050",
+    "CelestialCaster": "RA-CLC-052",
+    "TwinbladeFighter": "RA-TBF-074",
+    "GreataxeBerserker": "RA-GBK-070",
+    "BladeDancer": "RA-BLD-061",
+}
+
+# The entrances the packs left with only footsteps get their own pack's recordings (owner, 2026-11-25: every entrance
+# sounds), played from that pack's uploaded file, so none needed another upload: (seconds into the clip, recordings,
+# volume). Each weapon's swing sounds where the weapon moves fastest (measured on the rig, Config's From, Until and
+# Speed), less the recording's own lead to its loudest; a hero who hardly moves rustles his clothes.
+ENTRANCE_EXTRA = {
+    # Both daggers drawn: the right at 0.58 s, the left at 0.78 s.
+    "ShadowDuelist": [(0.50, ["A143e27c8565a"], 0.5), (0.74, ["A58e4837f72d2"], 0.6)],
+    # Three swings of the scythe (4.90, 5.53, 6.15 s), the middle one the smallest.
+    "ScytheWielder": [
+        (4.82, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.85),
+        (5.45, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.5),
+        (6.07, ["A1673babe6052", "A715b73045d72", "Aec6ee6730a76"], 0.75),
+    ],
+    # The greatsword turned twice as the clip starts (3.60, 3.83 s) and brought down (4.50 s), his cloak with it.
+    "GreatswordKnight": [
+        (3.50, ["A1fe7fbf5cd09", "Af3065edadcc9", "Af2d53416ac23"], 0.4),
+        (3.55, ["A3c9d46617057", "Affbd494f9af1", "A9e079ff9b56d"], 0.6),
+        (3.79, ["A3c9d46617057", "Affbd494f9af1", "A9e079ff9b56d"], 0.5),
+        (4.45, ["A3c9d46617057", "Affbd494f9af1", "A9e079ff9b56d"], 0.6),
+    ],
+    # He only shifts into his stance: his clothes and a soft spark of his beams.
+    "TricksterCaster": [
+        (0.30, ["A1fe7fbf5cd09", "Af3065edadcc9", "Af2d53416ac23"], 0.5),
+        (0.35, ["A86d1985907b6"], 0.35),
+    ],
+    # The katana twirled: five swings (0.59, 0.87, 1.30, 1.82, 2.10 s), the first and fourth the smaller.
+    "KatanaSwordsman": [
+        (0.50, ["A00c74d459b78", "A0efddde6ac9e", "A1c6b7a0b9672"], 0.35),
+        (0.78, ["A00c74d459b78", "A0efddde6ac9e", "A1c6b7a0b9672"], 0.6),
+        (1.21, ["A00c74d459b78", "A0efddde6ac9e", "A1c6b7a0b9672"], 0.6),
+        (1.73, ["A00c74d459b78", "A0efddde6ac9e", "A1c6b7a0b9672"], 0.4),
+        (2.01, ["A00c74d459b78", "A0efddde6ac9e", "A1c6b7a0b9672"], 0.6),
+    ],
+    # The gun raised (fastest at 0.57 s) as his rifle in the sniper shot, and its click as it comes to rest.
+    "Gunslinger": [(0.0, ["SnipeRaise"], 0.8), (0.75, ["SnipeClick"], 0.76)],
+    # The sword swung up (0.69 s) and round (1.02 s).
+    "ArenaFighter": [
+        (0.51, ["A295245c3f321", "A9806f82329ee", "Accff9c0d296a"], 0.4),
+        (0.84, ["A295245c3f321", "A9806f82329ee", "Accff9c0d296a"], 0.65),
+    ],
+    # Both blades spun: 0.63, 0.97 and 1.28 s.
+    "TwinbladeFighter": [
+        (0.56, ["A4a8100ac9298", "A6b7b81c1d7d0", "Af5f60c710ee8"], 0.5),
+        (0.90, ["A4a8100ac9298", "A6b7b81c1d7d0", "Af5f60c710ee8"], 0.6),
+        (1.21, ["A4a8100ac9298", "A6b7b81c1d7d0", "Af5f60c710ee8"], 0.5),
+    ],
+    # The greataxe drawn (0.83 s) as the pack's own draw, then laid on his shoulder (1.58 s).
+    "GreataxeBerserker": [(0.63, ["A81f4e634d4a3"], 0.7), (1.27, ["A7599bee05509"], 0.35)],
+    # The chakrams swung out (0.37 s) and round (0.92 s).
+    "BladeDancer": [
+        (0.32, ["A59af2406c93e", "A60bbe21cc925", "Af374f5b984b1"], 0.45),
+        (0.87, ["A59af2406c93e", "A60bbe21cc925", "Af374f5b984b1"], 0.6),
+    ],
+}
+
+
 def load(pack):
     with open(pack["folder"] / "Roblox Integration/Sound Map.json") as f:
         return json.load(f)
@@ -657,7 +736,41 @@ def thin(samples, cutoff):
     return np.clip(x, -32000, 32000).astype(np.int16).tobytes()
 
 
+def build_entrances():
+    """The entrances' cues and the recordings they play, from every pack, joined into Vendor/Build/Entrances_Sounds."""
+    regions, clips = {}, {}
+    data = bytearray()
+    silence = bytes(int(GAP * RATE) * 2)
+    for name, clip_id in ENTRANCES.items():
+        pack = PACKS[name]
+        sound_map = load(pack)
+        only = {**pack, "clips": [clip_id], "extra": {}, "mute": [], "same_cues": {}, "keep": [], "keep_in": {}}
+        clips[clip_id] = select(only, sound_map)[0][clip_id]
+        for cue in clips[clip_id]:
+            for sound_id in cue.get("sounds", []):
+                if sound_id not in regions:
+                    samples = recording(pack, sound_map, sound_id)
+                    regions[sound_id] = [round(len(data) / 2 / RATE, 4), round(len(samples) / 2 / RATE, 4)]
+                    data += samples + silence
+        for time, sounds, volume in ENTRANCE_EXTRA.get(name, []):
+            clips[clip_id].append({"time": time, "volume": volume, "sounds": list(sounds), "bank": name})
+        clips[clip_id].sort(key=lambda c: c["time"])
+    out = ROOT / "Vendor/Build"
+    out.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(out / "Entrances_Sounds.wav"), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(bytes(data))
+    layout = {"regions": regions, "clips": clips, "footsteps": [], "events": {}}
+    (out / "Entrances_Sounds.json").write_text(json.dumps(layout, indent=1))
+    print(f"Entrances: {len(regions)} recordings, {len(data) / 2 / RATE:.1f} s -> Vendor/Build/Entrances_Sounds.wav")
+
+
 def build(name):
+    if name == "Entrances":
+        build_entrances()
+        return
     pack = PACKS[name]
     sound_map = load(pack)
     clips, contacts, events, needed = select(pack, sound_map)
@@ -755,7 +868,7 @@ def write(name):
     asset = next(line.split('"')[3] for line in module.read_text().splitlines() if '["Asset"]' in line)
     if not asset.startswith("rbxassetid://"):
         sys.exit(f"No uploaded asset in {module.relative_to(ROOT)}: upload the file instead.")
-    parts = PACKS[name].get("parts", {})
+    parts = PACKS.get(name, {}).get("parts", {})
     uploaded = {
         k: float(v)
         for k, v in re.findall(r'\["(\w+)"\] = \{ ([\d.]+), [\d.]+ \}', module.read_text())
@@ -805,8 +918,9 @@ def write_module(name, asset, layout):
     }
     module = ROOT / f"src/shared/PackSounds/{name}.luau"
     module.parent.mkdir(parents=True, exist_ok=True)
+    source = "the packs' sound add-ons, their heroes' podium entrances" if name == "Entrances" else f"the {name} pack's sound add-on"
     module.write_text(
-        f"-- Generated by Tools/hero_sounds.py from the {name} pack's sound add-on; do not edit by hand.\n"
+        f"-- Generated by Tools/hero_sounds.py from {source}; do not edit by hand.\n"
         "-- Asset: every recording in one uploaded file. Regions: where each sits in it (start, length in seconds).\n"
         "-- Cues: per clip, when (seconds into the clip) to play one of Sounds (from the pack Bank's file when it has\n"
         "-- one, Speed times as fast when it has one), or a footstep on the arena's floor.\n"
@@ -817,6 +931,6 @@ def write_module(name, asset, layout):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[1] not in ("build", "upload", "write") or sys.argv[2] not in PACKS:
+    if len(sys.argv) != 3 or sys.argv[1] not in ("build", "upload", "write") or sys.argv[2] not in [*PACKS, "Entrances"]:
         sys.exit(__doc__)
     {"build": build, "upload": upload, "write": write}[sys.argv[1]](sys.argv[2])

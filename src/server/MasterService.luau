@@ -168,10 +168,11 @@ local function choose(m: Master, inZone: { Foe }): Foe?
 	return best
 end
 
-local function strike(foe: Foe, amount: number)
+-- `foe` loses `amount`, or `share` of its most health when it is a minion.
+local function strike(foe: Foe, amount: number, share: number)
 	local target = foe.instance
 	if target:IsA("BasePart") then
-		amount = math.round(amount)
+		amount = math.round(share * (target:GetAttribute("MaxHealth") or 0))
 		hitEvent:FireAllClients(target, amount, foe.position, nil)
 		MinionService.damage(target, amount, nil)
 		return
@@ -217,7 +218,7 @@ local function swing(m: Master, now: number)
 		local facing = HeroKit.flat(m.root.CFrame.LookVector).Unit
 		for _, foe in foes(m.team, origin, SETTINGS.Reach) do
 			if HeroKit.inCone(origin, facing, SETTINGS.Reach, settings.Angle, foe.position, foe.radius) then
-				strike(foe, settings.Damage * rage(m))
+				strike(foe, settings.Damage * rage(m), settings.Minion)
 			end
 		end
 	end)
@@ -236,7 +237,7 @@ local function slam(m: Master, now: number, centre: Vector3)
 			return
 		end
 		for _, foe in foes(m.team, centre, settings.Radius) do
-			strike(foe, settings.Damage * rage(m))
+			strike(foe, settings.Damage * rage(m), settings.Minion)
 		end
 	end)
 end
@@ -415,7 +416,12 @@ local function update(m: Master, dt: number, now: number)
 	local settings = SETTINGS.Slam
 	if now >= m.slamReady then
 		local centre = ground(m) + direction * settings.Ahead
-		local crowd = #foes(m.team, centre, settings.Radius)
+		local crowd = 0
+		for _, foe in foes(m.team, centre, settings.Radius) do
+			if foe.hero then
+				crowd += 1
+			end
+		end
 		if target.hero and gap <= SETTINGS.Reach then
 			m.aloneSince = m.aloneSince or now
 		else

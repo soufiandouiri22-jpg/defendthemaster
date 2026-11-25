@@ -1,11 +1,15 @@
 -- The bots (Config.Bots): AI heroes that fill both teams up to TeamSize, as many fewer on a team as it has players. A
--- bot is an Actor (a Configuration in ServerStorage.Bots) whose hero the server moves: it goes after an enemy hero no
--- one of its team fights yet, anywhere in the arena, and helps with one only when all are taken; with none alive it
--- fights the other enemies (Config.Bots). It fights with its own hero's whole kit through CombatService, as a player
+-- bot is an Actor (a Configuration in ServerStorage.Bots) whose hero the server moves: it plays to kill the enemy
+-- Master (Config.Bots): an enemy hero at its own Master first; near the enemy Master while its minions stand at him
+-- and no enemy hero is close, him; with no enemy hero close and its team ahead, its chance: it walks with its minions
+-- to the enemy Master; else it goes after an enemy hero no one of its team fights yet, anywhere in the arena, and helps with one only when all are taken; with none alive it fights the other enemies, and with none left
+-- waits at the enemy zone's edge for its minions. It keeps out of the enemy Master's zone, where his wardens would shoot it
+-- (Config.Wardens), and goes for nobody in it, unless its team's minions stand in it. It fights with its own hero's whole kit through CombatService, as a player
 -- would: a fighter up close goes in with it, an archer keeps his distance; with a person's reaction time, rests and
 -- misses (Config.Bots), not perfectly. It levels up as players do and spends its points itself; in a mode Buys lists
--- (Ranked) it buys its hero's build at the armory (ShopService: at its stall in the buy phase, and while dead) and drinks its
--- potions. It comes back on a
+-- (every mode now) it buys its hero's build at the armory (ShopService: at its stall in the buy phase, and while dead),
+-- potions again when it runs out, and drinks them; low on health and out of a fight with a hero it goes back to heal on
+-- its spawn pad, by the armory for a potion when it has none. It comes back on a
 -- spawn pad after it dies. It plays the hero the draft picked for its place (BotService.start), and a bot that takes over
 -- from a player who left plays his hero.
 
@@ -88,6 +92,8 @@ type Bot = {
 	-- What it fights this tick, and the one its attack under way keeps aiming at.
 	aimFor: Instance?,
 	aiming: Aiming?,
+	-- Whether it went back to heal (Config.Bots: under Retreat of its health, till Healed).
+	healing: boolean,
 }
 
 -- An attack under way that follows its target till it strikes or lets go (Bot.aiming): `speed` of what it shoots,
@@ -109,11 +115,20 @@ type Target = {
 local bots: { Bot } = {}
 local folder: Folder
 local stalls: { [string]: { Vector3 } } = {}
+-- Per team the middles of its spawn pads, which heal (PadService), and how near one a bot waits to heal.
+local pads: { [string]: { Vector3 } } = {}
+local PAD_NEAR = 3
 local made = 0
 -- Per team the heroes still to be played by its next bots.
 local waiting: { [string]: { string } } = {}
 local walls = RaycastParams.new()
 walls.FilterType = Enum.RaycastFilterType.Exclude
+-- Per team the middle of its Master's zone, which its wardens shoot into (Config.Wardens), and whether the other
+-- team's minions stand in it now: then its wardens burn no hero. A bot keeps WARDEN_MARGIN studs out of an enemy zone
+-- without them, and goes for nobody in it.
+local fronts: { [string]: Vector3 } = {}
+local covered: { [string]: boolean } = {}
+local WARDEN_MARGIN = 6
 
 -- A minion's root is moved by the server, not by physics, so its velocity is measured from where it was a moment ago.
 local seen: { [BasePart]: { at: Vector3, time: number, velocity: Vector3 } } = setmetatable({}, { __mode = "k" }) :: any
@@ -179,6 +194,48 @@ local function enemiesNear(team: string, from: Vector3, reach: number): ({ Targe
 		end
 	end
 	return heroes, others
+end
+
+-- Whether `position` lies within WARDEN_MARGIN of the zone of `b`'s enemy Master while none of `b`'s minions stand in
+-- it.
+local function guarded(b: Bot, position: Vector3): boolean
+	local enemy = MatchService.enemyOf(b.team)
+	local front = fronts[enemy]
+	return front ~= nil
+		and not covered[enemy]
+		and HeroKit.flat(position - front).Magnitude <= Config.Master.Zone + WARDEN_MARGIN
+end
+
+-- `list` without what stands in `b`'s guarded enemy zone.
+local function unguarded(b: Bot, list: { Target }): { Target }
+	local kept = {}
+	for _, t in list do
+		if not guarded(b, t.position) then
+			table.insert(kept, t)
+		end
+	end
+	return kept
+end
+
+-- Whether each team's Master's zone holds the other team's minions.
+local function cover()
+	for team in fronts do
+		covered[team] = false
+	end
+	local minions = Workspace:FindFirstChild("Minions")
+	for _, root in if minions then minions:GetChildren() else {} do
+		local team = root:GetAttribute("Team")
+		local enemy = if typeof(team) == "string" then MatchService.enemyOf(team) else nil
+		local front = enemy and fronts[enemy]
+		if
+			front
+			and root:IsA("BasePart")
+			and not root:GetAttribute("Dead")
+			and HeroKit.flat(root.Position - front).Magnitude <= Config.Master.Zone
+		then
+			covered[enemy :: string] = true
+		end
+	end
 end
 
 local function nearest(list: { Target }, from: Vector3): Target?
@@ -633,7 +690,7 @@ local function fight(b: Bot, target: Target, others: { Target }, now: number)
 end
 
 -- Walks the bot, with no enemy hero alive, to the nearest of the enemy minions (`enemies`, anywhere in the arena), or
--- to its lane's gate when there are none.
+-- when there are none to the edge of the enemy Master's zone on its side of the arena, to wait there for its minions.
 local function advance(b: Bot, enemies: { Target }, now: number)
 	local minions = {}
 	for _, t in enemies do
@@ -642,7 +699,120 @@ local function advance(b: Bot, enemies: { Target }, now: number)
 		end
 	end
 	local minion = nearest(minions, (b.root :: BasePart).Position)
-	walkTo(b, if minion then minion.position else Vector3.new(b.side * Config.Minions.LaneRadius, 0, 0), now)
+	if minion then
+		walkTo(b, minion.position, now)
+		return
+	end
+	local gate = Vector3.new(b.side * Config.Minions.LaneRadius, 0, 0)
+	local front = fronts[MatchService.enemyOf(b.team)]
+	if not front then
+		walkTo(b, gate, now)
+		return
+	end
+	local out = HeroKit.flat(gate - front)
+	walkTo(b, front + out.Unit * (Config.Master.Zone + WARDEN_MARGIN + 4), now)
+end
+
+-- `heroes` within Sight of `from`.
+local function sighted(heroes: { Target }, from: Vector3): { Target }
+	local near = {}
+	for _, hero in heroes do
+		if HeroKit.flat(hero.position - from).Magnitude <= SETTINGS.Sight then
+			table.insert(near, hero)
+		end
+	end
+	return near
+end
+
+-- The nearest enemy minion of `enemies` within Clear studs of `from`, so its own minions get through; nil when none is.
+local function clearing(enemies: { Target }, from: Vector3): Target?
+	local minions = {}
+	for _, t in enemies do
+		if t.instance:IsA("BasePart") and HeroKit.flat(t.position - from).Magnitude <= SETTINGS.Clear then
+			table.insert(minions, t)
+		end
+	end
+	return nearest(minions, from)
+end
+
+-- How many heroes of `team` are alive.
+local function living(team: string): number
+	local count = 0
+	for _, model in CollectionService:GetTagged("Combatant") do
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		if model:GetAttribute("Hero") and model:GetAttribute("Team") == team and humanoid and humanoid.Health > 0 then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- Where `b` walks with its minions when it sees its chance (Config.Bots: its team ahead, its health over Chance), Escort
+-- studs behind the one of them nearest the enemy Master; nil when it sees none.
+local function chance(b: Bot): Vector3?
+	local humanoid = b.humanoid :: Humanoid
+	local enemy = MatchService.enemyOf(b.team)
+	local front = fronts[enemy]
+	if not front or humanoid.Health < SETTINGS.Chance * humanoid.MaxHealth or living(enemy) >= living(b.team) then
+		return nil
+	end
+	local lead: Vector3? = nil
+	local leadGap = math.huge
+	local minions = Workspace:FindFirstChild("Minions")
+	for _, root in if minions then minions:GetChildren() else {} do
+		if root:IsA("BasePart") and root:GetAttribute("Team") == b.team and not root:GetAttribute("Dead") then
+			local gap = HeroKit.flat(root.Position - front).Magnitude
+			if gap < leadGap then
+				lead, leadGap = root.Position, gap
+			end
+		end
+	end
+	if not lead then
+		return nil
+	end
+	local ahead = HeroKit.flat(front - lead)
+	return if ahead.Magnitude > 0.1 then lead - ahead.Unit * SETTINGS.Escort else lead
+end
+
+-- The enemy hero `b` fights, while he is in `heroes` within Sight of it: once it fights one it picks no other till he
+-- dies, vanishes or gets away (owner, 2026-11-25); nil when it fights none.
+local function engaged(b: Bot, heroes: { Target }): Target?
+	for _, hero in sighted(heroes, (b.root :: BasePart).Position) do
+		if hero.instance == b.prey then
+			return hero
+		end
+	end
+	return nil
+end
+
+-- The enemy hero at `b`'s own Master, within Defend studs of his zone, nearest to `b`; nil when none is.
+local function raider(b: Bot, heroes: { Target }): Target?
+	local own = fronts[b.team]
+	if not own then
+		return nil
+	end
+	local raiders = {}
+	for _, hero in heroes do
+		if HeroKit.flat(hero.position - own).Magnitude <= Config.Master.Zone + SETTINGS.Defend then
+			table.insert(raiders, hero)
+		end
+	end
+	return nearest(raiders, (b.root :: BasePart).Position)
+end
+
+-- The enemy Master, when `b` is within Siege studs of his zone's middle and its minions stand in that zone
+-- (`enemies` holds only what its wardens would not burn it for, `unguarded`); else nil.
+local function siege(b: Bot, enemies: { Target }): Target?
+	local front = fronts[MatchService.enemyOf(b.team)]
+	if not front or HeroKit.flat((b.root :: BasePart).Position - front).Magnitude > SETTINGS.Siege then
+		return nil
+	end
+	for _, t in enemies do
+		if t.instance:GetAttribute("Master") then
+			return t
+		end
+	end
+	return nil
 end
 
 -- Whether a living player's hero of `team` stands within Taken studs of `hero`.
@@ -736,6 +906,11 @@ local function shop(b: Bot)
 	if not ShopService.atShop(b.actor) then
 		return
 	end
+	-- Potions again once it has fewer than Potions, before the rest of its build.
+	if Items.count(b.actor, "HealthPotion") < SETTINGS.Potions and Items.check(b.actor, "HealthPotion") then
+		ShopService.buy(b.actor, "HealthPotion")
+		return
+	end
 	local step = b.actor:GetAttribute("BuildStep") or 1
 	local id = (SETTINGS.Builds[b.hero] or Items.build(b.hero, nil))[step]
 	if not id then
@@ -792,6 +967,64 @@ local function nearestStall(b: Bot, from: Vector3): Vector3?
 	return best
 end
 
+-- Sends `b` back to heal under Retreat of its health, till Healed (Config.Bots): by its armory stall first when it has
+-- fewer than Potions potions and can buy one, then to its nearest spawn pad, where it waits. Never out of a fight with a
+-- hero (one within Sight, or one hurt it in the last Config.Pads.CombatPause seconds): there it fights on and drinks its
+-- potions. On the pad it fights back whatever hurt it in the last CombatPause seconds, a minion too, since the pad does
+-- not heal it till then. Whether it went back this tick.
+local function retreat(b: Bot, root: BasePart, now: number): boolean
+	local humanoid = b.humanoid :: Humanoid
+	if humanoid.Health < SETTINGS.Retreat * humanoid.MaxHealth then
+		b.healing = true
+	elseif humanoid.Health >= SETTINGS.Healed * humanoid.MaxHealth then
+		b.healing = false
+	end
+	if not b.healing then
+		return false
+	end
+	local hurt = ProgressService.heroHurtAt(humanoid.Parent :: Model)
+	if
+		(hurt and os.clock() - hurt < Config.Pads.CombatPause)
+		or #(enemiesNear(b.team, root.Position, SETTINGS.Sight)) > 0
+	then
+		return false
+	end
+	local goal: Vector3? = nil
+	if
+		buys()
+		and Items.count(b.actor, "HealthPotion") < SETTINGS.Potions
+		and Items.check(b.actor, "HealthPotion")
+		and not ShopService.atShop(b.actor)
+	then
+		goal = nearestStall(b, root.Position)
+	end
+	if not goal then
+		local best, bestGap = nil, math.huge
+		for _, pad in pads[b.team] or {} do
+			local gap = HeroKit.flat(pad - root.Position).Magnitude
+			if gap < bestGap then
+				best, bestGap = pad, gap
+			end
+		end
+		if not best then
+			return false
+		end
+		if bestGap <= PAD_NEAR then
+			local struck = ProgressService.hurtAt(humanoid.Parent :: Model)
+			if struck and os.clock() - struck < Config.Pads.CombatPause then
+				return false
+			end
+			b.aimFor = nil
+			humanoid:Move(Vector3.zero)
+			return true
+		end
+		goal = best
+	end
+	b.aimFor = nil
+	walkTo(b, goal :: Vector3, now)
+	return true
+end
+
 local function think(b: Bot, now: number)
 	-- Under the match's cards, before the buy phase, the bots wait on their pads like everyone (HeroService.release).
 	if Workspace:GetAttribute("Phase") == "Waiting" then
@@ -823,14 +1056,39 @@ local function think(b: Bot, now: number)
 		end
 		return
 	end
+	-- Out of an enemy zone its wardens would shoot it in, before anything else.
+	local enemyFront = fronts[MatchService.enemyOf(b.team)]
+	if enemyFront and guarded(b, root.Position) then
+		local away = HeroKit.flat(root.Position - enemyFront)
+		away = if away.Magnitude > 0.1 then away.Unit else -enemyFront.Unit
+		b.aimFor = nil
+		walkTo(b, enemyFront + away * (Config.Master.Zone + WARDEN_MARGIN + 4), now)
+		return
+	end
+	if retreat(b, root, now) then
+		return
+	end
 	local heroes, enemies = enemiesNear(b.team, root.Position, math.huge)
+	heroes, enemies = unguarded(b, heroes), unguarded(b, enemies)
 	local others = {}
 	for _, t in enemies do
 		if HeroKit.flat(t.position - root.Position).Magnitude <= SETTINGS.Sight then
 			table.insert(others, t)
 		end
 	end
-	local target = choosePrey(b, heroes) or nearest(others, root.Position)
+	local target = engaged(b, heroes) or raider(b, heroes)
+	if target then
+		b.prey = target.instance
+	elseif not nearest(sighted(heroes, root.Position), root.Position) then
+		target = siege(b, enemies) or clearing(enemies, root.Position)
+		local escort = if target then nil else chance(b)
+		if escort then
+			b.aimFor = nil
+			walkTo(b, escort, now)
+			return
+		end
+	end
+	target = target or choosePrey(b, heroes) or nearest(others, root.Position)
 	b.aimFor = if target then target.instance else nil
 	-- A hero it turns on gets a moment before the first ability, as a person needs to see him coming.
 	if target and target.hero and target.instance ~= b.focus then
@@ -917,6 +1175,7 @@ local function spawnHero(b: Bot)
 	root:SetNetworkOwner(nil)
 	b.character, b.humanoid, b.root = character, humanoid, root
 	b.path, b.waypoint, b.pathGoal, b.move = {}, 1, nil, nil
+	b.healing = false
 	b.checkAt, b.checkFrom, b.detourUntil = os.clock(), root.Position, 0
 	Actors.setCharacter(b.actor, character)
 	CombatService.track(b.actor, character)
@@ -973,6 +1232,7 @@ local function addBot(team: string)
 		swingAt = 0,
 		focus = nil,
 		prey = nil,
+		healing = false,
 		circle = if math.random() < 0.5 then 1 else -1,
 		circleAt = 0,
 		aimFor = nil,
@@ -1026,6 +1286,7 @@ end
 export type Layout = {
 	daisFront: { [string]: Vector3 },
 	shops: { [string]: { CFrame } },
+	map: Folder,
 }
 
 -- `heroes`: per team the heroes the draft picked for its bots' places.
@@ -1033,10 +1294,20 @@ function BotService.start(layout: Layout, heroes: { [string]: { string } }?)
 	for team, list in heroes or {} do
 		waiting[team] = table.clone(list)
 	end
+	for team, front in layout.daisFront do
+		fronts[team] = HeroKit.flat(front)
+	end
 	for team, list in layout.shops do
 		stalls[team] = {}
 		for _, spot in list do
 			table.insert(stalls[team], spot.Position)
+		end
+	end
+	for _, model in layout.map:GetDescendants() do
+		local team = model:GetAttribute("Team")
+		if model:IsA("Model") and model.Name == "SpawnPad" and typeof(team) == "string" then
+			pads[team] = pads[team] or {}
+			table.insert(pads[team], model:GetBoundingBox().Position)
 		end
 	end
 	folder = Instance.new("Folder")
@@ -1087,6 +1358,7 @@ function BotService.start(layout: Layout, heroes: { [string]: { string } }?)
 		end
 		elapsed = math.min(elapsed - TICK, TICK)
 		walls.FilterDescendantsInstances = HeroKit.leapIgnore()
+		cover()
 		-- One bot's error is reported but never stops the others, which all think in this one loop: an error in it
 		-- once stood every bot after it still while it lasted.
 		for _, b in table.clone(bots) do

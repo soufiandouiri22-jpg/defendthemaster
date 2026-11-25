@@ -12,21 +12,23 @@ Config.Arena = {
 -- with him. He never heals (MasterService). He sits until an enemy (a hero, or a minion when no hero is there) comes
 -- within `Zone` studs of his dais' front, then stands up and fights: enemy heroes first, the nearest of them, else the
 -- nearest minion, never going further than `Leash` studs from that spot. With nobody left in his zone for `Calm`
--- seconds he walks back and sits down again. He walks slowly (`WalkSpeed`, a hero walks Config.Combat.WalkSpeed).
--- He moves with the Greataxe Berserker's clips (`Pack`, Shared.Sequence, Docs/Third_Party.md) and holds its weapon.
+-- seconds he walks back and sits down again. His zone and leash are smaller than the first 50 and 62 (owner,
+-- 2026-11-25: both 15% smaller, then the zone 35 so his wardens' lasers, Config.Wardens, reach less far). He walks slowly (`WalkSpeed`, a hero walks
+-- Config.Combat.WalkSpeed). He moves with the Greataxe Berserker's clips (`Pack`, Shared.Sequence, Docs/Third_Party.md) and holds its weapon.
 -- His swing (`Swing`) cuts everyone in front of him within `Reach` studs of his middle, every `Every` seconds: its
 -- clips (`Motions`) take turns, each striking `Hits` seconds in and lasting `Length`. His ground slam (`Slam`) first
 -- shows a red circle of `Radius` studs round the spot `Ahead` studs before him while he works himself up (the `Frenzy`
 -- clip, `FrenzyLength` seconds) and swings (the `Motion` clip, striking `Impact` seconds in and lasting `Length`), then
--- strikes everyone in it; he slams when `Crowd` enemies or more stand in it, or when a hero has stood alone before him
+-- strikes everyone in it; he slams when `Crowd` enemy heroes or more stand in it (minions never count, owner,
+-- 2026-11-25: no slam on a wave of minions), or when a hero has stood alone before him
 -- for `Alone` seconds since the slam came off its `Cooldown`. Standing up from the throne takes `Rise` seconds; he
 -- falls with the `Death` clip. He is dressed from the catalogue as design 02 (`Look`): a toga with a red sash, the gold
 -- crown, a red cape, short brown hair and a grim face; the blue team's Master wears his reds in blue (`TeamLook`).
 Config.Master = {
 	Scale = 3,
 	Health = 20000,
-	Zone = 50,
-	Leash = 62,
+	Zone = 35,
+	Leash = 53,
 	Calm = 3,
 	-- The weaker he gets, the harder he strikes, so his attacks stay feared late in the match when heroes have health
 	-- and armour (owner, 2026-11-01): his swing's and slam's damage times 1 + Rage times the share of his health he
@@ -54,10 +56,14 @@ Config.Master = {
 	-- Back before his throne he lowers his guard (the `Unguard` clip), reaches over his shoulder in `Reach` seconds to
 	-- put his sword on his back, and sits down `Length` seconds after he arrived.
 	Sheath = { Reach = 0.5, Length = 1.5 },
+	-- A minion his swing or slam strikes loses `Minion` of its most health instead of their `Damage`, whatever his Rage,
+	-- as a League tower's shot takes a set share of a minion's (owner, 2026-11-25): a Spitter lives through two
+	-- slams, not one, so a wave holds out under him.
 	Swing = {
 		Every = 2.4,
 		Angle = 130,
 		Damage = 140,
+		Minion = 0.2,
 		Motions = { "Attack1", "Attack2", "Attack3" },
 		Hits = { 0.5, 0.45, 0.45 },
 		Length = 1.33,
@@ -73,6 +79,7 @@ Config.Master = {
 		Ahead = 5,
 		-- Stronger (owner, 2026-11-01; was 260): over half the health of an archer or mage, over a third of a tank's.
 		Damage = 420,
+		Minion = 0.35,
 		Crowd = 2,
 		Alone = 6,
 	},
@@ -128,6 +135,39 @@ Config.Master = {
 		Red = { Image = "rbxassetid://86808592989754", Face = { 230, 30, 700 } },
 		Blue = { Image = "rbxassetid://110619426711939", Face = { 230, 30, 700 } },
 	},
+}
+
+-- The two knight statues beside each throne guard their Master as a tower in League of Legends does (owner,
+-- 2026-11-25; WardenService, the client's WardenView): each burns one enemy at a time with red lasers from its eyes,
+-- which always strike, through everything. Each only into its own half of their Master's zone (Master.Zone round his
+-- dais's front, halved by the line from it to the arena's middle), so never both on one enemy (owner, 2026-11-25):
+-- enemy minions there first, else enemy heroes there; an enemy hero who strikes their Master from outside it on its
+-- side too. Neither burns a hero while an enemy minion stands anywhere in the zone, in either half (owner,
+-- 2026-11-25: one burning a minion means a hero is safe). Once it has one, it keeps the beam on him
+-- until he dies or leaves its half; a hero who struck their Master from outside it until he has not for `Forget`
+-- seconds, and it never reaches further than `Reach` studs from the dais's front.
+-- No shots but one beam that stays on him and drains his health, as a real laser (owner, 2026-11-25): on each new
+-- target it gathers its light for `Charge` seconds, then the beam burns him every `Tick` seconds until he is gone.
+-- A hero loses `Hero` of his health a second at first, as magic (Resist takes it down), `Ramp` more for every second
+-- it has burnt him, up to `Most` (League's Warming Up, as a beam): a squishy hero is dead 5.9 s into it, 6.3 s after
+-- the charge began (owner, 2026-11-25: 3.1 s was far too strong); a tank with Resist lives a little longer. A minion
+-- loses `Minion` of its health a second: 5 s each.
+Config.Wardens = {
+	Reach = 85,
+	Forget = 2.5,
+	Charge = 0.35,
+	Tick = 0.1,
+	Hero = 0.05,
+	Ramp = 0.04,
+	Most = 0.25,
+	Minion = 0.2,
+	-- Each eye's beam: a core `Width` studs wide where it leaves the eye and at the target, brighter than white by
+	-- `Brightness` so the bloom spreads it, in a fainter glow `Glow` times as wide; it fades in and out over `Fade`
+	-- seconds.
+	Width = { 0.45, 0.3 },
+	Brightness = 7,
+	Glow = 3,
+	Fade = 0.15,
 }
 
 -- Coins, in League of Legends' proportions (a hero kill is worth 14 Melee or 21 Spitter last hits, a legendary item
@@ -852,16 +892,25 @@ Config.Progress = {
 	},
 }
 
--- The team minions (concept G, rock creatures with crystals): a wave leaves both of a team's doorways on its own half every
--- `WaveInterval` seconds, the first `FirstWave` seconds after the fight began, and marches on the other team's Master,
--- fighting every enemy hero it meets on the way; minions never fight each other. Only the last hit earns the bounty. Ranges are from edge to edge, speeds in
--- studs a second (a hero walks 16).
+-- The team minions (concept G, rock creatures with crystals): a wave leaves both of a team's doorways on its own half,
+-- down the doorway's side and through the middle (`Middle`), every
+-- `WaveInterval` seconds, whether the last one still lives or not (owner, 2026-11-25: 30 again after trying 15), the first `FirstWave`
+-- seconds after the fight began, and marches on the other team's Master, fighting the enemy heroes, minions and Master it
+-- meets on the way. Only the last hit earns the bounty. Ranges are from edge to edge, speeds in studs a second (a hero
+-- walks 16).
 Config.Minions = {
 	FirstWave = 10,
 	WaveInterval = 30,
-	-- Per doorway and wave, in marching order: two doorways a team, so twelve minions a wave in all.
-	Wave = { "Spitter", "Spitter", "Spitter" },
-	MaxPerTeam = 15,
+	-- Per doorway and wave, in marching order, down the doorway's own side; then its `Middle.Wave` through the middle.
+	-- Two doorways a team, so sixteen minions a wave in all (owner, 2026-11-25: two down the side, not three).
+	Wave = { "Spitter", "Spitter" },
+	-- At most this many waves of a lane's minions alive at once (owner, 2026-11-25); the rest of a wave stays home.
+	MaxWaves = 3,
+	-- The middle (owner, 2026-11-25): each doorway's two middle minions leave it after its side ones and turn in,
+	-- in one go, to `Ahead` studs before their own dais' front, `Apart` studs off its middle on the doorway's side, so
+	-- the two doorways' pairs come by each other; each pair then passes the plateau on its doorway's side, `Around`
+	-- studs from the middle, and goes on to the enemy dais' front on that side.
+	Middle = { Wave = { "Spitter", "Spitter" }, Ahead = 28, Apart = 6, Around = 25 },
 	-- The lanes pass the east and west gates this far from the centre, between the cover arcs and the pillars.
 	LaneRadius = 82,
 	Radius = 1.8,
@@ -3630,11 +3679,34 @@ Config.Respawn = {
 -- to `Stray` studs from where it aimed. An
 -- archer (a hero whose combo shoots, as Rowan) keeps `Keep` studs from an enemy hero, hops away from one within
 -- `Flee`, looses his fan of arrows at a hero within `Fan` of its range, and into minions when 3 stand within `Crowd`
--- studs of the one he aims at. Only in the modes `Buys` lists (Config.Queue.Modes) does a bot shop, in Ranked and not in
--- Quick Play (owner, 2026-11-06): at the armory it buys its hero's build in
+-- studs of the one he aims at. Only in the modes `Buys` lists (Config.Queue.Modes) does a bot shop, in every mode now
+-- (owner, 2026-11-25; Ranked only from 2026-11-06; easier bots in Quick Play may come later): at the armory it buys
+-- its hero's build in
 -- `Builds`, or else the one the armory recommends him (Config.ClassBuilds), in order, its parts first while the whole
 -- is too dear, and it drinks a potion below `PotionAt` of its health.
+-- It plays to kill the enemy Master (owner, 2026-11-25): an enemy hero within `Defend` studs of its own Master's zone
+-- comes before every other; while its minions stand in a half of the enemy Master's zone and he is in that half, a bot
+-- within `Siege` studs of that zone's middle goes to strike him, unless an enemy hero stands within `Sight` of it;
+-- else, with no enemy hero that close, it kills the enemy minions within `Clear` studs, so its own get through, before
+-- it goes after an enemy hero further off; and with no enemy left to fight it waits at the edge of the enemy zone, on
+-- its own side, for its minions.
+-- Each bot sees its own chance, none of them ganging up on one hero (owner, 2026-11-25): with no enemy hero within
+-- `Sight` (it won its fight, or none came), fewer enemy heroes alive than of its own team, over `Chance` of its health
+-- and its minions alive, it walks with the one of them nearest the enemy Master, `Escort` studs behind it, instead of
+-- going after an enemy hero further off, clearing and striking him as above.
+-- Under `Retreat` of its health it goes back to heal till it has `Healed` of it (owner, 2026-11-25): by its armory
+-- stall first when it carries fewer than `Potions` potions and can buy one, then onto its nearest spawn pad, which
+-- heals (Config.Pads); but never out of a fight with a hero, where it fights on and drinks its potions (owner,
+-- 2026-11-25). At the armory, alive or dead, it buys potions up to `Potions` before the rest of its build.
 Config.Bots = {
+	Retreat = 0.3,
+	Healed = 0.9,
+	Potions = 1,
+	Defend = 10,
+	Siege = 90,
+	Clear = 40,
+	Chance = 0.5,
+	Escort = 6,
 	TeamSize = 4,
 	Hero = "Shadowren",
 	-- Every hero at most once a team, the bots' at random (owner, 2026-11-01): each bot takes the first of these, shuffled
@@ -3666,7 +3738,7 @@ Config.Bots = {
 	Flee = 8,
 	Fan = 0.6,
 	Crowd = 8,
-	Buys = { QuickPlay = false, Ranked = true },
+	Buys = { QuickPlay = true, Ranked = true },
 	Builds = {
 		Shadowren = {
 			"IronSword",
