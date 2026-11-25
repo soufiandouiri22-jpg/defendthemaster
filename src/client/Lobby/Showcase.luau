@@ -12,6 +12,7 @@
 -- crumbles away, a blast and a shockwave, and the hero drops onto the podium as a white silhouette that fades into
 -- him, with his name slammed across the screen.
 
+local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -179,32 +180,43 @@ local function burns(hero: string): boolean
 	return showcase ~= nil and showcase.Fire == true
 end
 
-local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
+-- Whether `hero`'s aura is dust (Showcase.Dust): the sand his dash throws up, in his colour, nothing of it glowing.
+local function dusty(hero: string): boolean
+	local settings = Config.Heroes[hero]
+	local showcase = settings and settings.Showcase
+	return showcase ~= nil and showcase.Dust == true
+end
+
+local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean, dust: boolean?)
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root then
 		return
 	end
 	-- A black aura (Kraeven's) cannot glow: dark smoke round him instead, its sparks pale, a dark pool under him.
 	local dark = math.max(colour.R, colour.G, colour.B) < 0.15
+	-- Dust is lit as the hall lights it, its grains too, a little darker deep in it.
+	local sand = colour:Lerp(WHITE, 0.35)
+	local deep = colour:Lerp(Color3.new(0, 0, 0), 0.45)
 	local attachment = Instance.new("Attachment")
 	attachment.Name = "Aura"
 	attachment.Parent = root
 
 	local wisps = Instance.new("ParticleEmitter")
 	wisps.Name = "Wisps"
-	wisps.Texture = if dark
+	wisps.Texture = if dark or dust
 		then "rbxasset://textures/particles/smoke_main.dds"
 		else "rbxasset://textures/particles/fire_main.dds"
 	wisps.Color = if dark
 		then ColorSequence.new(Color3.fromRGB(34, 32, 40), colour)
+		elseif dust then ColorSequence.new(sand, colour)
 		elseif fire then ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 220, 110)),
 			ColorSequenceKeypoint.new(0.4, colour),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 30, 10)),
 		})
 		else ColorSequence.new(colour:Lerp(WHITE, 0.25), colour)
-	wisps.LightEmission = if dark then 0 else 0.8
-	wisps.LightInfluence = 0
+	wisps.LightEmission = if dark or dust then 0 else 0.8
+	wisps.LightInfluence = if dust then 1 else 0
 	wisps.Size = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0.6),
 		NumberSequenceKeypoint.new(0.5, 1.1),
@@ -231,10 +243,14 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 	embers.Color = if dark
 		then ColorSequence.new(Color3.fromRGB(200, 200, 215), Color3.fromRGB(110, 110, 130))
+		elseif dust then ColorSequence.new(sand, colour)
 		else ColorSequence.new(Color3.fromRGB(255, 220, 140), Color3.fromRGB(255, 150, 60))
-	embers.LightEmission = if dark then 0.4 else 1
-	embers.LightInfluence = 0
-	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) })
+	embers.LightEmission = if dark then 0.4 elseif dust then 0 else 1
+	embers.LightInfluence = if dust then 1 else 0
+	embers.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, if dust then 0.12 else 0.18),
+		NumberSequenceKeypoint.new(1, 0),
+	})
 	embers.Lifetime = NumberRange.new(1.8, 3)
 	embers.Rate = if fire then 30 else 14
 	embers.Speed = NumberRange.new(0.6, 1.4)
@@ -242,12 +258,14 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	embers.Acceleration = Vector3.new(0, 1.2, 0)
 	embers.Parent = attachment
 
-	if fire or dark then
+	if fire or dark or dust then
 		local smoke = Instance.new("ParticleEmitter")
 		smoke.Name = "Smoke"
 		smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
-		smoke.Color = ColorSequence.new(Color3.fromRGB(40, 34, 32), Color3.fromRGB(12, 10, 10))
-		smoke.LightInfluence = 0.3
+		smoke.Color = if dust
+			then ColorSequence.new(colour, deep)
+			else ColorSequence.new(Color3.fromRGB(40, 34, 32), Color3.fromRGB(12, 10, 10))
+		smoke.LightInfluence = if dust then 1 else 0.3
 		smoke.Size = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, 0.8),
 			NumberSequenceKeypoint.new(1, 2.4),
@@ -269,7 +287,7 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 		smoke.Parent = attachment
 	end
 
-	if not dark then
+	if not dark and not dust then
 		local light = Instance.new("PointLight")
 		light.Color = colour
 		light.Brightness = if fire then 3 else 1.6
@@ -288,9 +306,9 @@ local function aura(model: Model, colour: Color3, at: CFrame, fire: boolean)
 	glow.Shape = Enum.PartType.Cylinder
 	glow.Size = Vector3.new(0.05, 4.6, 4.6)
 	glow.CFrame = at * CFrame.new(0, 0.03, 0) * CFrame.Angles(0, 0, math.rad(90))
-	glow.Material = if dark then Enum.Material.SmoothPlastic else Enum.Material.Neon
+	glow.Material = if dark or dust then Enum.Material.SmoothPlastic else Enum.Material.Neon
 	glow.Color = colour
-	glow.Transparency = if dark then 0.45 elseif fire then 0.6 else 0.82
+	glow.Transparency = if dark then 0.45 elseif dust then 0.6 elseif fire then 0.6 else 0.82
 	glow.Parent = model
 end
 
@@ -354,6 +372,9 @@ local function make(hero: string, entering: boolean?): Entry?
 	if not model then
 		return nil
 	end
+	-- His weapons' colours (a SurfaceAppearance's maps) load only once something shows them, so a copy put up before
+	-- they have would stand there grey: his own start loading as he is chosen, during the transformation's charge.
+	task.spawn(pcall, ContentProvider.PreloadAsync, ContentProvider, { model })
 	local copy = model:Clone()
 	local pivot = standing(copy, turnOf(hero, entering))
 	copy:PivotTo(pivot)
@@ -540,7 +561,7 @@ function Showcase.show(hero: string)
 	local colour = colourOf(hero)
 	if hero ~= Showcase.Avatar then
 		if glows(hero) then
-			aura(entry.model, colour, podium(), burns(hero))
+			aura(entry.model, colour, podium(), burns(hero), dusty(hero))
 		end
 		LightningEffects.crackle(entry.model)
 	end
@@ -963,7 +984,7 @@ function Showcase.transform(hero: string)
 	embers:Emit(60)
 
 	if glows(hero) then
-		aura(after.model, colour, at, burns(hero))
+		aura(after.model, colour, at, burns(hero), dusty(hero))
 	end
 	LightningEffects.crackle(after.model)
 	lightPlate(at, plateColour(hero))
@@ -997,6 +1018,13 @@ function Showcase.start()
 		Workspace:GetAttributeChangedSignal("MenuCamera"):Wait()
 	end
 	local base = Workspace:GetAttribute("MenuCamera") :: CFrame
+	-- Every hero's model loads in the background, so whoever he chooses comes onto the podium in his colours.
+	task.spawn(function()
+		local folder = ReplicatedStorage:WaitForChild("Showcase", 30)
+		if folder then
+			pcall(ContentProvider.PreloadAsync, ContentProvider, { folder })
+		end
+	end)
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.FieldOfView = FOV
 	camera.CFrame = base

@@ -11,6 +11,7 @@ local PhysicsService = game:GetService("PhysicsService")
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
+local Assets = require(game:GetService("ReplicatedStorage").Shared.Assets)
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 
 local ColosseumBuilder = {}
@@ -141,6 +142,129 @@ local function kit(parent: Instance, name: string, at: CFrame, scale: number, so
 	end
 	m.Parent = parent
 	return m
+end
+
+-- The knight statue's visor has three holes, its two eyes and the slit between them, each filled from inside: the
+-- eyes with glowing red, the slit dark, so the visor shows two eyes and not three lights. Measured on its mesh with rays from in front (Art/Models/Colosseum/statue.glb, at its imported size, from the
+-- middle of its MeshPart; the visor faces -Z): each fill is a box in the plane of the stone round its hole (`Right`,
+-- `Up`, and `Back` out of the visor, which leans up to 27 degrees there), a little wider than the hole so its edges
+-- are in the stone, its front just behind the deepest stone round the hole so it never shows through it, and reaching
+-- back to the hole's bottom. The eyes are named "Eye", for the lasers they shoot.
+local STATUE_GLOW = {
+	{
+		Name = "Eye",
+		At = Vector3.new(0.0596, 0.5368, -0.1004),
+		Right = Vector3.new(-0.9104, 0, -0.4137),
+		Up = Vector3.new(-0.0075, 0.9998, 0.0166),
+		Back = Vector3.new(0.4136, 0.0182, -0.9103),
+		Size = Vector3.new(0.0335, 0.042, 0.0573),
+	},
+	{
+		Name = "VisorSlit",
+		At = Vector3.new(-0.0001, 0.5366, -0.1231),
+		Right = Vector3.new(-0.9372, 0, 0.3489),
+		Up = Vector3.new(0.0061, 0.9999, 0.0165),
+		Back = Vector3.new(-0.3488, 0.0176, -0.937),
+		Size = Vector3.new(0.0176, 0.041, 0.0308),
+		Dark = true,
+	},
+	{
+		Name = "Eye",
+		At = Vector3.new(-0.0349, 0.5388, -0.11),
+		Right = Vector3.new(-0.9279, 0, 0.3729),
+		Up = Vector3.new(-0.0365, 0.9952, -0.0909),
+		Back = Vector3.new(-0.3711, -0.0979, -0.9234),
+		Size = Vector3.new(0.0302, 0.0417, 0.033),
+	},
+}
+-- Pure red: any green in it turns orange when it shines brighter than white.
+local EYE_RED = Color3.fromRGB(255, 0, 0)
+local SLIT_DARK = Color3.fromRGB(28, 22, 22)
+-- Each fill's front lies about INSET behind the visor, and its eye's glow GLOW_OUT before it (in the mesh's size).
+local INSET, GLOW_OUT = 0.0095, 0.012
+-- An eye's face shines EYE_SHINE times brighter than white, hotter in its middle. The bloom leaves a face's light
+-- alone, so the glow round the eye is particles (which it takes up when brighter than white), each layer its width
+-- against the eye's, how many times brighter than white, and how clear at its fullest: a small bright core whose bloom
+-- spills over the rim, and a faint wider haze. One layer as wide and as bright looks a flat red disc.
+local EYE_SHINE = 7
+local EYE_HOT = Color3.fromRGB(255, 90, 60)
+local EYE_GLOWS = {
+	{ Width = 0.7, Brightness = 10, Clear = 0.4 },
+	{ Width = 1.5, Brightness = 1.6, Clear = 0.5 },
+}
+
+-- Lights the eyes of the knight statue `m` from inside, and darkens the slit between them.
+local function statueEyes(m: Model?)
+	local body = m and m.PrimaryPart :: MeshPart?
+	if not body then
+		return
+	end
+	local scale = body.Size.Y / body.MeshSize.Y
+	for _, hole in STATUE_GLOW do
+		local fill = Instance.new("Part")
+		fill.Name = hole.Name
+		fill.Anchored = true
+		fill.CanCollide = false
+		fill.CanQuery = false
+		fill.CanTouch = false
+		fill.CastShadow = false
+		fill.Size = hole.Size * scale
+		fill.CFrame = body.CFrame * CFrame.fromMatrix(hole.At * scale, hole.Right, hole.Up, hole.Back)
+		fill.Parent = m
+		if hole.Dark then
+			fill.Material = Enum.Material.SmoothPlastic
+			fill.Color = SLIT_DARK
+			continue
+		end
+		fill.Material = Enum.Material.Neon
+		fill.Color = EYE_RED
+		local face = Instance.new("SurfaceGui")
+		face.Face = Enum.NormalId.Back
+		face.LightInfluence = 0
+		face.Brightness = EYE_SHINE
+		face.CanvasSize = Vector2.new(64, 64)
+		local red = Instance.new("Frame")
+		red.Size = UDim2.fromScale(1, 1)
+		red.BorderSizePixel = 0
+		red.BackgroundColor3 = EYE_RED
+		red.Parent = face
+		local hot = Instance.new("ImageLabel")
+		hot.Size = UDim2.fromScale(1.2, 1.2)
+		hot.Position = UDim2.fromScale(0.5, 0.5)
+		hot.AnchorPoint = Vector2.new(0.5, 0.5)
+		hot.BackgroundTransparency = 1
+		hot.Image = Assets.GunGlow
+		hot.ImageColor3 = EYE_HOT
+		hot.ImageTransparency = 0.2
+		hot.Parent = red
+		face.Parent = fill
+		local glow = Instance.new("Attachment")
+		glow.Position = Vector3.new(0, 0, (hole.Size.Z / 2 + INSET + GLOW_OUT) * scale)
+		glow.Parent = fill
+		local width = math.max(fill.Size.X, fill.Size.Y)
+		for _, layer in EYE_GLOWS do
+			-- Particles fading in and out over each other, so the glow stays steady and only breathes a little.
+			local particles = Instance.new("ParticleEmitter")
+			particles.Texture = Assets.GunGlow
+			particles.Color = ColorSequence.new(EYE_RED)
+			particles.LightEmission = 1
+			particles.LightInfluence = 0
+			particles.Brightness = layer.Brightness
+			particles.Size = NumberSequence.new(width * layer.Width)
+			particles.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.3, layer.Clear),
+				NumberSequenceKeypoint.new(0.7, layer.Clear),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			particles.Lifetime = NumberRange.new(1.2)
+			particles.Rate = 6
+			particles.Speed = NumberRange.new(0)
+			particles.Rotation = NumberRange.new(0, 360)
+			particles.LockedToPart = true
+			particles.Parent = glow
+		end
+	end
 end
 
 -- Gives the team piece `m` the texture of its twin in the other team's colours, kit piece `other` (the same mesh), in
@@ -616,11 +740,13 @@ local function buildBase(map: Folder, team: string): Base
 	twin(kit(area, "throne" .. suffix, at(0, DAIS_HEIGHT, throneBack), throneScale), "throne" .. otherSuffix)
 
 	for _, side in { -1, 1 } do
-		kit(
-			area,
-			"statue",
-			at(side * 14.5 * s, 0, 9 * s) * CFrame.Angles(0, math.rad(side * 8), 0),
-			byHeight("statue", STATUE_HEIGHT)
+		statueEyes(
+			kit(
+				area,
+				"statue",
+				at(side * 14.5 * s, 0, 9 * s) * CFrame.Angles(0, math.rad(side * 8), 0),
+				byHeight("statue", STATUE_HEIGHT)
+			)
 		)
 		brazier(area, "brazier_pillar", at(side * 6 * s, DAIS_HEIGHT, 7 * s), 6.5 * s)
 		brazier(area, "brazier_pillar", at(side * 22.5 * s, 0, 6 * s), 8 * s)

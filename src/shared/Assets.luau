@@ -13,7 +13,7 @@ return {
 	ScopeHousing = "rbxassetid://86077005689186",
 	ScopeReticle = "rbxassetid://86616302978212",
 	-- Corvin's shots (client GunEffects, Tools/gun_textures.py): the muzzle flash, a soft glow, a tracer's streak
-	-- and a spark, the last three white to be tinted.
+	-- and a spark, the last three white to be tinted. The glow also lights the knight statues' eyes (ColosseumBuilder).
 	GunFlash = "rbxassetid://79208491765154",
 	GunGlow = "rbxassetid://140221199714929",
 	GunStreak = "rbxassetid://104828619030557",

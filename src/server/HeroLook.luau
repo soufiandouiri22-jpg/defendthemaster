@@ -13,6 +13,9 @@ local HeroLook = {}
 
 local BODY_COLOURS = { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" }
 
+-- How much wider a plain forearm and shin are made (HeroLook.dress), as the Master's forearms (MasterService).
+local CUFF = 1.03
+
 -- The avatar of the hero `name`.
 function HeroLook.description(name: string): HumanoidDescription
 	local look = Config.Heroes[name].Look
@@ -432,6 +435,22 @@ function HeroLook.dress(character: Model, hero: string)
 					weld.C1 = attachment.CFrame
 				end
 			end
+		end
+	end
+	-- The plain R15 limbs are all as wide as each other, so where an elbow or a knee bends round its hinge (or a wrist or
+	-- an ankle), the two parts' sides share one plane where they overlap and flicker between their clothes: each plain
+	-- forearm and shin grows this much wider, closing round the upper limb, the hand and the foot.
+	for _, limb in
+		{
+			{ "LeftArm", "LeftLowerArm" },
+			{ "RightArm", "RightLowerArm" },
+			{ "LeftLeg", "LeftLowerLeg" },
+			{ "RightLeg", "RightLowerLeg" },
+		}
+	do
+		local part = character:FindFirstChild(limb[2])
+		if not (look :: any)[limb[1]] and part and part:IsA("BasePart") then
+			part.Size = Vector3.new(part.Size.X * CUFF, part.Size.Y, part.Size.Z * CUFF)
 		end
 	end
 	if look.Held then

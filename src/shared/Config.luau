@@ -157,8 +157,9 @@ Config.Shop = {
 	Slots = 6,
 	Sell = 0.7,
 	Reach = 16,
-	-- The arena is small and fights are quick, so a potion heals in under two seconds (owner, 2026-10-29).
-	Potion = { Heal = 120, Time = 1.875, Stack = 5 },
+	-- The arena is small and fights are quick, so a potion heals in under two seconds (owner, 2026-10-29), and since
+	-- 2026-11-24 half as fast again (owner): in 1.25 seconds.
+	Potion = { Heal = 120, Time = 1.25, Stack = 5 },
 	GuardReach = 40,
 	-- How long a wound (Bitter Thorn and the items built from it) keeps a hero's healing down.
 	WoundTime = 3,
@@ -254,7 +255,7 @@ Config.Items = {
 		Cost = 50,
 		Potion = true,
 		Stats = {},
-		Text = "Q: heals 120 health over 1.875 seconds",
+		Text = "Q: heals 120 health over 1.25 seconds",
 		Icon = "rbxassetid://72428616348938",
 	},
 	HuntingBow = {
@@ -1005,7 +1006,8 @@ Config.Minions = {
 -- hero is every player's from the start; one with a `Price` is sold for coins in the heroes' shop (Shared.HeroShop),
 -- and an `Exclusive` one only comes from the season pass (Config.Pass) and is never sold. `Showcase` is how he stands
 -- on the menu's podium, in 3D in the hall (owner, 2026-10-28): the clip he holds there, the degrees he stands `Turn`ed
--- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke; his transformation
+-- when that clip looks aside, and the colour of his aura, which with `Fire` burns under dark smoke and with `Dust` is
+-- sand and dust thrown up round him, nothing of it glowing; his transformation
 -- and the podium's runes take the same colour; with `Aura = false` he transforms in white and the runes stay the
 -- podium's plain gold (owner, 2026-11-05).
 -- Every hero gets one, a pose from his own pack as Shadowren's weapon pose. `Enter` is the move he makes when he lands
@@ -3270,15 +3272,17 @@ Config.Heroes = {
 		-- Every player's, in the game (owner, 2026-11-24).
 		Starter = true,
 		-- On the podium she comes in with her chakrams (061, Weapon pose enter) into her weapon pose.
+		-- Her aura the desert's dust her dash throws up, in its colour (ShadowEffects.Dust; owner, 2026-11-24).
 		Showcase = {
 			Motion = "RA-BLD-062",
 			Enter = { Motion = "RA-BLD-061", Then = "Breathe" },
-			Aura = false,
+			Aura = Color3.fromRGB(190, 158, 112),
+			Dust = true,
 		},
 		-- An archer's, as Corvin's (740) and Rowan's (760).
 		Health = 750,
 		Scales = "Attack",
-		-- Sand and dust, as she has no aura (owner, 2026-11-24).
+		-- Sand and dust, as her aura (owner, 2026-11-24).
 		Effects = "Dust",
 		Look = {
 			-- A desert dancer (owner, 2026-11-24, over a green corset, two onesies and a hooded robe): Bd Fashion's black
@@ -3402,18 +3406,18 @@ Config.Heroes = {
 				},
 			},
 			-- Once round and both chakrams thrown at once (043, Chakram technique 11; owner, 2026-11-24), as the clip
-			-- lets them go (0.8 s), each at one of the two nearest enemies round her within its Range (none: both to
-			-- the crosshair; one: both at it), on through it and back, striking again for half on the way back, as
-			-- Astryn's E: 55 each, about Kraeven's two swords (60), as they seek their enemies.
+			-- lets them go (0.8 s), side by side where she aims (owner, 2026-11-24: an archer's, not seeking enemies as
+			-- Astryn's do), on through everyone in their way and back, striking again for half on the way back, as
+			-- Kraeven's two swords: 55 out and up to 110 to one who stays in their way, against his 60 and 120.
 			E = {
 				Kind = "Throw",
 				Motion = "RA-BLD-043",
-				Indicator = "Ring",
+				Indicator = "Arrow",
 				Cooldown = 10,
 				Release = 0.8,
 				Count = 2,
-				Spread = 30,
-				Seek = { Angle = 360, Turn = 8 },
+				-- Close together, so both strike the one she aims at.
+				Spread = 8,
 				ProjectileSpeed = 100,
 				Range = 28,
 				Width = 2,
@@ -3459,8 +3463,6 @@ Config.Heroes = {
 				Cooldown = 6,
 				Range = 14,
 				Width = 4,
-				-- No dust behind her, as Corvin (owner, 2026-11-24).
-				Trail = false,
 				Damage = 20,
 				Ratio = 0.3,
 				Start = 0.05,
