@@ -505,7 +505,8 @@ end
 local function tick(now: number)
 	local combatants: { Target } = {}
 	for _, tagged in CollectionService:GetTagged("Combatant") do
-		if tagged:IsA("Model") and not tagged:GetAttribute("Hidden") then
+		-- The beast is the heroes' to fight, not the minions'.
+		if tagged:IsA("Model") and not tagged:GetAttribute("Hidden") and not tagged:GetAttribute("Beast") then
 			table.insert(combatants, tagged)
 		end
 	end

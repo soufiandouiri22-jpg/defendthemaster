@@ -3,12 +3,13 @@ front for its banner (KillFeed), where it sits on the taker's portrait, and the 
 warm from the front and above, cut to its edges and outlined in the UI's dark edge.
 
     /Applications/Blender.app/Contents/MacOS/Blender -b -P Tools/render_crown_icon.py -- <out.png> [turn] [tilt] \
-        [model.glb] [metallic] [lean] [saturation]
+        [model.glb] [metallic] [lean] [saturation] [stand]
 
 `turn` spins the model about its upright axis (degrees, to bring its front to the camera), `tilt` is how far the
 camera looks down on it (degrees), `metallic` how much it shines as metal (0.75, the crown's polished gold), `lean`
-how far its top leans to the right (degrees; the Wind Feather leans as in its concept) and `saturation` how strong its
-colours are (1 as rendered).
+how far its top leans to the right (degrees; the Wind Feather leans as in its concept), `saturation` how strong its
+colours are (1 as rendered) and `stand` how far it first tips back about the camera's left-right axis (degrees; the
+Serpent's key, which Meshy made lying flat, stands up with 90 and its ring up with a lean of 90).
 """
 
 import math
@@ -33,6 +34,7 @@ model = Path(args[3]).resolve() if len(args) > 3 else ROOT / "Art/Models/Crown/s
 metallic = float(args[4]) if len(args) > 4 else 0.75
 lean = float(args[5]) if len(args) > 5 else 0.0
 saturation = float(args[6]) if len(args) > 6 else 1.0
+stand = float(args[7]) if len(args) > 7 else 0.0
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(model))
@@ -51,7 +53,11 @@ bpy.context.scene.collection.objects.link(pivot)
 for o in bpy.context.scene.objects:
     if o.parent is None and o is not pivot:
         o.parent = pivot
-pivot.matrix_world = Matrix.Rotation(math.radians(lean), 4, "Y") @ Matrix.Rotation(math.radians(turn), 4, "Z")
+pivot.matrix_world = (
+    Matrix.Rotation(math.radians(lean), 4, "Y")
+    @ Matrix.Rotation(math.radians(turn), 4, "Z")
+    @ Matrix.Rotation(math.radians(stand), 4, "X")
+)
 bpy.context.view_layer.update()
 
 corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]

@@ -14,7 +14,8 @@
 -- When a hero takes a boost (BoostService), the middle banner shows his portrait with the boost's picture on it in a
 -- halo of its colour over Config.Boosts.Texts, and under that what it does for whoever reads it (Boosts.line): gold
 -- for the player's team, with its sting, and the enemy's colour for theirs, with a dark bell. When it fades, the
--- banner shows the picture alone, fading out with a falling shimmer.
+-- banner shows the picture alone, fading out with a falling shimmer. The beast's key (Config.Beast.Key, BeastService)
+-- shows the same as it is taken and as its time runs out, not as it lets the beast loose.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -34,7 +35,16 @@ local KillFeed = {}
 
 local C = UiStyle.Colors
 local SETTINGS = Config.Kills
+local KEY = Config.Beast.Key
 local player = Players.LocalPlayer
+
+-- A banner's boost, or the beast's key by its model's name.
+local function pictured(id: string?): any
+	if not id then
+		return nil
+	end
+	return Config.Boosts.List[id] or (if id == KEY.Model then KEY else nil)
+end
 
 -- The two banners: the player's own kills and death big in the middle, everyone else's small on the right. While the
 -- player's own shows, PlayerGui's "KillBanner" attribute is set, and the middle's other texts (the respawn timer) step
@@ -329,15 +339,19 @@ function KillFeed.start()
 		worn.Parent = row
 		-- Each boost's picture stays drawn, tiny and all but clear, so it shows with the portrait: a picture off the
 		-- screen for minutes can be let go of and came in a moment after it (owner, 2026-11-02).
+		local images = { KEY.Image }
 		for _, boost in Config.Boosts.List do
 			if boost.Image then
-				local picture = Instance.new("ImageLabel")
-				picture.BackgroundTransparency = 1
-				picture.ImageTransparency = 0.99
-				picture.Size = UDim2.fromOffset(2, 2)
-				picture.Image = boost.Image
-				picture.Parent = gui
+				table.insert(images, boost.Image)
 			end
+		end
+		for _, image in images do
+			local picture = Instance.new("ImageLabel")
+			picture.BackgroundTransparency = 1
+			picture.ImageTransparency = 0.99
+			picture.Size = UDim2.fromOffset(2, 2)
+			picture.Image = image
+			picture.Parent = gui
 		end
 
 		local textFrame = UiStyle.frame(
@@ -398,7 +412,7 @@ function KillFeed.start()
 			end
 			-- A boost's banner: the taker's portrait alone in the middle, the boost on it, `kind` its text and its
 			-- line under it. As the boost fades it stands alone, bigger, and fades with the banner.
-			local boost = if kill.boost then Config.Boosts.List[kill.boost] else nil
+			local boost = pictured(kill.boost)
 			local crowned = boost ~= nil
 			local fading = crowned and kill.fades == true
 			local tier = if crowned then 2 else SETTINGS.Tiers[kind] or 1
@@ -781,6 +795,67 @@ function KillFeed.start()
 			kind = text,
 			boost = kind,
 			line = Boosts.line(boost, who),
+			killer = taker,
+			killerHero = carrier and carrier:GetAttribute("Hero"),
+			killerTeam = team,
+			victimTeam = team,
+			coins = 0,
+			at = Vector3.zero,
+		}, text, ally, false)
+	end)
+
+	-- The beast's key: its banner as it is taken, and as its time ran out (not as its carrier let the beast loose).
+	local keyWas = Workspace:GetAttribute("SerpentKey")
+	local keyEnds = Workspace:GetAttribute("SerpentKeyEnds")
+	Workspace:GetAttributeChangedSignal("SerpentKeyEnds"):Connect(function()
+		keyEnds = Workspace:GetAttribute("SerpentKeyEnds") or keyEnds
+	end)
+	Workspace:GetAttributeChangedSignal("SerpentKey"):Connect(function()
+		local state = Workspace:GetAttribute("SerpentKey")
+		local was = keyWas
+		keyWas = state
+		if state == nil and was ~= nil then
+			local ran = typeof(keyEnds) == "number" and Workspace:GetServerTimeNow() >= keyEnds - 1
+			keyEnds = nil
+			if ran then
+				local text = string.format(texts.Fades, string.upper(KEY.Name))
+				mine({
+					kind = text,
+					boost = KEY.Model,
+					fades = true,
+					killerTeam = "Blue",
+					victimTeam = "Blue",
+					coins = 0,
+					at = Vector3.zero,
+				}, text, false, false)
+			end
+			return
+		end
+		if state ~= "Carried" then
+			return
+		end
+		local carrier: Model? = nil
+		for _ = 1, 10 do
+			for _, model in CollectionService:GetTagged("Combatant") do
+				if model:IsA("Model") and model:GetAttribute("SerpentKey") == true then
+					carrier = model
+				end
+			end
+			if carrier then
+				break
+			end
+			task.wait(0.1)
+		end
+		local team = Workspace:GetAttribute("SerpentKeyTeam") or "Blue"
+		local taker = if carrier then Players:GetPlayerFromCharacter(carrier) else nil
+		myTeam = player.Character and player.Character:GetAttribute("Team") or myTeam
+		local ally = myTeam == team
+		local who = if taker == player then "Own" elseif ally then "Ally" else "Enemy"
+		local text = string.format((texts :: any)[who], string.upper(KEY.Name))
+		mine({
+			kind = text,
+			boost = KEY.Model,
+			line = (KEY :: any)[who],
 			killer = taker,
 			killerHero = carrier and carrier:GetAttribute("Hero"),
 			killerTeam = team,

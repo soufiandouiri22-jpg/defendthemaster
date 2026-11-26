@@ -38,6 +38,7 @@ if Places.isLobby() then
 end
 
 Workspace:SetAttribute("Role", "Match")
+local BeastService = require(script.BeastService)
 local BoostService = require(script.BoostService)
 local BotService = require(script.BotService)
 local ColosseumBuilder = require(script.ColosseumBuilder)
@@ -84,6 +85,7 @@ RuneGateService.start(layout)
 JumpPadService.start()
 MasterService.start(layout, if testing then TestGround.MASTERS else nil)
 WardenService.start(layout)
+BeastService.start(layout)
 PadService.start(layout)
 ShopService.start(layout)
 BoostService.start(layout)

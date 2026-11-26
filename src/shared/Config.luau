@@ -14,7 +14,11 @@ Config.Arena = {
 -- nearest minion, never going further than `Leash` studs from that spot. With nobody left in his zone for `Calm`
 -- seconds he walks back and sits down again. His zone and leash are smaller than the first 50 and 62 (owner,
 -- 2026-11-25: both 15% smaller, then the zone 35 so his wardens' lasers, Config.Wardens, reach less far, then 10% larger
--- again, as their Reach). He walks slowly (`WalkSpeed`, a hero walks
+-- again, as their Reach). He wakes sooner than his zone (owner, 2026-11-26: he stood up so late that every fight with
+-- him was beside his throne): as soon as an enemy comes within `Wake` studs of his dais' front he stands up and draws,
+-- and until one is in his zone he walks out to `Post` studs from that spot, towards the nearest of them, and waits
+-- there facing him, so the fight starts at his zone's edge; he goes back to sit down once none is within `Wake` for
+-- `Calm` seconds. He walks slowly (`WalkSpeed`, a hero walks
 -- Config.Combat.WalkSpeed). He moves with the Greataxe Berserker's clips (`Pack`, Shared.Sequence, Docs/Third_Party.md) and holds its weapon.
 -- His swing (`Swing`) cuts everyone in front of him within `Reach` studs of his middle, every `Every` seconds: its
 -- clips (`Motions`) take turns, each striking `Hits` seconds in and lasting `Length`. His ground slam (`Slam`) first
@@ -30,6 +34,8 @@ Config.Master = {
 	Health = 20000,
 	Zone = 38.5,
 	Leash = 53,
+	Wake = 60,
+	Post = 32,
 	Calm = 3,
 	-- The weaker he gets, the harder he strikes, so his attacks stay feared late in the match when heroes have health
 	-- and armour (owner, 2026-11-01): his swing's and slam's damage times 1 + Rage times the share of his health he
@@ -183,6 +189,110 @@ Config.Wardens = {
 	Brightness = 7,
 	Glow = 3,
 	Fade = 0.15,
+}
+
+-- The beast (League's Rift Herald, owner 2026-11-26): Naviworx's Boulder Serpent (Docs/Third_Party.md;
+-- ReplicatedStorage.Beast), a snake of boulders with moss on them, like Pokémon's Onix, `Scale` times its size; the
+-- others tried wait in ServerStorage: Naviworx's Stone Beetle (BeastBeetle, at Scale 1.3, Leap 32) and KashTheKing's
+-- Crystal Burrower, a mole (BeastBurrower, at Scale 2.5, Hole 9, Leap 26, Slam 20). It comes
+-- once, `At` seconds into the fight (on Studio's test ground the Workspace attribute "TestBeast", seconds after the
+-- start), out of the ground at a spot nobody knows beforehand, so nobody camps it: on the line between the two halves,
+-- `From` to `To` studs from the arena's middle on either side, up to `Off` studs off it. For `Rumble` seconds the
+-- ground there trembles and cracks with the crystals' light; then it bursts, a hole of `Hole` studs' radius opens, and the
+-- beast flies out of it in an arc `Height` studs high to land `Leap` studs further towards the middle, `Flight`
+-- seconds later, where its landing throws everyone within `Slam` studs `Throw` studs away. It roars `Roar` seconds
+-- after it landed. The hole stays `Crater` seconds (BeastService, BeastView). It goes by `Name` (owner, 2026-11-26).
+-- From `Wake` seconds after it landed it fights, as League's Rift Herald: `Health`, struck anywhere within `Radius`
+-- studs of its coil's middle. Till someone strikes it, it slithers round in circles (`Roam`: `Radius` studs round, at
+-- `Speed` studs a second). It goes only for heroes who struck it, the last first: it holds on to one while he struck
+-- it within `Grudge` seconds or stays within `Aggro` studs, turns `Turn` radians a second towards him, slithers after
+-- him at `Speed` studs a second and bites (`Bite`: every `Every` seconds, the Attack clip of `Length` seconds striking
+-- `Hit` seconds in) every hero within `Radius` studs of the spot `Ahead` studs before its head for `Damage`. When no
+-- one is left it circles on where it is (owner, 2026-11-26: never back to its landing). Circling it keeps to the
+-- middle, within `Middle.X` studs of it along the line between the halves and `Middle.Z` studs off that line (a hunt
+-- may lead it out, and it comes back after), and it goes through nothing of the map that stands up from the floor:
+-- circling it turns back there, hunting it slides round it. Left alone `Calm` seconds it
+-- heals `Heal` of its health a second. Dead, it falls with its Death clip and sinks into the sand, gone `Dying`
+-- seconds after.
+-- Slain, it leaves its key (`Key`, owner 2026-11-26, as League's Eye of the Herald) floating `Float` studs over where
+-- it died, for the team that slew it to take: a hero of that team touching it (within `Reach` studs) carries it over
+-- his head. Its carrier slain, it falls where he fell for anyone to take; `Lasts` seconds after it was first taken it
+-- is gone. Its carrier lets the beast loose with `Key.Press` (`Release`): it bursts out of the ground beside him in
+-- `Rumble` seconds, flies `Leap` studs towards the enemy Master in `Flight` seconds, and `Wake` seconds after it landed
+-- charges him at `Speed` studs a second (turning `Turn` radians a second), through everything in its way. Its first
+-- blow, a headbutt, strikes the Master for `Ram` of his most health once its head is within `Reach` studs of him;
+-- then it bites him for
+-- `Hit` every `Every` seconds. It fights for its carrier's team with `Health`: the enemy heroes and the Master
+-- (MasterService) can strike it, its own cannot, and from its headbutt on it loses `Decay` of its health a second,
+-- so it falls soon after.
+Config.Beast = {
+	-- 15% smaller than the 3.5 it had first (owner, 2026-11-26).
+	Scale = 2.975,
+	At = 600,
+	From = 45,
+	To = 95,
+	Off = 10,
+	Rumble = 6,
+	Hole = 7,
+	Height = 26,
+	Leap = 44,
+	Flight = 2.6,
+	Slam = 24,
+	Throw = 16,
+	Roar = 0.7,
+	Crater = 5,
+	Name = "Serpent",
+	Wake = 2.5,
+	-- As League's Rift Herald (owner, 2026-11-26): one hero brings it down in about half a minute, a whole team in
+	-- a few seconds, and it hurts without killing (6000 health and 220 a bite were far too much).
+	Health = 2600,
+	Radius = 13,
+	Turn = 2.5,
+	Speed = 16,
+	Roam = { Radius = 16, Speed = 6 },
+	Middle = { X = 110, Z = 32 },
+	Grudge = 8,
+	Aggro = 30,
+	Bite = { Every = 2.4, Length = 1.3, Hit = 0.62, Ahead = 12, Radius = 9.5, Damage = 55 },
+	Calm = 6,
+	Heal = 0.2,
+	Dying = 3.8,
+	-- Shown as the boosts are (owner, 2026-11-26): the banner as it is taken with `Own`, `Ally` or `Enemy` under it
+	-- (Config.Boosts.Texts over it), the pill over the bottom left's panel with `Short`, the minimap while it lies.
+	Key = {
+		Model = "SerpentKey",
+		Float = 3,
+		Reach = 5,
+		Lasts = 240,
+		Worn = 0.55,
+		Press = Enum.KeyCode.H,
+		Name = "Serpent Key",
+		Short = "SERPENT KEY",
+		Own = "PRESS H TO RELEASE THE SERPENT",
+		Ally = "YOUR TEAM CAN RELEASE THE SERPENT",
+		Enemy = "THE SERPENT MAY COME FOR YOUR MASTER",
+		Color = Color3.fromRGB(255, 150, 60),
+		-- Art/Icons/Key/SerpentKeyFront.png, Tools/render_crown_icon.py (stand 90, lean 90).
+		Image = "rbxassetid://133948536934667",
+		ImageSize = Vector2.new(242, 483),
+		FadeScale = 0.85,
+	},
+	-- Its headbutt takes 40% of the Master's most health (owner, 2026-11-26), and with him striking back it lives about
+	-- 13 seconds after it, its bites of 250 taking some 7% more (owner, 2026-11-26).
+	Release = {
+		Rumble = 1.2,
+		Leap = 16,
+		Flight = 1.3,
+		Wake = 0.4,
+		Speed = 75,
+		Turn = 6,
+		Health = 1600,
+		Reach = 9,
+		Ram = 0.4,
+		Hit = 250,
+		Every = 2.2,
+		Decay = 0.03,
+	},
 }
 
 -- Coins, in League of Legends' proportions (a hero kill is worth 14 Melee or 21 Spitter last hits, a legendary item
@@ -917,15 +1027,16 @@ Config.Minions = {
 	FirstWave = 10,
 	WaveInterval = 30,
 	-- Per doorway and wave, in marching order, down the doorway's own side; then its `Middle.Wave` through the middle.
-	-- Two doorways a team, so sixteen minions a wave in all (owner, 2026-11-25: two down the side, not three).
+	-- Two doorways a team, so twenty minions a wave in all (owner, 2026-11-25: two down the side, not three).
 	Wave = { "Spitter", "Spitter" },
 	-- At most this many waves of a lane's minions alive at once (owner, 2026-11-25); the rest of a wave stays home.
 	MaxWaves = 3,
-	-- The middle (owner, 2026-11-25): each doorway's two middle minions leave it after its side ones and turn in,
-	-- in one go, to `Ahead` studs before their own dais' front, `Apart` studs off its middle on the doorway's side, so
-	-- the two doorways' pairs come by each other; each pair then passes the plateau on its doorway's side, `Around`
-	-- studs from the middle, and goes on to the enemy dais' front on that side.
-	Middle = { Wave = { "Spitter", "Spitter" }, Ahead = 28, Apart = 6, Around = 25 },
+	-- The middle (owner, 2026-11-25): each doorway's three middle minions (owner, 2026-11-26: three each side of the
+	-- plateau, not two) leave it after its side ones and turn in, in one go, to `Ahead` studs before their own dais'
+	-- front, `Apart` studs off its middle on the doorway's side, so the two doorways' groups come by each other; each
+	-- group then passes the plateau on its doorway's side, `Around` studs from the middle, and goes on to the enemy
+	-- dais' front on that side.
+	Middle = { Wave = { "Spitter", "Spitter", "Spitter" }, Ahead = 28, Apart = 6, Around = 25 },
 	-- The lanes pass the east and west gates this far from the centre, between the cover arcs and the pillars.
 	LaneRadius = 82,
 	Radius = 1.8,
@@ -3335,11 +3446,13 @@ Config.Heroes = {
 		Description = "Veiled steps, sharp rings.",
 		-- Every player's, in the game (owner, 2026-11-24).
 		Starter = true,
-		-- On the podium she comes in with her chakrams (061, Weapon pose enter) into her weapon pose.
+		-- On the podium she comes in with her chakrams (065, cinematic motion 4) and stays in its last frame, her arms
+		-- nearly straight: 061's ends with her elbow bent 104°, where the blocky arm's two parts cut through each other
+		-- (owner, 2026-11-26).
 		-- Her aura the desert's dust her dash throws up, in its colour (ShadowEffects.Dust; owner, 2026-11-24).
 		Showcase = {
 			Motion = "RA-BLD-062",
-			Enter = { Motion = "RA-BLD-061", Then = "Breathe" },
+			Enter = { Motion = "RA-BLD-065", Then = "Breathe" },
 			Aura = Color3.fromRGB(190, 158, 112),
 			Dust = true,
 		},

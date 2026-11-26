@@ -2,8 +2,8 @@
 -- the player's own team left in blue and the enemy right in red (Side), jolting at every blow he takes, and between them the score (enemy heroes killed) over the match's clock (MatchService),
 -- at the bottom left the hero's portrait with his level (a chime as it rises), his kills / deaths / assists
 -- (ProgressService), health and XP (Shared.Leveling), with the boost over it: which comes next and when, and what it
--- does and how long it lasts; at the bottom right the round minimap with every hero, minion, throne and the boost
--- waiting to be taken on it, over the coin counter.
+-- does and how long it lasts, and the beast's key who has it; at the bottom right the round minimap with every hero,
+-- minion, throne, the boost and the beast's key waiting to be taken on it, over the coin counter.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -330,16 +330,24 @@ end
 -- seconds before the next one, when it comes and what it does ("WIND FEATHER IN 0:15 · SPEED UP"); while carried what
 -- it does and the time until it fades, "ENEMY" before it in the enemy's colour when they have it; while dropped its
 -- name and the time. While it floats in the middle the pill is gone: the boost shows itself, and on the minimap.
--- The time blinks for its last BOOST_BLINK seconds.
+-- The time blinks for its last BOOST_BLINK seconds. The beast's key (Config.Beast.Key) has a pill of its own the same
+-- way, over the boost's while that one shows.
 local BOOST_BLINK = 10
-local function buildBoost(gui: ScreenGui): () -> ()
-	local pill = UiStyle.frame(
-		gui,
-		UDim2.fromOffset(0, 40),
-		UDim2.new(0, PANEL_IN, 1, -PANEL_UP - PANEL_HEIGHT * UiStyle.BottomScale - 10),
-		Vector2.new(0, 1)
-	)
-	pill.Name = "BoostTimer"
+local PILL_HEIGHT, PILL_GAP = 40, 10
+local PILL_AT = UDim2.new(0, PANEL_IN, 1, -PANEL_UP - PANEL_HEIGHT * UiStyle.BottomScale - PILL_GAP)
+
+type Pill = {
+	frame: Frame,
+	edge: UIStroke,
+	picture: ImageLabel,
+	dot: Frame,
+	label: TextLabel,
+	labelEdge: UIStroke,
+}
+
+local function makePill(gui: ScreenGui, name: string): Pill
+	local pill = UiStyle.frame(gui, UDim2.fromOffset(0, PILL_HEIGHT), PILL_AT, Vector2.new(0, 1))
+	pill.Name = name
 	pill.AutomaticSize = Enum.AutomaticSize.X
 	pill.BackgroundColor3 = Color3.fromRGB(46, 32, 22)
 	pill.ZIndex = 3
@@ -374,6 +382,44 @@ local function buildBoost(gui: ScreenGui): () -> ()
 	label.ZIndex = 4
 	label.LayoutOrder = 2
 	local labelEdge = label:FindFirstChildOfClass("UIStroke") :: UIStroke
+	return { frame = pill, edge = edge, picture = picture, dot = dot, label = label, labelEdge = labelEdge }
+end
+
+-- Shows `text` on `p` (hidden without one) with `image` (else a dot of `colour`): in the enemy's colour for `enemy`,
+-- blinking red in its last BOOST_BLINK seconds (`left`).
+local function paintPill(
+	p: Pill,
+	text: string?,
+	left: number?,
+	enemy: boolean,
+	team: string?,
+	colour: Color3,
+	image: string?
+)
+	p.frame.Visible = text ~= nil
+	if not text then
+		return
+	end
+	p.label.Text = text
+	p.picture.Image = image or ""
+	p.picture.Visible = image ~= nil
+	p.dot.Visible = image == nil
+	p.dot.BackgroundColor3 = colour
+	local ending = left ~= nil and left <= BOOST_BLINK
+	local dim = ending and os.clock() % 0.5 < 0.25
+	local enemyColour = Config.Teams[Side.shown(if team == "Red" then "Blue" else "Red")].Color
+	p.label.TextColor3 = if ending
+		then Color3.fromRGB(255, 110, 90)
+		elseif enemy then enemyColour:Lerp(Color3.new(1, 1, 1), 0.35)
+		else Color3.new(1, 1, 1)
+	p.label.TextTransparency = if dim then 0.6 else 0
+	p.labelEdge.Transparency = if dim then 0.6 else 0
+	p.picture.ImageTransparency = if dim then 0.6 else 0
+	p.edge.Color = if ending then Color3.fromRGB(255, 110, 90) else colour
+end
+
+local function buildBoost(gui: ScreenGui): (() -> (), Frame)
+	local pill = makePill(gui, "BoostTimer")
 	-- The player's team, kept while he waits to respawn without a character.
 	local team: string? = nil
 
@@ -405,26 +451,41 @@ local function buildBoost(gui: ScreenGui): () -> ()
 				end
 			end
 		end
-		pill.Visible = text ~= nil
-		if not boost or not text then
+		if not boost then
+			pill.frame.Visible = false
 			return
 		end
-		label.Text = text
-		picture.Image = boost.Image or ""
-		picture.Visible = boost.Image ~= nil
-		dot.Visible = boost.Image == nil
-		dot.BackgroundColor3 = boost.Color
-		local ending = left ~= nil and left <= BOOST_BLINK
-		local dim = ending and os.clock() % 0.5 < 0.25
-		local enemyColour = Config.Teams[Side.shown(if team == "Red" then "Blue" else "Red")].Color
-		label.TextColor3 = if ending
-			then Color3.fromRGB(255, 110, 90)
-			elseif enemy then enemyColour:Lerp(Color3.new(1, 1, 1), 0.35)
-			else Color3.new(1, 1, 1)
-		label.TextTransparency = if dim then 0.6 else 0
-		labelEdge.Transparency = if dim then 0.6 else 0
-		picture.ImageTransparency = if dim then 0.6 else 0
-		edge.Color = if ending then Color3.fromRGB(255, 110, 90) else boost.Color
+		paintPill(pill, text, left, enemy, team, boost.Color, boost.Image)
+	end,
+		pill.frame
+end
+
+-- The beast's key's pill (BeastService's "SerpentKey" attributes): while carried "SERPENT KEY" and its time, "ENEMY"
+-- before it when they have it; while dropped its name and the time. Over the boost's pill while that one shows.
+local function buildKey(gui: ScreenGui, boostPill: Frame): () -> ()
+	local key = Config.Beast.Key
+	local pill = makePill(gui, "KeyTimer")
+	local team: string? = nil
+
+	return function()
+		team = player.Character and player.Character:GetAttribute("Team") or team
+		local state = Workspace:GetAttribute("SerpentKey")
+		local ends = Workspace:GetAttribute("SerpentKeyEnds")
+		local text: string? = nil
+		local left: number? = nil
+		local enemy = false
+		if (state == "Carried" or state == "Dropped") and typeof(ends) == "number" then
+			left = math.max(0, ends - Workspace:GetServerTimeNow())
+			local clock = UiStyle.clock(math.ceil(left :: number))
+			if state == "Dropped" then
+				text = string.format("%s DROPPED %s", string.upper(key.Name), clock)
+			else
+				enemy = Workspace:GetAttribute("SerpentKeyTeam") ~= team
+				text = string.format("%s%s %s", if enemy then "ENEMY " else "", key.Short, clock)
+			end
+		end
+		pill.frame.Position = PILL_AT + UDim2.fromOffset(0, if boostPill.Visible then -(PILL_HEIGHT + PILL_GAP) else 0)
+		paintPill(pill, text, left, enemy, team, key.Color, key.Image)
 	end
 end
 
@@ -590,6 +651,11 @@ local function buildMap(gui: ScreenGui): () -> ()
 	boostIcon.ZIndex = 6
 	boostIcon.Visible = false
 	boostIcon.Parent = map
+	-- The beast's key where it lies.
+	local keyIcon = boostIcon:Clone()
+	keyIcon.Name = "SerpentKey"
+	keyIcon.Image = Config.Beast.Key.Image
+	keyIcon.Parent = map
 
 	local pool: { Dot } = {}
 	local function dot(size: number, colour: Color3, edge: Color3, z: number): Frame
@@ -675,6 +741,11 @@ local function buildMap(gui: ScreenGui): () -> ()
 		else
 			boostIcon.Visible = false
 		end
+		local keySpot = Workspace:GetAttribute("SerpentKeySpot")
+		keyIcon.Visible = Workspace:GetAttribute("SerpentKey") == "Dropped" and typeof(keySpot) == "Vector3"
+		if keyIcon.Visible then
+			keyIcon.Position = at(keySpot)
+		end
 		for _, d in pool do
 			if not d.used then
 				d.frame.Visible = false
@@ -721,7 +792,8 @@ function Hud.start()
 	insets:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	scale:GetPropertyChangedSignal("Scale"):Connect(fit)
 	fit()
-	local updates = { buildTop(top), buildBoost(gui), buildPlayer(gui), buildMap(gui) }
+	local boost, boostPill = buildBoost(gui)
+	local updates = { buildTop(top), boost, buildKey(gui, boostPill), buildPlayer(gui), buildMap(gui) }
 	RunService.RenderStepped:Connect(function()
 		for _, update in updates do
 			update()

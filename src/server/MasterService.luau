@@ -2,8 +2,9 @@
 -- heroes are, three times their size, on his throne. He carries the "Master", "Team" and "Radius" attributes and the
 -- "Combatant" tag, so heroes and minions fight him and MatchService shows his health; he never heals. His "State"
 -- attribute tells the clients (MasterView) what he does: "Seated" on his throne (anchored), "Rising" when an enemy
--- comes into his zone, "Drawing" while he stands and draws his sword from his back, "Fight" while he chases and
--- strikes, "Returning" when he walks back to sit down, "Sheathing" before his throne while he puts his sword on his
+-- comes within Config.Master.Wake, "Drawing" while he stands and draws his sword from his back, "Fight" while he
+-- waits at his zone's edge, chases and strikes, "Returning" when he walks back to sit down, "Sheathing" before his
+-- throne while he puts his sword on his
 -- back, "Dead".
 -- Every strike is told to the clients first (Net.MasterAction: the Master, "Swing" or "Slam", the seconds until it
 -- lands, then for a swing which of Config.Master.Swing.Motions it is, for a slam the spot on the ground and its radius,
@@ -115,10 +116,26 @@ local function setState(m: Master, state: string)
 	m.model:SetAttribute("State", state)
 end
 
--- The enemies of `team` within `reach` studs of `centre` (flat): heroes and minions; a vanished hero ("Hidden") is not
--- there for him, neither to go for nor to strike.
+-- The enemies of `team` within `reach` studs of `centre` (flat): heroes, minions and the beast an enemy let loose
+-- (BeastService, gone for him by its coil's middle as a hero); a vanished hero ("Hidden") is not there for him,
+-- neither to go for nor to strike.
 local function foes(team: string, centre: Vector3, reach: number): { Foe }
 	local found = {}
+	local beast = Workspace:FindFirstChild("Beast")
+	local coil = beast and beast:GetAttribute("Centre")
+	if
+		beast
+		and typeof(coil) == "Vector3"
+		and beast:GetAttribute("Released")
+		and beast:GetAttribute("Team") ~= team
+		and beast:GetAttribute("Phase") == "Fight"
+		and (beast:GetAttribute("Health") or 0) > 0
+	then
+		local radius = beast:GetAttribute("Radius") or Config.Beast.Radius
+		if HeroKit.flat(coil - centre).Magnitude <= reach + radius then
+			table.insert(found, { instance = beast, position = coil, radius = radius, hero = true })
+		end
+	end
 	local minions = Workspace:FindFirstChild("Minions")
 	if minions then
 		for _, root in minions:GetChildren() do
@@ -178,6 +195,15 @@ local function strike(foe: Foe, amount: number, share: number)
 		return
 	end
 	local model = target :: Model
+	if model:GetAttribute("Beast") then
+		local health = model:GetAttribute("Health") or 0
+		if health > 0 then
+			amount = math.round(amount)
+			hitEvent:FireAllClients(model, amount, foe.position, nil)
+			model:SetAttribute("Health", math.max(0, health - amount))
+		end
+		return
+	end
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if not humanoid or humanoid.Health <= 0 then
 		return
@@ -360,15 +386,21 @@ local function update(m: Master, dt: number, now: number)
 	then
 		return
 	end
-	local inZone = if MatchService.fighting() then foes(m.team, m.front, SETTINGS.Zone) else {}
+	local near = if MatchService.fighting() then foes(m.team, m.front, SETTINGS.Wake) else {}
+	local inZone = {}
+	for _, foe in near do
+		if HeroKit.flat(foe.position - m.front).Magnitude <= SETTINGS.Zone + foe.radius then
+			table.insert(inZone, foe)
+		end
+	end
 	if m.state == "Seated" then
-		if #inZone > 0 then
+		if #near > 0 then
 			rise(m)
 		end
 		return
 	end
 
-	if #inZone == 0 then
+	if #near == 0 then
 		m.calmSince = m.calmSince or now
 	else
 		m.calmSince = nil
@@ -402,7 +434,20 @@ local function update(m: Master, dt: number, now: number)
 	local target = choose(m, inZone)
 	m.target = target
 	if not target then
-		m.humanoid:MoveTo(m.root.Position)
+		local coming = choose(m, near)
+		if not coming or busy then
+			m.humanoid:MoveTo(m.root.Position)
+			return
+		end
+		face(m, coming.position, dt)
+		local out = HeroKit.flat(coming.position - m.front)
+		local way = if out.Magnitude > 0.1 then out.Unit else HeroKit.flat(m.front - m.stand.Position).Unit
+		local post = m.front + way * math.min(SETTINGS.Post, out.Magnitude)
+		if HeroKit.flat(post - m.root.Position).Magnitude > ARRIVED then
+			walk(m, post, now)
+		else
+			m.humanoid:MoveTo(m.root.Position)
+		end
 		return
 	end
 	face(m, target.position, dt)

@@ -80,6 +80,8 @@ function KilledBy.start()
 			name.Text = "Minions"
 		elseif kill.killerHero == "Warden" then
 			name.Text = "The Warden"
+		elseif kill.killerHero == "Beast" then
+			name.Text = Config.Beast.Name
 		elseif typeof(killer) == "Instance" and killer:IsA("Player") then
 			name.Text = killer.DisplayName
 		else

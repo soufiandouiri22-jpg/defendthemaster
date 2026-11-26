@@ -204,6 +204,42 @@ local function watch(character: Model): Model?
 	return if #options > 0 then options[math.random(#options)] else nil
 end
 
+-- Where the line from `from` along `direction` (a unit) first meets the beast's body within `reach` studs: the
+-- upright cylinder the server strikes (HeroKit.body), as its hit box is not there for rays (BeastService).
+local function beastHit(beast: Model, from: Vector3, direction: Vector3, reach: number): Vector3?
+	local body = HeroKit.body(beast)
+	if not body then
+		return nil
+	end
+	local o = HeroKit.flat(from - body.position)
+	local d = HeroKit.flat(direction)
+	local a, b, c = d:Dot(d), 2 * o:Dot(d), o:Dot(o) - body.radius * body.radius
+	local function within(t: number): Vector3?
+		local at = from + direction * t
+		if t >= 0 and t <= reach and at.Y >= body.bottom and at.Y <= body.top then
+			return at
+		end
+		return nil
+	end
+	if a > 1e-6 then
+		local disc = b * b - 4 * a * c
+		if disc >= 0 then
+			local side = within(math.max((-b - math.sqrt(disc)) / (2 * a), 0))
+			if side then
+				return side
+			end
+		end
+	end
+	if math.abs(direction.Y) > 1e-6 then
+		local t = (body.top - from.Y) / direction.Y
+		local at = from + direction * t
+		if t >= 0 and t <= reach and HeroKit.flat(at - body.position).Magnitude <= body.radius then
+			return at
+		end
+	end
+	return nil
+end
+
 local function update(dt: number)
 	local camera = Workspace.CurrentCamera
 	local character = player.Character
@@ -298,11 +334,19 @@ local function update(dt: number)
 	local start = math.max(0, (HeroKit.muzzle(root.Position) - ray.Origin):Dot(ray.Direction))
 	local from = ray.Origin + ray.Direction * start
 	local scoped = scoping > 0.5
-	local result = Workspace:Raycast(from, ray.Direction * (if scoped then SCOPE_REACH else AIM_REACH), aimRay)
+	local reach = if scoped then SCOPE_REACH else AIM_REACH
+	local result = Workspace:Raycast(from, ray.Direction * reach, aimRay)
 	aimInstance = if result then result.Instance else nil
 	-- The point under the crosshair, else one far along the camera's line: the hero stands left of that line, so
 	-- aiming along the look from him would fly past what the crosshair is on.
 	aimPoint = if result then result.Position else from + ray.Direction * (if scoped then SCOPE_REACH else AIM_ALONG)
+	local beast = Workspace:FindFirstChild("Beast")
+	if beast and beast:IsA("Model") and (beast:GetAttribute("Health") or 0) > 0 then
+		local at = beastHit(beast, from, ray.Direction, if result then result.Distance else reach)
+		if at then
+			aimInstance, aimPoint = beast, at
+		end
+	end
 end
 
 function HeroCamera.start()

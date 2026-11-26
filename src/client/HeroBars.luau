@@ -1,13 +1,14 @@
 -- The bar over every other hero's head (design 05): his health in his team's colour on this screen (Side: allies blue,
 -- enemies red), the only thing that tells the teams apart, with his level in the round knob at its left end. A hero's bar goes when he dies (the "Combatant" tag
 -- goes with his life). A boost's carrier (his "Boost" attribute, BoostService) has his bar raised over the boost
--- that turns over his head (BoostView).
+-- that turns over his head (BoostView), and the beast's key's ("SerpentKey", KeyView) over the key.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Boosts = require(ReplicatedStorage.Shared.Boosts)
 local BoostView = require(script.Parent.BoostView)
+local KeyView = require(script.Parent.KeyView)
 local Side = require(script.Parent.Side)
 local UiStyle = require(script.Parent.UiStyle)
 
@@ -90,11 +91,14 @@ local function build(model: Model)
 		bar:set(if humanoid.MaxHealth > 0 then humanoid.Health / humanoid.MaxHealth else 0)
 		level.Text = tostring(levelOf(model))
 		local boost = if model:GetAttribute("Boost") == true then Boosts.current() else nil
-		gui.StudsOffsetWorldSpace = Vector3.new(0, if boost then BOOSTED + BoostView.wornTop(boost) else OVER, 0)
+		local key = model:GetAttribute("SerpentKey") == true
+		local worn = (if boost then BoostView.wornTop(boost) else 0) + (if key then KeyView.wornTop() else 0)
+		gui.StudsOffsetWorldSpace = Vector3.new(0, if boost or key then BOOSTED + worn else OVER, 0)
 	end
 	humanoid.HealthChanged:Connect(update)
 	humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(update)
 	model:GetAttributeChangedSignal("Boost"):Connect(update)
+	model:GetAttributeChangedSignal("SerpentKey"):Connect(update)
 	if owner then
 		owner:GetAttributeChangedSignal("Level"):Connect(update)
 	else

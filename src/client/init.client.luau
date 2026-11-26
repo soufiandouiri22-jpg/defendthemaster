@@ -26,6 +26,10 @@ Pointer.start(playerGui)
 -- What the loading screen waits for: the world, everything on the screen, and every picture a page or the HUD can show.
 local function everything(): { Instance | string }
 	local list: { Instance | string } = { Workspace, playerGui }
+	local beast = ReplicatedStorage:FindFirstChild("Beast")
+	if beast then
+		table.insert(list, beast)
+	end
 	for _, id in Pictures.all() do
 		table.insert(list, id)
 	end
@@ -56,6 +60,7 @@ if Workspace:GetAttribute("Role") == "Lobby" then
 end
 
 local AbilityBar = require(script.AbilityBar)
+local BeastView = require(script.BeastView)
 local BoostView = require(script.BoostView)
 local BuyPhase = require(script.BuyPhase)
 local ClothingWatch = require(script.ClothingWatch)
@@ -74,6 +79,7 @@ local HitFeedback = require(script.HitFeedback)
 local Hud = require(script.Hud)
 local ItemBar = require(script.ItemBar)
 local JumpPadView = require(script.JumpPadView)
+local KeyView = require(script.KeyView)
 local KillFeed = require(script.KillFeed)
 local KilledBy = require(script.KilledBy)
 local LightningEffects = require(script.LightningEffects)
@@ -100,6 +106,7 @@ HeroSounds.start()
 MinionView.start()
 task.spawn(MasterView.start)
 task.spawn(WardenView.start)
+BeastView.start()
 HitFeedback.start()
 LightningEffects.start()
 HeroAnimator.start()
@@ -113,6 +120,7 @@ RespawnTimer.start()
 Shop.start()
 Scoreboard.start()
 task.spawn(BoostView.start)
+task.spawn(KeyView.start)
 DamageView.start()
 task.spawn(KillFeed.start)
 task.spawn(KilledBy.start)

@@ -21,7 +21,8 @@ local OVER = 1.2
 -- The stand-in ball's size.
 local BALL = 2.6
 
-local function prepare(model: Model, range: number, brightness: number)
+-- Readies `model` to float as a boost does (also the beast's key, KeyView): nothing touches it, with the warm light.
+function BoostView.prepare(model: Model, range: number, brightness: number)
 	for _, p in model:GetDescendants() do
 		if p:IsA("BasePart") then
 			p.Anchored = true
@@ -60,10 +61,10 @@ end
 local function models(boost: Boosts.Boost): (Model, Model)
 	local base = source(boost)
 	local floating = base:Clone()
-	prepare(floating, 16, 2)
+	BoostView.prepare(floating, 16, 2)
 	local worn = base
 	worn:ScaleTo(worn:GetScale() * boost.Worn)
-	prepare(worn, 8, 1)
+	BoostView.prepare(worn, 8, 1)
 	return floating, worn
 end
 
@@ -82,9 +83,9 @@ function BoostView.wornTop(boost: Boosts.Boost): number
 	return OVER + height :: number
 end
 
--- The glow under the floating boost: a light on the floor shining up at it and a faint column of light that fades
--- out on its way up.
-local function glow(): (BasePart, Attachment)
+-- The glow under the floating boost (and the beast's key, KeyView): a light on the floor shining up at it and a faint
+-- column of light that fades out on its way up.
+function BoostView.glow(): (BasePart, Attachment)
 	local base = Instance.new("Part")
 	base.Name = "BoostGlow"
 	base.Anchored = true
@@ -136,7 +137,7 @@ end
 function BoostView.start()
 	-- The boosts' models live in the place, not in the project: the first may still be on its way.
 	ReplicatedStorage:WaitForChild(Config.Boosts.List[Config.Boosts.First].Model, 30)
-	local base, top = glow()
+	local base, top = BoostView.glow()
 	local folder = Instance.new("Folder")
 	folder.Name = "BoostEffects"
 	folder.Parent = Workspace

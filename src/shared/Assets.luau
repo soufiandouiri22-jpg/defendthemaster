@@ -153,6 +153,14 @@ return {
 	-- `WardenLaserLoop` to the end, cut and uploaded with Tools/upload_audio.py (owner's pick, 2026-11-25).
 	WardenLaser = "rbxassetid://136879281458413",
 	WardenLaserLoop = { 0.83, 3.88 },
+	-- The beast coming out of the ground (BeastView), Pro Sound Effects' recordings in Roblox's licensed library
+	-- (Docs/Third_Party.md): an avalanche's rumble growing stronger, its rocks bursting, and a giant monster's roars.
+	BeastRumble = "rbxassetid://9113222895",
+	BeastBurst = "rbxassetid://9113218938",
+	BeastRoar = "rbxassetid://9113987603",
+	-- Its dying cry (owner, 2026-11-26): Pro Sound Effects' "Lion Roar Painful Bellows Cries Whines Gargle 1", played
+	-- lower (BeastView's DEATH_PITCH) so it sounds as big as the beast.
+	BeastDeath = "rbxassetid://9125628598",
 	-- Candidates for the sound of every hit (Config.Combat.HitSounds): the game's own dry crunches, wide,
 	-- deeper, and deeper with a sharp crack (Art/Sounds/Hit.wav, HitLow.wav and HitRaw.wav, made and uploaded by
 	-- Tools/hit_sound.py; the owner's picks, 2026-10-29).

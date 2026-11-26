@@ -12,6 +12,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local BeastView = require(script.Parent.BeastView)
 local MinionView = require(script.Parent.MinionView)
 local Preferences = require(script.Parent.Preferences)
 local UiSound = require(script.Parent.UiSound)
@@ -125,7 +126,10 @@ end
 local flashes: Folder? = nil
 
 local function flash(target: Instance, tier: Tier)
-	local model = if target:IsA("BasePart") then MinionView.modelOf(target) else target
+	local model = if target:IsA("BasePart")
+		then MinionView.modelOf(target)
+		elseif target:GetAttribute("Beast") then BeastView.model()
+		else target
 	if not model then
 		return
 	end

@@ -153,6 +153,8 @@ local knockEvent: RemoteEvent
 
 -- Carries a knocked bot (BotService.start sets it), as a knocked player's client carries him.
 CombatService.carryBot = nil :: ((actor: Instance, to: Vector3, height: number, length: number) -> ())?
+-- Tells BeastService the hero `character` struck the beast (BeastService.start sets it).
+CombatService.beastStruck = nil :: ((character: Model) -> ())?
 
 local function alive(character: Model): boolean
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -248,6 +250,8 @@ local function damage(player: Instance, character: Model, enemy: Enemy, amount: 
 	if model:GetAttribute("Hero") or model:GetAttribute("Master") then
 		MinionService.heroAttacked(character, model)
 		WardenService.struck(character, model)
+	elseif model:GetAttribute("Beast") and CombatService.beastStruck then
+		CombatService.beastStruck(character)
 	end
 end
 
@@ -274,6 +278,7 @@ local function carry(target: Instance, to: Vector3, height: number, length: numb
 		CombatService.carryBot(owner, to, height, length)
 	end
 end
+CombatService.carry = carry
 
 -- A kit's `Knockback` throws the enemy hero or minion struck by `character` away from him (or from `centre`, where
 -- his strike fell): `Distance` studs over the ground (less where a wall stops it), in an arc `Height` studs high, in

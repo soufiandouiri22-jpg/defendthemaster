@@ -51,6 +51,10 @@ local SOUNDS = {
 	Thunder = true,
 	CrowCaw = true,
 	WardenLaser = true,
+	BeastRumble = true,
+	BeastBurst = true,
+	BeastRoar = true,
+	BeastDeath = true,
 }
 
 local Pictures = {}

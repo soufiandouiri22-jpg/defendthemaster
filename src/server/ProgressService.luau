@@ -28,7 +28,7 @@ local credit: { [Model]: { last: Instance, at: number, by: { [Instance]: number 
 local masterHits: { [Model]: number } = {}
 local minionHits: { [Model]: number } = {}
 -- Per hurt hero: when a warden's laser last burnt him (os.clock), and which statue's.
-local wardenHits: { [Model]: { at: number, statue: Model } } = {}
+local wardenHits: { [Model]: { at: number, statue: Model, kind: string } } = {}
 -- Per killer: his kills in a row within Config.Kills.MultiWindow of each other, and when the last was.
 local multi: { [Instance]: { count: number, at: number } } = {}
 local firstBlood = false
@@ -140,9 +140,10 @@ function ProgressService.hurtByMinion(victim: Model)
 	minionHits[victim] = os.clock()
 end
 
--- The laser of the warden `statue` burnt the hero `victim` (WardenService).
-function ProgressService.hurtByWarden(victim: Model, statue: Model)
-	wardenHits[victim] = { at = os.clock(), statue = statue }
+-- The laser of the warden `statue` burnt the hero `victim` (WardenService); or, as `kind` "Beast", the beast bit him
+-- (BeastService), its blow counted as a warden's.
+function ProgressService.hurtByWarden(victim: Model, statue: Model, kind: string?)
+	wardenHits[victim] = { at = os.clock(), statue = statue, kind = kind or "Warden" }
 end
 
 -- When an enemy (a hero, a minion, a Master or a warden) last hurt `victim` (os.clock), if one did since `victim` came
@@ -249,7 +250,7 @@ end
 
 -- Tells every client of the death of `player`'s hero `character` at `position` (Net.Kill): the call, whether Wipeout
 -- follows it, both sides' players (nil for bots), names, heroes and teams, and the bounty. Felled by a Master or a
--- minion or a warden, the killer's hero is `by`: "Master", "Minion" or "Warden".
+-- minion, a warden or the beast, the killer's hero is `by`: "Master", "Minion", "Warden" or "Beast".
 local function announce(
 	character: Model,
 	player: Instance,
@@ -339,7 +340,7 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 		kind,
 		wiped,
 		worth,
-		if byWarden then "Warden" elseif byMinion then "Minion" elseif byMaster then "Master" else nil
+		if byWarden and warden then warden.kind elseif byMinion then "Minion" elseif byMaster then "Master" else nil
 	)
 	for _, actor in assists do
 		Economy.give(actor, math.round(worth * Config.Economy.Assist / #assists), "assist on " .. player.Name)
