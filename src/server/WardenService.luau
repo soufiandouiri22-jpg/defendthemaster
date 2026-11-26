@@ -3,7 +3,8 @@
 -- dais's front to the arena's middle, so never two on one enemy (owner, 2026-11-25). Their eyes are the "Eye" parts
 -- ColosseumBuilder lights in their visors, in the Map's "BlueBase" and "RedBase". Each statue's target is told to the
 -- clients by an ObjectValue in Net.Wardens (nil while it burns nobody), named as the statue's "Warden" attribute, for
--- its beams (WardenView); the beam burns him from Charge seconds after it was set.
+-- its beams (WardenView); the beam burns him from Charge seconds after it was set. Its "Front" and "Half" attributes
+-- are its half of the zone, for its eyes.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,6 +25,7 @@ local ZONE = Config.Master.Zone
 
 type Side = {
 	team: string,
+	statue: Model,
 	-- The middle of their Master's zone, his dais's front, and the flat way from the line through it to the arena's
 	-- middle to this statue's side of the zone.
 	front: Vector3,
@@ -183,8 +185,8 @@ local function burn(side: Side, target: Instance, now: number)
 	end
 	side.owed -= amount
 	if humanoid then
-		-- His death counts as his Master's kill, as the minions' do as theirs.
-		ProgressService.hurtByMaster(target :: Model)
+		-- His death may be this warden's kill, as a minion's (ProgressService).
+		ProgressService.hurtByWarden(target :: Model, side.statue)
 		humanoid:TakeDamage(amount)
 	else
 		MinionService.damage(target :: BasePart, amount, nil)
@@ -260,11 +262,15 @@ function WardenService.start(layout: Layout)
 			local half = if away:Dot(right) >= 0 then right else -right
 			local name = team .. (if half == right then "Right" else "Left")
 			statue:SetAttribute("Warden", name)
+			-- For the eyes waking as an enemy comes near its half of the zone (WardenView).
+			statue:SetAttribute("Front", middle)
+			statue:SetAttribute("Half", half)
 			local shown = Instance.new("ObjectValue")
 			shown.Name = name
 			shown.Parent = folder
 			table.insert(sides, {
 				team = team,
+				statue = statue :: Model,
 				front = middle,
 				half = half,
 				target = nil,

@@ -27,6 +27,8 @@ local credit: { [Model]: { last: Instance, at: number, by: { [Instance]: number 
 -- Per hurt hero: when a Master last struck him, and when a minion last did (os.clock).
 local masterHits: { [Model]: number } = {}
 local minionHits: { [Model]: number } = {}
+-- Per hurt hero: when a warden's laser last burnt him (os.clock), and which statue's.
+local wardenHits: { [Model]: { at: number, statue: Model } } = {}
 -- Per killer: his kills in a row within Config.Kills.MultiWindow of each other, and when the last was.
 local multi: { [Instance]: { count: number, at: number } } = {}
 local firstBlood = false
@@ -138,10 +140,21 @@ function ProgressService.hurtByMinion(victim: Model)
 	minionHits[victim] = os.clock()
 end
 
--- When an enemy (a hero, a minion or a Master) last hurt `victim` (os.clock), if one did since `victim` came back.
+-- The laser of the warden `statue` burnt the hero `victim` (WardenService).
+function ProgressService.hurtByWarden(victim: Model, statue: Model)
+	wardenHits[victim] = { at = os.clock(), statue = statue }
+end
+
+-- When an enemy (a hero, a minion, a Master or a warden) last hurt `victim` (os.clock), if one did since `victim` came
+-- back.
 function ProgressService.hurtAt(victim: Model): number?
 	local last = credit[victim]
-	local at = math.max(last and last.at or 0, minionHits[victim] or 0, masterHits[victim] or 0)
+	local at = math.max(
+		last and last.at or 0,
+		minionHits[victim] or 0,
+		masterHits[victim] or 0,
+		if wardenHits[victim] then wardenHits[victim].at else 0
+	)
 	return if at > 0 then at else nil
 end
 
@@ -149,6 +162,12 @@ end
 function ProgressService.heroHurtAt(victim: Model): number?
 	local last = credit[victim]
 	return last and last.at
+end
+
+-- When the hero of `player` last hurt `victim` (os.clock), if he did since `victim` came back.
+function ProgressService.hurtBy(victim: Model, player: Instance): number?
+	local last = credit[victim]
+	return last and last.by[player]
 end
 
 -- What killing `player`'s hero earns (Config.Economy): less after deaths without a kill, more on a kill streak.
@@ -230,7 +249,7 @@ end
 
 -- Tells every client of the death of `player`'s hero `character` at `position` (Net.Kill): the call, whether Wipeout
 -- follows it, both sides' players (nil for bots), names, heroes and teams, and the bounty. Felled by a Master or a
--- minion, the killer's hero is `by`: "Master" or "Minion".
+-- minion or a warden, the killer's hero is `by`: "Master", "Minion" or "Warden".
 local function announce(
 	character: Model,
 	player: Instance,
@@ -286,6 +305,15 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 	if byMinion then
 		byMaster = false
 	end
+	-- A warden's laser counts as a minion's blow (owner, 2026-11-25): with no enemy hero's blow to credit, its last
+	-- burn after any Master's and minion's makes it the warden's kill.
+	local warden = wardenHits[character]
+	wardenHits[character] = nil
+	local lastAt = if byMinion then minionAt :: number elseif byMaster then masterAt :: number else -math.huge
+	local byWarden = killer == nil and warden ~= nil and now - warden.at <= SETTINGS.KillCredit and warden.at > lastAt
+	if byWarden then
+		byMaster, byMinion = false, false
+	end
 	local assists = {}
 	for actor, at in if entry then entry.by else {} do
 		if actor ~= killer and actor.Parent and now - at <= SETTINGS.KillCredit then
@@ -311,7 +339,7 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 		kind,
 		wiped,
 		worth,
-		if byMinion then "Minion" elseif byMaster then "Master" else nil
+		if byWarden then "Warden" elseif byMinion then "Minion" elseif byMaster then "Master" else nil
 	)
 	for _, actor in assists do
 		Economy.give(actor, math.round(worth * Config.Economy.Assist / #assists), "assist on " .. player.Name)
@@ -322,8 +350,12 @@ function ProgressService.heroDied(character: Model, player: Instance, position: 
 	player:SetAttribute("DeathsSinceKill", (player:GetAttribute("DeathsSinceKill") or 0) + 1)
 	local wait = respawnTime(player)
 	character:SetAttribute("RespawnAt", Workspace:GetServerTimeNow() + wait)
-	-- Whom his camera follows until he is back (the client's HeroCamera): the enemy hero who killed him, or the Master.
+	-- Whom his camera follows until he is back (the client's HeroCamera): the enemy hero who killed him, the Master or
+	-- the warden statue.
 	local follow: Instance? = if killer then Actors.character(killer) else nil
+	if byWarden and warden and warden.statue.Parent then
+		follow = warden.statue
+	end
 	local masters = Workspace:FindFirstChild("Masters")
 	if byMaster and masters then
 		for _, model in masters:GetChildren() do

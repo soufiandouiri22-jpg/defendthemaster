@@ -1,7 +1,7 @@
 -- While the player's hero is dead, one line under the respawn count says who killed him (owner, 2026-11-25: as
 -- Fortnite's "ELIMINATED <name>", in the HUD's look, not a card full of information): "KILLED BY" in cream and the
 -- killer's name in his team's colour: the player's own name, never his hero's, and "Bot" for a bot (owner,
--- 2026-11-25); the Master, or the minions. A death nobody is credited with shows none. It comes in after the death's banner has slammed in (KillFeed) and goes when the hero is back.
+-- 2026-11-25); the Master, the minions, or a warden. A death nobody is credited with shows none. It comes in after the death's banner has slammed in (KillFeed) and goes when the hero is back.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -78,6 +78,8 @@ function KilledBy.start()
 			name.Text = "The Master"
 		elseif kill.killerHero == "Minion" then
 			name.Text = "Minions"
+		elseif kill.killerHero == "Warden" then
+			name.Text = "The Warden"
 		elseif typeof(killer) == "Instance" and killer:IsA("Player") then
 			name.Text = killer.DisplayName
 		else

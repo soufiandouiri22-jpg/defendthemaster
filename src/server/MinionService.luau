@@ -114,8 +114,10 @@ local folder: Folder
 local attackEvent: RemoteEvent
 local obstacles = RaycastParams.new()
 obstacles.FilterType = Enum.RaycastFilterType.Include
--- A doorway's way to the enemy dais, and the minions of a wave that take it, in marching order.
-type Lane = { path: { Vector3 }, wave: { string } }
+-- A doorway's way to the enemy dais, and the minions of a wave that take it, in marching order. Both teams' minions
+-- on one stretch of the arena share its `index`, the root's "Lane" attribute: 1 down the +X side, 2 through the
+-- middle on the +X side, 3 through the middle on the -X side, 4 down the -X side (BotService's lanes).
+type Lane = { path: { Vector3 }, wave: { string }, index: number }
 -- Each doorway's two lanes, down its own side and through the middle, by the door's CFrame.
 local lanes: { [CFrame]: { Lane } } = {}
 
@@ -558,6 +560,7 @@ local function spawn(team: string, kind: string, door: CFrame, lane: Lane): Base
 	root:SetAttribute("Health", stats.Health)
 	root:SetAttribute("MaxHealth", stats.Health)
 	root:SetAttribute("Dead", false)
+	root:SetAttribute("Lane", lane.index)
 	local m: Minion = {
 		team = team,
 		kind = kind,
@@ -710,7 +713,7 @@ export type Layout = {
 -- A `team` minion of `kind` at `at`, whose path ends where it stands (Studio's tests and test ground); its root.
 function MinionService.spawnAt(team: string, kind: string, at: Vector3): BasePart?
 	local door = CFrame.new(at)
-	return spawn(team, kind, door, { path = { flat(at) }, wave = SETTINGS.Wave })
+	return spawn(team, kind, door, { path = { flat(at) }, wave = SETTINGS.Wave, index = 0 })
 end
 
 -- The path through `points`, one after another.
@@ -778,10 +781,12 @@ function MinionService.start(layout: Layout)
 				{
 					path = through({ door.Position, Vector3.new(side * SETTINGS.LaneRadius, 0, 0), goal }),
 					wave = SETTINGS.Wave,
+					index = if side > 0 then 1 else 4,
 				},
 				{
 					path = through({ door.Position, inside, Vector3.new(side * SETTINGS.Middle.Around, 0, 0), goal }),
 					wave = SETTINGS.Middle.Wave,
+					index = if side > 0 then 2 else 3,
 				},
 			}
 			print(

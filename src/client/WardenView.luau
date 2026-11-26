@@ -1,8 +1,11 @@
--- The wardens' beams (Config.Wardens, the server's WardenService): when a knight statue takes a target (Net.Wardens)
--- its eyes flare and the laser's burst sounds as they gather their light; then a red beam goes from each eye to the
--- target and stays on him, following him, with the laser's full sound looping, until the server lets him go. Then the
--- beams fade, the sound dies away and the eyes dim.
+-- The wardens' eyes and beams (Config.Wardens, the server's WardenService). A knight statue's eyes are dark stone
+-- until a living enemy hero who is not hidden comes within Warn studs of its half of the zone, and glow redder as he
+-- comes nearer, full at its edge. When it takes a target (Net.Wardens) its eyes flare and the laser's burst sounds as
+-- they gather their light; then a red beam goes from each eye to the target and stays on him, following him, with the
+-- laser's full sound looping, until the server lets him go. Then the beams fade, the sound dies away and the eyes go
+-- back to how near the nearest enemy hero is.
 
+local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -16,9 +19,13 @@ local Preferences = require(script.Parent.Preferences)
 local WardenView = {}
 
 local SETTINGS = Config.Wardens
+local ZONE = Config.Master.Zone
 local RED = Color3.fromRGB(255, 0, 0)
--- How many times brighter the eyes' glow grows while they burn someone, and how fast it dims after.
-local FLARE, DIM = 2.5, 0.4
+-- The eyes asleep, as dark as the stone deep in the visor.
+local DARK = Color3.fromRGB(28, 22, 20)
+-- How many times brighter the eyes' glow grows while they burn someone, and how fast they follow what they should
+-- show (about all of it within Charge).
+local FLARE, EASE = 2.5, 6
 -- The glow where the beams strike: how wide, how bright.
 local SPOT_SIZE, SPOT_BRIGHTNESS = 2.4, 6
 -- How much the beams' width trembles, and how fast.
@@ -38,6 +45,9 @@ type Burning = {
 -- Each eye's glow (the attachment before it in ColosseumBuilder), by statue (its "Warden" attribute, as "BlueLeft").
 local eyes: { [string]: { Attachment } } = {}
 local burning: { [string]: Burning } = {}
+-- Every warden told of in Net.Wardens, and how bright its eyes are now.
+local watched: { [string]: true } = {}
+local shine: { [string]: number } = {}
 
 local function eyesOf(warden: string): { Attachment }
 	local found = eyes[warden]
@@ -57,6 +67,8 @@ local function eyesOf(warden: string): { Attachment }
 		end
 	end
 	eyes[warden] = found
+	-- New eyes (a new map) are as ColosseumBuilder lit them, till they are lit again.
+	shine[warden] = nil
 	return found
 end
 
@@ -73,16 +85,81 @@ local function pointOf(target: Instance): Vector3?
 	return nil
 end
 
--- The eyes `glows` shine `times` as bright as ColosseumBuilder made them, over `seconds`.
-local function glowTo(glows: { Attachment }, times: number, seconds: number)
+-- The base `thing` was made with, by ColosseumBuilder, of its `property`.
+local function base(thing: Instance, property: string): number
+	local name = "Base" .. property
+	local was = thing:GetAttribute(name)
+	if was == nil then
+		was = (thing :: any)[property]
+		thing:SetAttribute(name, was)
+	end
+	return was
+end
+
+-- The eyes `glows` shine `times` as bright as ColosseumBuilder made them: dark at 0, red from there to full at 1.
+local function light(glows: { Attachment }, times: number)
+	local lit = math.min(times, 1)
 	for _, glow in glows do
-		for _, particles in glow:GetChildren() do
-			if particles:IsA("ParticleEmitter") then
-				local base = particles:GetAttribute("BaseBrightness") or particles.Brightness
-				particles:SetAttribute("BaseBrightness", base)
-				TweenService:Create(particles, TweenInfo.new(seconds), { Brightness = base * times }):Play()
+		local fill = glow.Parent
+		if fill and fill:IsA("BasePart") then
+			fill.Color = DARK:Lerp(RED, lit)
+			local face = fill:FindFirstChildOfClass("SurfaceGui")
+			if face then
+				face.Enabled = lit > 0
+				face.Brightness = base(face, "Brightness") * lit
 			end
 		end
+		for _, particles in glow:GetChildren() do
+			if particles:IsA("ParticleEmitter") then
+				particles.Enabled = lit > 0
+				particles.Brightness = base(particles, "Brightness") * times
+			end
+		end
+	end
+end
+
+-- How awake the warden `warden` (its statue `statue`) is: from 0 with no enemy hero within Warn studs of its half of
+-- the zone to 1 with one at its edge.
+local function nearness(warden: string, statue: Instance): number
+	local front, half = statue:GetAttribute("Front"), statue:GetAttribute("Half")
+	if typeof(front) ~= "Vector3" or typeof(half) ~= "Vector3" then
+		return 0
+	end
+	local team = warden:match("^%u%l+")
+	local most = 0
+	for _, model in CollectionService:GetTagged("Combatant") do
+		if
+			model:IsA("Model")
+			and model:GetAttribute("Hero")
+			and model:GetAttribute("Team") ~= team
+			and not model:GetAttribute("Hidden")
+		then
+			local humanoid = model:FindFirstChildOfClass("Humanoid")
+			local away = model:GetPivot().Position - front
+			away = Vector3.new(away.X, 0, away.Z)
+			if humanoid and humanoid.Health > 0 and away:Dot(half) >= 0 then
+				most = math.max(most, math.clamp((ZONE + SETTINGS.Warn - away.Magnitude) / SETTINGS.Warn, 0, 1))
+			end
+		end
+	end
+	return most
+end
+
+local function wake(warden: string, dt: number)
+	local glows = eyesOf(warden)
+	local statue = glows[1] and glows[1].Parent and glows[1].Parent.Parent
+	if not statue then
+		return
+	end
+	local want = if burning[warden] then FLARE else nearness(warden, statue)
+	local was = shine[warden]
+	local now = if was then was + (want - was) * math.min(dt * EASE, 1) else want
+	if math.abs(now - want) < 0.005 then
+		now = want
+	end
+	if now ~= was then
+		shine[warden] = now
+		light(glows, now)
 	end
 end
 
@@ -159,7 +236,6 @@ local function stop(warden: string)
 	end
 	TweenService:Create(was.sound, TweenInfo.new(HUSH), { Volume = 0 }):Play()
 	Debris:AddItem(was.hit, math.max(SETTINGS.Fade, HUSH) + 0.1)
-	glowTo(eyesOf(warden), 1, DIM)
 end
 
 local function begin(warden: string, target: Instance)
@@ -198,11 +274,11 @@ local function begin(warden: string, target: Instance)
 		end
 	end)
 	burning[warden] = { hit = hit, beams = beams, sound = sound(hit), follow = follow }
-	glowTo(glows, FLARE, SETTINGS.Charge)
 end
 
 local function watch(value: ObjectValue)
 	local warden = value.Name
+	watched[warden] = true
 	local function changed()
 		stop(warden)
 		local target = value.Value
@@ -225,6 +301,11 @@ function WardenView.start()
 	wardens.ChildAdded:Connect(function(value)
 		if value:IsA("ObjectValue") then
 			watch(value)
+		end
+	end)
+	RunService.RenderStepped:Connect(function(dt)
+		for warden in watched do
+			wake(warden, dt)
 		end
 	end)
 end

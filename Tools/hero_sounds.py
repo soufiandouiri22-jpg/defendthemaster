@@ -543,12 +543,17 @@ ENTRANCES = {
     "GreataxeBerserker": "RA-GBK-070",
     "BladeDancer": "RA-BLD-061",
 }
+# Every entrance's sounds, its steps too, play this much as loud as their cues say (owner, 2026-11-25: 30% softer).
+ENTRANCE_VOLUME = 0.7
 
-# The entrances the packs left with only footsteps get their own pack's recordings (owner, 2026-11-25: every entrance
+# The entrances the packs left with only footsteps (or too soft) get their own pack's recordings (owner, 2026-11-25: every entrance
 # sounds), played from that pack's uploaded file, so none needed another upload: (seconds into the clip, recordings,
 # volume). Each weapon's swing sounds where the weapon moves fastest (measured on the rig, Config's From, Until and
 # Speed), less the recording's own lead to its loudest; a hero who hardly moves rustles his clothes.
 ENTRANCE_EXTRA = {
+    # The pack's own sound of his staff drawn (0.53 s) is too soft to hear (owner, 2026-11-25): his basic attack's
+    # swing as the staff comes into his hand and swings round (0.77 s).
+    "Elementalist": [(0.70, ["A45b1e75a70dd", "A8e4f46daeb19", "Ac81756bb8dc7"], 0.8)],
     # Both daggers drawn: the right at 0.58 s, the left at 0.78 s.
     "ShadowDuelist": [(0.50, ["A143e27c8565a"], 0.5), (0.74, ["A58e4837f72d2"], 0.6)],
     # Three swings of the scythe (4.90, 5.53, 6.15 s), the middle one the smallest.
@@ -755,6 +760,8 @@ def build_entrances():
         for time, sounds, volume in ENTRANCE_EXTRA.get(name, []):
             clips[clip_id].append({"time": time, "volume": volume, "sounds": list(sounds), "bank": name})
         clips[clip_id].sort(key=lambda c: c["time"])
+        for cue in clips[clip_id]:
+            cue["volume"] = round(cue["volume"] * ENTRANCE_VOLUME, 3)
     out = ROOT / "Vendor/Build"
     out.mkdir(parents=True, exist_ok=True)
     with wave.open(str(out / "Entrances_Sounds.wav"), "wb") as w:

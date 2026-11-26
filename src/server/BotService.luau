@@ -1,8 +1,10 @@
 -- The bots (Config.Bots): AI heroes that fill both teams up to TeamSize, as many fewer on a team as it has players. A
 -- bot is an Actor (a Configuration in ServerStorage.Bots) whose hero the server moves: it plays to kill the enemy
 -- Master (Config.Bots): an enemy hero at its own Master first; near the enemy Master while its minions stand at him
--- and no enemy hero is close, him; with no enemy hero close and its team ahead, its chance: it walks with its minions
--- to the enemy Master; else it goes after an enemy hero no one of its team fights yet, anywhere in the arena, and helps with one only when all are taken; with none alive it fights the other enemies, and with none left
+-- and no enemy hero is close, him; with no enemy hero close, its own lane (LANES): it clears the enemy minions on it
+-- and walks with its lane's minions to the enemy Master, else clears another lane's; else it goes after an enemy hero
+-- no one of its team fights yet, anywhere in the arena, and helps with one only when all are taken; with none alive it
+-- fights the other enemies, and with none left
 -- waits at the enemy zone's edge for its minions. It keeps out of the enemy Master's zone, where his wardens would shoot it
 -- (Config.Wardens), and goes for nobody in it, unless its team's minions stand in it. It fights with its own hero's whole kit through CombatService, as a player
 -- would: a fighter up close goes in with it, an archer keeps his distance; with a person's reaction time, rests and
@@ -33,6 +35,7 @@ local MatchService = require(script.Parent.MatchService)
 local MatchSetup = require(script.Parent.MatchSetup)
 local ProgressService = require(script.Parent.ProgressService)
 local ShopService = require(script.Parent.ShopService)
+local TraceService = require(script.Parent.TraceService)
 
 local BotService = {}
 
@@ -44,6 +47,9 @@ local PATH_REFRESH, PATH_SLACK = 2, 6
 local STUCK_TIME, STUCK_STEP, DETOUR = 1, 1, 3
 -- How far above or below it a bot counts an enemy as level with it.
 local RISE = 3
+-- How many studs past the gap where it would change how it moves in a fight (walk up, step beside, back off) a bot
+-- keeps on as it moves, and how many seconds at least it keeps on so.
+local SLACK, HOLD = 2.5, 0.5
 
 -- A leap or dash under way: the server carries the bot from `from` to `to`, as a player's client carries him.
 type Move = {
@@ -64,8 +70,8 @@ type Bot = {
 	actor: Configuration,
 	team: string,
 	hero: string,
-	-- The lane it plays: 1 east, -1 west.
-	side: number,
+	-- The lane it plays (LANES).
+	lane: number,
 	active: boolean,
 	character: Model?,
 	humanoid: Humanoid?,
@@ -94,6 +100,13 @@ type Bot = {
 	aiming: Aiming?,
 	-- Whether it went back to heal (Config.Bots: under Retreat of its health, till Healed).
 	healing: boolean,
+	-- How it moves in its fight: "walk" up to its target, "circle" beside him, "back" away from him; and since when.
+	mode: string,
+	modeAt: number,
+	-- What it last marked in the game's log (report), when, and how often what it does changed since.
+	reportKey: string,
+	reportedAt: number,
+	changes: number,
 }
 
 -- An attack under way that follows its target till it strikes or lets go (Bot.aiming): `speed` of what it shoots,
@@ -129,6 +142,17 @@ walls.FilterType = Enum.RaycastFilterType.Exclude
 local fronts: { [string]: Vector3 } = {}
 local covered: { [string]: boolean } = {}
 local WARDEN_MARGIN = 6
+-- A zone counts as covered till COVER_HOLD seconds after the last of those minions left it or died, so minions fighting
+-- on its edge do not send the bots in and out of it every tick.
+local COVER_HOLD = 1
+local coveredAt: { [string]: number } = {}
+-- The lanes (MinionService's "Lane" of a minion: 1 and 4 down the sides, 2 and 3 through the middle), in the order a
+-- team's bots take them: each bot its own, which it clears of enemy minions and pushes on the enemy Master with its
+-- own (owner, 2026-11-25).
+local LANES = { 1, 4, 2, 3 }
+-- What every bot does goes into the game's log (TraceService; Tools/trace.py --kind bot): marked when it changes, at
+-- most once every REPORT_GAP seconds a bot, and every REPORT_EVERY seconds while it stays the same.
+local REPORT_GAP, REPORT_EVERY = 0.5, 10
 
 -- A minion's root is moved by the server, not by physics, so its velocity is measured from where it was a moment ago.
 local seen: { [BasePart]: { at: Vector3, time: number, velocity: Vector3 } } = setmetatable({}, { __mode = "k" }) :: any
@@ -196,14 +220,14 @@ local function enemiesNear(team: string, from: Vector3, reach: number): ({ Targe
 	return heroes, others
 end
 
--- Whether `position` lies within WARDEN_MARGIN of the zone of `b`'s enemy Master while none of `b`'s minions stand in
--- it.
-local function guarded(b: Bot, position: Vector3): boolean
+-- Whether `position` lies within WARDEN_MARGIN (or `margin`) of the zone of `b`'s enemy Master while none of `b`'s
+-- minions stand in it.
+local function guarded(b: Bot, position: Vector3, margin: number?): boolean
 	local enemy = MatchService.enemyOf(b.team)
 	local front = fronts[enemy]
 	return front ~= nil
 		and not covered[enemy]
-		and HeroKit.flat(position - front).Magnitude <= Config.Master.Zone + WARDEN_MARGIN
+		and HeroKit.flat(position - front).Magnitude <= Config.Master.Zone + (margin or WARDEN_MARGIN)
 end
 
 -- `list` without what stands in `b`'s guarded enemy zone.
@@ -217,11 +241,9 @@ local function unguarded(b: Bot, list: { Target }): { Target }
 	return kept
 end
 
--- Whether each team's Master's zone holds the other team's minions.
-local function cover()
-	for team in fronts do
-		covered[team] = false
-	end
+-- Whether each team's Master's zone holds the other team's minions, or did COVER_HOLD seconds ago.
+local function cover(now: number)
+	local inside: { [string]: boolean } = {}
 	local minions = Workspace:FindFirstChild("Minions")
 	for _, root in if minions then minions:GetChildren() else {} do
 		local team = root:GetAttribute("Team")
@@ -233,8 +255,14 @@ local function cover()
 			and not root:GetAttribute("Dead")
 			and HeroKit.flat(root.Position - front).Magnitude <= Config.Master.Zone
 		then
-			covered[enemy :: string] = true
+			inside[enemy :: string] = true
 		end
+	end
+	for team in fronts do
+		if inside[team] then
+			coveredAt[team] = now
+		end
+		covered[team] = now - (coveredAt[team] or -math.huge) <= COVER_HOLD
 	end
 end
 
@@ -261,8 +289,24 @@ local function clear(from: Vector3, to: Vector3): boolean
 	return Workspace:Spherecast(from - back, 1.2, offset + back, walls) == nil
 end
 
--- Walks the bot towards `goal`: straight when nothing is in the way, else along a path round the walls.
+-- `goal`, or where `b` stops short of it outside the enemy zone that it lies in (guarded), on that zone's edge, so a bot
+-- that backs off, steps aside or goes for someone by the zone keeps out of it instead of walking in and out again.
+local function outside(b: Bot, goal: Vector3): Vector3
+	if not guarded(b, goal) then
+		return goal
+	end
+	local front = fronts[MatchService.enemyOf(b.team)]
+	local out = HeroKit.flat(goal - front)
+	if out.Magnitude < 0.1 then
+		out = HeroKit.flat((b.root :: BasePart).Position - front)
+	end
+	return front + (if out.Magnitude > 0.1 then out.Unit else -front.Unit) * (Config.Master.Zone + WARDEN_MARGIN + 1.5)
+end
+
+-- Walks the bot towards `goal`, keeping out of a guarded enemy zone (outside): straight when nothing is in the way,
+-- else along a path round the walls.
 local function walkTo(b: Bot, goal: Vector3, now: number)
+	goal = outside(b, goal)
 	local root, humanoid = b.root :: BasePart, b.humanoid :: Humanoid
 	local flatGoal = Vector3.new(goal.X, root.Position.Y, goal.Z)
 	if HeroKit.flat(goal - root.Position).Magnitude < 1.5 then
@@ -335,6 +379,14 @@ local function circle(b: Bot, target: Target, now: number)
 	end
 	local side = Vector3.new(-out.Z, 0, out.X) * b.circle
 	walkTo(b, root.Position + side * 10, now)
+end
+
+-- How `b` moves in its fight: `wanted`, unless it began to move otherwise less than HOLD seconds ago.
+local function settle(b: Bot, wanted: string, now: number): string
+	if wanted ~= b.mode and now - b.modeAt >= HOLD then
+		b.mode, b.modeAt = wanted, now
+	end
+	return b.mode
 end
 
 -- What turns a bot to its aim and holds an ascending one up: constraints, as the server's own CFrame set on the bot
@@ -595,7 +647,10 @@ local function brawl(b: Bot, target: Target, others: { Target }, now: number)
 	if not used and gap <= kit.M1.Hits[1].Range - 0.5 and now >= b.swingAt and use(b, "M1", target.position) then
 		b.swingAt = now + math.random() * SETTINGS.Rest
 	end
-	if gap > 3 then
+	-- Each way it moves holds till the gap is clearly past where the other begins (SLACK), so a bot on the line does not
+	-- turn between them every tick.
+	local wanted = if gap > (if b.mode == "circle" then 3 + SLACK else 3) then "walk" else "circle"
+	if settle(b, wanted, now) == "walk" then
 		walkTo(b, target.position, now)
 	else
 		circle(b, target, now)
@@ -672,9 +727,14 @@ local function shoot(b: Bot, target: Target, others: { Target }, now: number)
 	if not used and open and gap <= shot.Range - 0.5 and now >= b.swingAt and use(b, "M1", aim) then
 		b.swingAt = now + math.random() * SETTINGS.Rest
 	end
-	if not open or gap > shot.Range - 4 then
+	local wanted = if not open or gap > shot.Range - 4 - (if b.mode == "walk" then SLACK else 0)
+		then "walk"
+		elseif target.hero and gap < SETTINGS.Keep + (if b.mode == "back" then SLACK else 0) then "back"
+		else "circle"
+	local mode = settle(b, wanted, now)
+	if mode == "walk" then
 		walkTo(b, target.position, now)
-	elseif target.hero and gap < SETTINGS.Keep then
+	elseif mode == "back" then
 		walkTo(b, root.Position + away * 8, now)
 	else
 		circle(b, target, now)
@@ -689,21 +749,28 @@ local function fight(b: Bot, target: Target, others: { Target }, now: number)
 	end
 end
 
--- Walks the bot, with no enemy hero alive, to the nearest of the enemy minions (`enemies`, anywhere in the arena), or
--- when there are none to the edge of the enemy Master's zone on its side of the arena, to wait there for its minions.
-local function advance(b: Bot, enemies: { Target }, now: number)
+-- Where `lane` passes the arena's middle line: down a side through the gate, else beside the plateau.
+local function laneGate(lane: number): Vector3
+	local side = if lane <= 2 then 1 else -1
+	local across = if lane == 1 or lane == 4 then Config.Minions.LaneRadius else Config.Minions.Middle.Around
+	return Vector3.new(side * across, 0, 0)
+end
+
+-- The nearest enemy minion of `enemies` to `from`, on `lane` if one is given; nil when there is none.
+local function minionOf(enemies: { Target }, from: Vector3, lane: number?): Target?
 	local minions = {}
 	for _, t in enemies do
-		if t.instance:IsA("BasePart") then
+		if t.instance:IsA("BasePart") and (lane == nil or t.instance:GetAttribute("Lane") == lane) then
 			table.insert(minions, t)
 		end
 	end
-	local minion = nearest(minions, (b.root :: BasePart).Position)
-	if minion then
-		walkTo(b, minion.position, now)
-		return
-	end
-	local gate = Vector3.new(b.side * Config.Minions.LaneRadius, 0, 0)
+	return nearest(minions, from)
+end
+
+-- Walks the bot, with nothing to fight, to the edge of the enemy Master's zone where its lane comes in, to wait there
+-- for its minions.
+local function advance(b: Bot, now: number)
+	local gate = laneGate(b.lane)
 	local front = fronts[MatchService.enemyOf(b.team)]
 	if not front then
 		walkTo(b, gate, now)
@@ -735,32 +802,24 @@ local function clearing(enemies: { Target }, from: Vector3): Target?
 	return nearest(minions, from)
 end
 
--- How many heroes of `team` are alive.
-local function living(team: string): number
-	local count = 0
-	for _, model in CollectionService:GetTagged("Combatant") do
-		local humanoid = model:FindFirstChildOfClass("Humanoid")
-		if model:GetAttribute("Hero") and model:GetAttribute("Team") == team and humanoid and humanoid.Health > 0 then
-			count += 1
-		end
-	end
-	return count
-end
-
--- Where `b` walks with its minions when it sees its chance (Config.Bots: its team ahead, its health over Chance), Escort
--- studs behind the one of them nearest the enemy Master; nil when it sees none.
-local function chance(b: Bot): Vector3?
+-- Where `b` walks with its lane's minions on the enemy Master while it has over Chance of its health (Config.Bots),
+-- Escort studs behind the one of them nearest him; nil when its lane has none of them alive.
+local function push(b: Bot): Vector3?
 	local humanoid = b.humanoid :: Humanoid
-	local enemy = MatchService.enemyOf(b.team)
-	local front = fronts[enemy]
-	if not front or humanoid.Health < SETTINGS.Chance * humanoid.MaxHealth or living(enemy) >= living(b.team) then
+	local front = fronts[MatchService.enemyOf(b.team)]
+	if not front or humanoid.Health < SETTINGS.Chance * humanoid.MaxHealth then
 		return nil
 	end
 	local lead: Vector3? = nil
 	local leadGap = math.huge
 	local minions = Workspace:FindFirstChild("Minions")
 	for _, root in if minions then minions:GetChildren() else {} do
-		if root:IsA("BasePart") and root:GetAttribute("Team") == b.team and not root:GetAttribute("Dead") then
+		if
+			root:IsA("BasePart")
+			and root:GetAttribute("Team") == b.team
+			and root:GetAttribute("Lane") == b.lane
+			and not root:GetAttribute("Dead")
+		then
 			local gap = HeroKit.flat(root.Position - front).Magnitude
 			if gap < leadGap then
 				lead, leadGap = root.Position, gap
@@ -775,14 +834,27 @@ local function chance(b: Bot): Vector3?
 end
 
 -- The enemy hero `b` fights, while he is in `heroes` within Sight of it: once it fights one it picks no other till he
--- dies, vanishes or gets away (owner, 2026-11-25); nil when it fights none.
-local function engaged(b: Bot, heroes: { Target }): Target?
+-- dies, vanishes or gets away (owner, 2026-11-25), unless he has not hurt it in Answer seconds while another of them
+-- has: then it turns on the one who hurt it last (owner, 2026-11-25). Nil when it fights none.
+local function engaged(b: Bot, heroes: { Target }, now: number): Target?
+	local current: Target? = nil
+	local currentAt = -math.huge
+	local answer: Target? = nil
+	local answerAt = now - SETTINGS.Answer
 	for _, hero in sighted(heroes, (b.root :: BasePart).Position) do
+		local owner = Actors.owner(hero.instance :: Model)
+		local at = owner and ProgressService.hurtBy(b.character :: Model, owner) or -math.huge
 		if hero.instance == b.prey then
-			return hero
+			current, currentAt = hero, at
+		end
+		if at >= answerAt then
+			answer, answerAt = hero, at
 		end
 	end
-	return nil
+	if current and currentAt >= now - SETTINGS.Answer then
+		return current
+	end
+	return answer or current
 end
 
 -- The enemy hero at `b`'s own Master, within Defend studs of his zone, nearest to `b`; nil when none is.
@@ -1025,20 +1097,21 @@ local function retreat(b: Bot, root: BasePart, now: number): boolean
 	return true
 end
 
-local function think(b: Bot, now: number)
+-- What the bot does this tick, for the log (report), and what it fights, if anything.
+local function think(b: Bot, now: number): (string, Target?)
 	-- Under the match's cards, before the buy phase, the bots wait on their pads like everyone (HeroService.release).
 	if Workspace:GetAttribute("Phase") == "Waiting" then
-		return
+		return "cards", nil
 	end
 	if not alive(b) then
 		b.prey = nil
 		if buys() then
 			shop(b)
 		end
-		return
+		return "dead", nil
 	end
 	if b.move then
-		return
+		return "leap", nil
 	end
 	spend(b)
 	if buys() then
@@ -1054,7 +1127,7 @@ local function think(b: Bot, now: number)
 		else
 			(b.humanoid :: Humanoid):Move(Vector3.zero)
 		end
-		return
+		return "buy", nil
 	end
 	-- Out of an enemy zone its wardens would shoot it in, before anything else.
 	local enemyFront = fronts[MatchService.enemyOf(b.team)]
@@ -1063,32 +1136,60 @@ local function think(b: Bot, now: number)
 		away = if away.Magnitude > 0.1 then away.Unit else -enemyFront.Unit
 		b.aimFor = nil
 		walkTo(b, enemyFront + away * (Config.Master.Zone + WARDEN_MARGIN + 4), now)
-		return
+		return "leaveZone", nil
 	end
 	if retreat(b, root, now) then
-		return
+		return "heal", nil
 	end
-	local heroes, enemies = enemiesNear(b.team, root.Position, math.huge)
-	heroes, enemies = unguarded(b, heroes), unguarded(b, enemies)
+	local all, enemies = enemiesNear(b.team, root.Position, math.huge)
+	local heroes = unguarded(b, all)
+	enemies = unguarded(b, enemies)
+	-- The hero it fights stays its own on the zone's edge till he is in the zone itself, so one who walks along the
+	-- edge does not come and go every tick; it fights him from outside (walkTo).
+	for _, hero in all do
+		if hero.instance == b.prey and not table.find(heroes, hero) and not guarded(b, hero.position, 0) then
+			table.insert(heroes, hero)
+		end
+	end
 	local others = {}
 	for _, t in enemies do
 		if HeroKit.flat(t.position - root.Position).Magnitude <= SETTINGS.Sight then
 			table.insert(others, t)
 		end
 	end
-	local target = engaged(b, heroes) or raider(b, heroes)
+	local doing = "hero"
+	local target = engaged(b, heroes, now) or raider(b, heroes)
 	if target then
 		b.prey = target.instance
 	elseif not nearest(sighted(heroes, root.Position), root.Position) then
-		target = siege(b, enemies) or clearing(enemies, root.Position)
-		local escort = if target then nil else chance(b)
+		-- With no enemy hero near, its lane (owner, 2026-11-25): the enemy Master once its minions stand at him, the
+		-- enemy minions close to it, then those anywhere on its lane; then on with its lane's minions; then the
+		-- enemy minions of another lane, before an enemy hero further off.
+		target = siege(b, enemies)
+		doing = "siege"
+		if not target then
+			target = clearing(enemies, root.Position) or minionOf(enemies, root.Position, b.lane)
+			doing = "clear"
+		end
+		local escort = if target then nil else push(b)
 		if escort then
 			b.aimFor = nil
 			walkTo(b, escort, now)
-			return
+			return "push", nil
+		end
+		if not target then
+			target = minionOf(enemies, root.Position)
+			doing = "help"
 		end
 	end
-	target = target or choosePrey(b, heroes) or nearest(others, root.Position)
+	if not target then
+		target = choosePrey(b, heroes)
+		doing = "hero"
+	end
+	if not target then
+		target = nearest(others, root.Position)
+		doing = "near"
+	end
 	b.aimFor = if target then target.instance else nil
 	-- A hero it turns on gets a moment before the first ability, as a person needs to see him coming.
 	if target and target.hero and target.instance ~= b.focus then
@@ -1097,9 +1198,48 @@ local function think(b: Bot, now: number)
 	b.focus = if target and target.hero then target.instance else b.focus
 	if target then
 		fight(b, target, others, now)
-	else
-		advance(b, enemies, now)
+		return doing, target
 	end
+	advance(b, now)
+	return "wait", nil
+end
+
+-- Marks in the game's log what `b` does (`doing`, on `target`), when it changed or REPORT_EVERY seconds went by.
+local function report(b: Bot, doing: string, target: Target?, now: number)
+	local root = b.root
+	local name = if not target
+		then "-"
+		elseif target.instance:IsA("BasePart") then `minion{target.instance:GetAttribute("Lane") or ""}`
+		elseif target.instance:GetAttribute("Master") then "Master"
+		else target.instance.Name
+	local mode = if target
+		then b.mode .. (if b.mode == "circle" then (if b.circle > 0 then "R" else "L") else "")
+		else ""
+	local key = `{doing}|{name}|{mode}`
+	if key ~= b.reportKey then
+		b.changes += 1
+	end
+	if (key == b.reportKey and now - b.reportedAt < REPORT_EVERY) or now - b.reportedAt < REPORT_GAP then
+		return
+	end
+	local front = fronts[MatchService.enemyOf(b.team)]
+	local humanoid = b.humanoid
+	TraceService.mark("bot." .. doing, {
+		hero = b.hero,
+		team = b.team,
+		lane = b.lane,
+		target = name,
+		mode = mode,
+		gap = if target and root then math.round(gapTo(root, target)) else nil,
+		at = if root then `{math.round(root.Position.X)},{math.round(root.Position.Z)}` else nil,
+		zone = if root and front then math.round(HeroKit.flat(root.Position - front).Magnitude) else nil,
+		covered = covered[MatchService.enemyOf(b.team)] == true,
+		health = if humanoid and humanoid.MaxHealth > 0
+			then math.round(humanoid.Health / humanoid.MaxHealth * 100)
+			else nil,
+		changes = b.changes,
+	})
+	b.reportKey, b.reportedAt, b.changes = key, now, 0
 end
 
 -- Carries a leaping or dashing bot along, or holds an ascending one up, as HeroControls does the player's hero.
@@ -1199,10 +1339,17 @@ local function addBot(team: string)
 	Economy.join(actor)
 	actor.Parent = folder
 	Actors.addBot(actor)
-	local onTeam = 0
+	local taken = {}
 	for _, other in bots do
 		if other.team == team then
-			onTeam += 1
+			taken[other.lane] = true
+		end
+	end
+	local lane = LANES[1]
+	for _, free in LANES do
+		if not taken[free] then
+			lane = free
+			break
 		end
 	end
 	local queued = waiting[team]
@@ -1214,7 +1361,7 @@ local function addBot(team: string)
 		actor = actor,
 		team = team,
 		hero = hero,
-		side = if onTeam % 2 == 0 then 1 else -1,
+		lane = lane,
 		active = true,
 		character = nil,
 		humanoid = nil,
@@ -1237,6 +1384,11 @@ local function addBot(team: string)
 		circleAt = 0,
 		aimFor = nil,
 		aiming = nil,
+		mode = "walk",
+		modeAt = 0,
+		reportKey = "",
+		reportedAt = -math.huge,
+		changes = 0,
 	}
 	table.insert(bots, b)
 	task.spawn(spawnHero, b)
@@ -1358,13 +1510,14 @@ function BotService.start(layout: Layout, heroes: { [string]: { string } }?)
 		end
 		elapsed = math.min(elapsed - TICK, TICK)
 		walls.FilterDescendantsInstances = HeroKit.leapIgnore()
-		cover()
+		cover(now)
 		-- One bot's error is reported but never stops the others, which all think in this one loop: an error in it
 		-- once stood every bot after it still while it lasted.
 		for _, b in table.clone(bots) do
 			local ok, problem = xpcall(function()
 				follow(b)
-				think(b, now)
+				local doing, target = think(b, now)
+				report(b, doing, target, now)
 			end, debug.traceback)
 			if not ok then
 				task.spawn(error, problem, 0)

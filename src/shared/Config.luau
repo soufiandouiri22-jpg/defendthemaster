@@ -13,7 +13,8 @@ Config.Arena = {
 -- within `Zone` studs of his dais' front, then stands up and fights: enemy heroes first, the nearest of them, else the
 -- nearest minion, never going further than `Leash` studs from that spot. With nobody left in his zone for `Calm`
 -- seconds he walks back and sits down again. His zone and leash are smaller than the first 50 and 62 (owner,
--- 2026-11-25: both 15% smaller, then the zone 35 so his wardens' lasers, Config.Wardens, reach less far). He walks slowly (`WalkSpeed`, a hero walks
+-- 2026-11-25: both 15% smaller, then the zone 35 so his wardens' lasers, Config.Wardens, reach less far, then 10% larger
+-- again, as their Reach). He walks slowly (`WalkSpeed`, a hero walks
 -- Config.Combat.WalkSpeed). He moves with the Greataxe Berserker's clips (`Pack`, Shared.Sequence, Docs/Third_Party.md) and holds its weapon.
 -- His swing (`Swing`) cuts everyone in front of him within `Reach` studs of his middle, every `Every` seconds: its
 -- clips (`Motions`) take turns, each striking `Hits` seconds in and lasting `Length`. His ground slam (`Slam`) first
@@ -27,7 +28,7 @@ Config.Arena = {
 Config.Master = {
 	Scale = 3,
 	Health = 20000,
-	Zone = 35,
+	Zone = 38.5,
 	Leash = 53,
 	Calm = 3,
 	-- The weaker he gets, the harder he strikes, so his attacks stay feared late in the match when heroes have health
@@ -147,15 +148,29 @@ Config.Master = {
 -- until he dies or leaves its half; a hero who struck their Master from outside it until he has not for `Forget`
 -- seconds, and it never reaches further than `Reach` studs from the dais's front.
 -- No shots but one beam that stays on him and drains his health, as a real laser (owner, 2026-11-25): on each new
--- target it gathers its light for `Charge` seconds, then the beam burns him every `Tick` seconds until he is gone.
+-- target it gathers its light for `Charge` seconds, as long as the laser sound's burst (Assets.WardenLaserLoop), so
+-- the beam comes with its sound and a hero who stepped in has time to step back (owner, 2026-11-25), then the beam
+-- burns him every `Tick` seconds until he is gone.
 -- A hero loses `Hero` of his health a second at first, as magic (Resist takes it down), `Ramp` more for every second
--- it has burnt him, up to `Most` (League's Warming Up, as a beam): a squishy hero is dead 5.9 s into it, 6.3 s after
+-- it has burnt him, up to `Most` (League's Warming Up, as a beam): a squishy hero is dead 5.9 s into it, 6.7 s after
 -- the charge began (owner, 2026-11-25: 3.1 s was far too strong); a tank with Resist lives a little longer. A minion
 -- loses `Minion` of its health a second: 5 s each.
+-- No ring on the ground (owner, 2026-11-25): a statue's eyes are dark stone until an enemy hero comes within `Warn`
+-- studs of its half of the zone, and glow redder as he comes nearer, full at its edge (WardenView).
 Config.Wardens = {
-	Reach = 85,
+	-- The wardens' painted portrait, the killer's in the kill feed when one's beam fells a hero, made as the heroes'
+	-- are from a sheet of Play views of a statue (Art/Portraits/concepts/warden_sheet.png): staring at the camera, its
+	-- eyes charging red (Art/Portraits/warden.png = concepts/warden_v3.png; owner, 2026-11-26). The same for both
+	-- teams, as their statues are. `Face` is the square round its helmet and plume.
+	Portraits = {
+		Red = { Image = "rbxassetid://130154724680616", Face = { 200, 10, 620 } },
+		Blue = { Image = "rbxassetid://130154724680616", Face = { 200, 10, 620 } },
+	},
+	-- 10% further with their zone (owner, 2026-11-25; was 85).
+	Reach = 93.5,
 	Forget = 2.5,
-	Charge = 0.35,
+	Charge = 0.83,
+	Warn = 12,
 	Tick = 0.1,
 	Hero = 0.05,
 	Ramp = 0.04,
@@ -3690,15 +3705,19 @@ Config.Respawn = {
 -- else, with no enemy hero that close, it kills the enemy minions within `Clear` studs, so its own get through, before
 -- it goes after an enemy hero further off; and with no enemy left to fight it waits at the edge of the enemy zone, on
 -- its own side, for its minions.
--- Each bot sees its own chance, none of them ganging up on one hero (owner, 2026-11-25): with no enemy hero within
--- `Sight` (it won its fight, or none came), fewer enemy heroes alive than of its own team, over `Chance` of its health
--- and its minions alive, it walks with the one of them nearest the enemy Master, `Escort` studs behind it, instead of
--- going after an enemy hero further off, clearing and striking him as above.
+-- Each bot of a team plays its own lane (owner, 2026-11-25; BotService's LANES: the two sides, then the two through the
+-- middle), so the minions are cleared quickly and the team gets to the enemy Master: with no enemy hero within
+-- `Sight` it kills the enemy minions on its lane, then with over `Chance` of its health walks with the one of its
+-- lane's minions nearest the enemy Master, `Escort` studs behind it, striking him as above; with its lane empty it
+-- clears another lane's enemy minions, before it goes after an enemy hero further off.
 -- Under `Retreat` of its health it goes back to heal till it has `Healed` of it (owner, 2026-11-25): by its armory
 -- stall first when it carries fewer than `Potions` potions and can buy one, then onto its nearest spawn pad, which
 -- heals (Config.Pads); but never out of a fight with a hero, where it fights on and drinks its potions (owner,
 -- 2026-11-25). At the armory, alive or dead, it buys potions up to `Potions` before the rest of its build.
+-- A bot keeps on the enemy hero it fights, but when he has not hurt it in `Answer` seconds and another enemy hero
+-- within `Sight` has, it turns on the one who hurt it last (owner, 2026-11-25).
 Config.Bots = {
+	Answer = 3,
 	Retreat = 0.3,
 	Healed = 0.9,
 	Potions = 1,

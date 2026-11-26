@@ -5,7 +5,8 @@
 -- to buy (Tips.Focus); then learning M2 with 1 (once the fight is on it comes before the armory, unless he is in it),
 -- attacking with M1 and M2 at anything, the dash, learning and using E and, from level 4, R; and the first time he dies, that B opens the armory while
 -- he waits. A tip done is saved in his profile (MenuService's HintSeen, data.SeenHints) and never shows again; one not
--- done comes back in his next match.
+-- done comes back in his next match. One he did already this match before it came (bought, attacked, dashed, learned
+-- or used E or R) is saved without showing.
 
 local Players = game:GetService("Players")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
@@ -51,7 +52,7 @@ type Tip = {
 
 local player = Players.LocalPlayer
 local seen: { [string]: boolean } = {}
--- The attacks used since the tip that is on came.
+-- The attacks used this match: one used before its tip came does that tip without showing it (owner, 2026-11-25).
 local used: { [string]: boolean } = {}
 
 local function fighting(): boolean
@@ -111,6 +112,9 @@ local function learnTip(id: string, key: string, digit: string, name: string, af
 end
 
 local function useTip(id: string, key: string, name: string, after: string): Tip
+	local function done()
+		return used[key] == true
+	end
 	return {
 		id = id,
 		task = "Use your " .. name,
@@ -119,10 +123,21 @@ local function useTip(id: string, key: string, name: string, after: string): Tip
 		ready = function()
 			return fighting() and Leveling.learned(player, key)
 		end,
-		done = function()
-			return used[key] == true
-		end,
+		done = done,
+		skip = done,
 	}
+end
+
+local function attacked(): boolean
+	return used.M1 == true and used.M2 == true
+end
+
+local function dashed(): boolean
+	return used.Dash == true
+end
+
+local function bought(): boolean
+	return bagCount() > 0
 end
 
 -- Learning M2 waits for the armory in the buy phase, and comes before it once the fight is on, but not while he is in
@@ -154,9 +169,8 @@ local TIPS: { Tip } = {
 			return true
 		end,
 		-- Also when he bought it while dead (Respawn).
-		done = function()
-			return bagCount() > 0
-		end,
+		done = bought,
+		skip = bought,
 		stage = function()
 			if player:GetAttribute("AtShop") == true and not Shop.isOpen() then
 				return "Hold F to open the armory", { "F" }
@@ -181,9 +195,8 @@ local TIPS: { Tip } = {
 		after = "LearnM2",
 		ready = fighting,
 		-- At anything or nothing.
-		done = function()
-			return used.M1 == true and used.M2 == true
-		end,
+		done = attacked,
+		skip = attacked,
 		count = function()
 			return (if used.M1 then 1 else 0) + (if used.M2 then 1 else 0), 2
 		end,
@@ -194,9 +207,8 @@ local TIPS: { Tip } = {
 		keys = { "Shift" },
 		after = "Attack",
 		ready = fighting,
-		done = function()
-			return used.Dash == true
-		end,
+		done = dashed,
+		skip = dashed,
 	},
 	learnTip("LearnE", "E", "2", "E", "Dash"),
 	useTip("UseE", "E", "E", "LearnE"),
@@ -246,12 +258,9 @@ local function look()
 			current = nil
 		end
 	end
-	local next = pick()
-	if next ~= current then
-		current = next
-		table.clear(used)
-		Focus.set(if next then next.focus else nil)
-	end
+	current = pick()
+	-- Also when the tip is done with none after it yet, so its frames go at once.
+	Focus.set(if current then current.focus else nil)
 	local on = current
 	local goal, keys = nil, nil
 	if on then
