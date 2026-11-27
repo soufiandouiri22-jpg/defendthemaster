@@ -10,7 +10,7 @@
 -- * The feed over the minimap: the last kills as small rows of both portraits, edged in the killer's team colour.
 -- A hero felled by a Master shows that Master's portrait, his team's (Config.Master.Portraits), as his killer's, and
 -- one felled by a minion or a warden its team's minion or warden portrait (Config.Minions.Portraits,
--- Config.Wardens.Portraits).
+-- Config.Wardens.Portraits), and one felled by the beast its portrait (Config.Beast.Portrait).
 -- When a hero takes a boost (BoostService), the middle banner shows his portrait with the boost's picture on it in a
 -- halo of its colour over Config.Boosts.Texts, and under that what it does for whoever reads it (Boosts.line): gold
 -- for the player's team, with its sting, and the enemy's colour for theirs, with a dark bell. When it fades, the
@@ -158,7 +158,7 @@ local function portrait(parent: Instance, size: number, position: UDim2, anchor:
 end
 
 -- The portrait of `hero`, or of `team`'s Master when he is "Master", of its minions when he is "Minion" and of its
--- wardens when he is "Warden".
+-- wardens when he is "Warden"; the beast's when he is "Beast".
 local function faceOf(hero: string?, team: string?): { Image: string, Face: { number } }?
 	if hero == "Master" then
 		return Config.Master.Portraits[Side.shown(team)]
@@ -166,6 +166,8 @@ local function faceOf(hero: string?, team: string?): { Image: string, Face: { nu
 		return Config.Minions.Portraits[Side.shown(team)]
 	elseif hero == "Warden" then
 		return Config.Wardens.Portraits[Side.shown(team)]
+	elseif hero == "Beast" then
+		return Config.Beast.Portrait
 	end
 	return hero and Config.Heroes[hero] and Config.Heroes[hero].Portrait
 end
@@ -221,7 +223,8 @@ function KillFeed.start()
 
 	-- Every portrait a kill can show stays drawn, tiny and all but clear, as the boosts' pictures do: the loading
 	-- screen loads them all, but one off the screen for minutes is let go of and came in a moment after its banner
-	-- (owner, 2026-11-26). Both teams' Master, minions and wardens, and the hero of everyone in the match (Scores).
+	-- (owner, 2026-11-26). Both teams' Master, minions and wardens, the beast, and the hero of everyone in the match
+	-- (Scores).
 	local kept: { [string]: boolean } = {}
 	local function keep(face: { Image: string }?)
 		if not face or kept[face.Image] then
@@ -240,6 +243,7 @@ function KillFeed.start()
 			keep(face)
 		end
 	end
+	keep(Config.Beast.Portrait)
 	local function keepHero(entry: Instance)
 		local function hero()
 			local name = entry:GetAttribute("Hero")

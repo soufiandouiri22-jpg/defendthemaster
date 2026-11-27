@@ -48,14 +48,33 @@ local LOOK_STEP, CENTRE_STEP = math.rad(1.5), 0.6
 -- It slithers only while it faces where it goes within this angle (radians), and circles towards the point this far
 -- (radians) ahead of it round its circle.
 local CRAWL_ANGLE, ROAM_AHEAD = math.rad(70), 0.6
+-- From a target too close for its bite, under its neck or in its coils, it jerks back in one slide that slows as it
+-- ends, its head swinging at most RECOIL_TURN (radians) towards him, till its head comes down where he stood, and
+-- strikes at once: the slide lasts RECOIL_TIME seconds and one more for every RECOIL_SPEED studs. Gone from there by
+-- then, he is not struck, and it lies RECOIL_REST seconds before it can strike or jerk back again. Till it jerks back it
+-- turns to him only while he stands within RECOIL_HOLD (radians) of its look (owner, 2026-11-27: back a stretch and
+-- strike, not turning round, not sliding along as he walks).
+local RECOIL_TURN, RECOIL_TIME, RECOIL_SPEED = math.rad(60), 0.3, 70
+local RECOIL_REST, RECOIL_HOLD = 0.6, math.rad(90)
 local MIDDLE = SETTINGS.Middle
 -- What of the map stands higher than this above the floor stops it; on its circle it turns back at most this often
 -- (seconds).
 local STANDS, TURN_BACK = 3, 1.5
--- The ways (radians off its look) it tries, hunting, when something stands right before it.
+-- The ways (radians off its look) it tries, hunting, when something stands right before it; it turns that way and
+-- slithers on so for this many seconds after it turned before it turns back to its target.
 local SWERVES = { math.rad(45), math.rad(-45), math.rad(85), math.rad(-85) }
+local AROUND = 0.6
 -- A hero's root stands this high over his feet.
 local ROOT_HEIGHT = 3
+
+type Recoil = {
+	from: Vector3,
+	to: Vector3,
+	look: Vector3,
+	toLook: Vector3,
+	start: number,
+	length: number,
+}
 
 type Beast = {
 	model: Model,
@@ -65,13 +84,16 @@ type Beast = {
 	-- The middle of the circle it slithers round while no one fights it, and when it last turned back on it.
 	home: Vector3,
 	turnedAt: number,
+	-- The way it took round what stood before it, till `aroundTill`.
+	around: Vector3?,
+	aroundTill: number,
 	hunting: boolean,
 	sentCentre: Vector3,
 	moving: boolean,
 	-- Till when its bite holds it still.
 	biting: number,
-	-- Its coil's middle from its pivot, in its pivot's frame (BeastView places its model by the same).
-	offset: Vector3,
+	-- Its slide back from a target too close for its bite (`recoil`).
+	recoil: Recoil?,
 	front: number,
 	look: Vector3,
 	sent: Vector3,
@@ -169,9 +191,9 @@ local function facing(b: Beast, look: Vector3): CFrame
 	return CFrame.lookAt(Vector3.zero, -look * b.front)
 end
 
--- Where its head's pivot stands (on the flat) when it faces `look` round its coil's middle.
-local function headAt(b: Beast, look: Vector3): Vector3
-	return b.centre - facing(b, look):VectorToWorldSpace(b.offset)
+-- Where its head comes down when it strikes facing `look`.
+local function strikeAt(b: Beast, look: Vector3): Vector3
+	return b.centre + look * BITE.Reach
 end
 
 local function living(model: Model): Humanoid?
@@ -265,9 +287,9 @@ local function free(b: Beast, at: Vector3, way: Vector3, roams: boolean): boolea
 	return true
 end
 
+-- Its bite: on every hero where its head comes down.
 local function bite(b: Beast)
-	local spot = headAt(b, b.look) + b.look * BITE.Ahead
-	for _, model in heroesNear(spot, BITE.Radius) do
+	for _, model in heroesNear(strikeAt(b, b.look), BITE.Radius) do
 		local humanoid = living(model)
 		if humanoid then
 			local amount = math.round(Damage.mitigated(model, BITE.Damage, false, nil))
@@ -276,6 +298,54 @@ local function bite(b: Beast)
 			humanoid:TakeDamage(amount)
 		end
 	end
+end
+
+-- It strikes: its Attack clip, and its bite once its head comes down.
+local function startBite(b: Beast, now: number)
+	local model = b.model
+	b.nextBite = now + BITE.Every
+	b.biting = now + BITE.Length
+	model:SetAttribute("Look", b.look)
+	b.sent = b.look
+	model:SetAttribute("Bite", Workspace:GetServerTimeNow())
+	task.delay(BITE.Hit, function()
+		if model.Parent and model:GetAttribute("Phase") == "Fight" then
+			bite(b)
+		end
+	end)
+end
+
+-- Its slide back from a target too close at `goal`, so its head comes down where he stands, short of what stands
+-- behind it.
+local function recoil(b: Beast, goal: Vector3, now: number): Recoil
+	local him = HeroKit.flat(goal - b.centre)
+	local look = b.look
+	if him.Magnitude > 0.1 then
+		local angle = math.atan2(look:Cross(him.Unit).Y, look:Dot(him.Unit))
+		look = CFrame.Angles(0, math.clamp(angle, -RECOIL_TURN, RECOIL_TURN), 0):VectorToWorldSpace(look)
+	end
+	local path = him - look * BITE.Reach
+	local length = path.Magnitude
+	local done = 0
+	if length > 0.1 then
+		local way = path.Unit
+		while done < length do
+			local further = math.min(done + 2, length)
+			if not free(b, b.centre + way * further, way, false) then
+				break
+			end
+			done = further
+		end
+		path = way * done
+	end
+	return {
+		from = b.centre,
+		to = b.centre + path,
+		look = b.look,
+		toLook = look,
+		start = now,
+		length = RECOIL_TIME + done / RECOIL_SPEED,
+	}
 end
 
 local function heroes(): { Hero }
@@ -453,8 +523,8 @@ local function charge(b: Beast, dt: number, now: number)
 		b.sent = b.look
 		model:SetAttribute("Look", b.look)
 	end
-	local reach = RELEASE.Reach + (master:GetAttribute("Radius") or 3)
-	local gap = HeroKit.flat(goal - headAt(b, b.look)).Magnitude - reach
+	-- Its head comes down on his front.
+	local gap = HeroKit.flat(goal - b.centre).Magnitude - (BITE.Reach + (master:GetAttribute("Radius") or 3))
 	local moving = false
 	if gap > 0 and now >= b.biting and math.abs(angle) <= CRAWL_ANGLE then
 		b.centre += b.look * math.min(RELEASE.Speed * dt, gap)
@@ -516,7 +586,57 @@ local function step(b: Beast, dt: number)
 	end
 	b.hunting = target ~= nil
 	local goal = if target then target:GetPivot().Position else roamGoal(b)
+	-- Right in its coils' middle he is straight before it.
+	local aim = HeroKit.flat(goal - b.centre)
+	if target and aim.Magnitude <= 0.1 then
+		aim = b.look
+	end
+	-- A target closer than its head comes down, under its neck or in its coils, it jerks back from and strikes, once
+	-- its bite is nearly ready; till then it lies still (owner, 2026-11-26: not as if he pushed it).
+	local close = target ~= nil and HeroKit.flat(goal - b.centre).Magnitude < BITE.Reach - BITE.Radius
+	if target and close and not b.recoil and now >= b.biting and now >= b.nextBite - RECOIL_TIME then
+		b.recoil = recoil(b, goal, now)
+	elseif not target then
+		b.recoil = nil
+	end
+	local slide = b.recoil
+	if target and slide then
+		local t = math.min((now - slide.start) / slide.length, 1)
+		local eased = 1 - (1 - t) ^ 3
+		b.centre = slide.from:Lerp(slide.to, eased)
+		b.look = slide.look:Lerp(slide.toLook, eased).Unit
+		b.body.CFrame = CFrame.lookAt(b.centre, b.centre + b.look) + Vector3.new(0, HEIGHT / 2, 0)
+		if (b.centre - b.sentCentre).Magnitude >= CENTRE_STEP then
+			b.sentCentre = b.centre
+			model:SetAttribute("Centre", b.centre)
+		end
+		if math.acos(math.clamp(b.look:Dot(b.sent), -1, 1)) >= LOOK_STEP then
+			b.sent = b.look
+			model:SetAttribute("Look", b.look)
+		end
+		if t >= 1 then
+			b.recoil = nil
+			model:SetAttribute("Centre", b.centre)
+			b.sentCentre = b.centre
+			if HeroKit.flat(goal - strikeAt(b, b.look)).Magnitude <= BITE.Radius then
+				startBite(b, now)
+			else
+				b.nextBite = math.max(b.nextBite, now + RECOIL_REST)
+			end
+		end
+		if b.moving then
+			b.moving = false
+			model:SetAttribute("Moving", false)
+		end
+		return
+	end
 	local want = HeroKit.flat(goal - b.centre)
+	local around = b.around
+	if around and target and now < b.aroundTill then
+		want = around
+	else
+		b.around = nil
+	end
 	local moving = false
 	if want.Magnitude > 0.1 then
 		want = want.Unit
@@ -525,33 +645,35 @@ local function step(b: Beast, dt: number)
 		if math.abs(angle) > math.pi - 0.05 then
 			angle = math.pi
 		end
+		-- One too close and far round it it does not turn round for; its slide back swings it towards him.
+		if close and math.abs(angle) > RECOIL_HOLD then
+			angle = 0
+		end
 		local turn = math.clamp(angle, -SETTINGS.Turn * dt, SETTINGS.Turn * dt)
 		b.look = CFrame.Angles(0, turn, 0):VectorToWorldSpace(b.look)
 		if math.acos(math.clamp(b.look:Dot(b.sent), -1, 1)) >= LOOK_STEP then
 			b.sent = b.look
 			model:SetAttribute("Look", b.look)
 		end
-		-- It slithers after its target till its bite reaches him, and round its circle when it has none; not while
-		-- it bites.
-		local gap = if target
-			then HeroKit.flat(goal - headAt(b, b.look)).Magnitude - (BITE.Ahead + BITE.Radius * 0.5)
-			else math.huge
+		-- It slithers after its target till its head comes down on him, and round its circle when it has none; not
+		-- while it bites.
+		local gap = if target then aim.Magnitude - BITE.Reach else math.huge
 		local speed = if target then SETTINGS.Speed else SETTINGS.Roam.Speed
 		if gap > 0 and now >= b.biting and math.abs(angle) <= CRAWL_ANGLE then
 			local length = math.min(speed * dt, gap)
-			local way = b.look
-			-- Hunting, it slides round what stands in its way.
-			if target and not free(b, b.centre + way * length, way, false) then
+			local next = b.centre + b.look * length
+			-- Hunting, it turns round what stands in its way and slithers on that way a while.
+			if target and not b.around and not free(b, next, b.look, false) then
 				for _, swerve in SWERVES do
 					local side = CFrame.Angles(0, swerve, 0):VectorToWorldSpace(b.look)
 					if free(b, b.centre + side * length, side, false) then
-						way = side
+						b.around = side
+						b.aroundTill = now + math.abs(swerve) / SETTINGS.Turn + AROUND
 						break
 					end
 				end
 			end
-			local next = b.centre + way * length
-			if free(b, next, way, target == nil) then
+			if free(b, next, b.look, target == nil) then
 				b.centre = next
 				moving = true
 				b.body.CFrame = CFrame.lookAt(b.centre, b.centre + b.look) + Vector3.new(0, HEIGHT / 2, 0)
@@ -580,22 +702,9 @@ local function step(b: Beast, dt: number)
 		return
 	end
 
-	if want.Magnitude > 0 then
-		local angle = math.atan2(b.look:Cross(want).Y, b.look:Dot(want))
-		local head = headAt(b, b.look)
-		local gap = HeroKit.flat(goal - head).Magnitude
-		if now >= b.nextBite and math.abs(angle) <= FACING and gap <= BITE.Ahead + BITE.Radius then
-			b.nextBite = now + BITE.Every
-			b.biting = now + BITE.Length
-			model:SetAttribute("Look", b.look)
-			b.sent = b.look
-			model:SetAttribute("Bite", Workspace:GetServerTimeNow())
-			task.delay(BITE.Hit, function()
-				if model.Parent and model:GetAttribute("Phase") == "Fight" then
-					bite(b)
-				end
-			end)
-		end
+	-- It strikes once its head would come down on him; it keeps turning to him till it does.
+	if now >= b.nextBite and HeroKit.flat(goal - strikeAt(b, b.look)).Magnitude <= BITE.Aim then
+		startBite(b, now)
 	end
 end
 
@@ -640,11 +749,13 @@ local function come(map: Instance, release: Release?)
 		map = map,
 		home = land,
 		turnedAt = 0,
+		around = nil,
+		aroundTill = 0,
 		hunting = false,
 		sentCentre = land,
 		moving = false,
 		biting = 0,
-		offset = offset,
+		recoil = nil,
 		front = front,
 		look = way,
 		sent = way,

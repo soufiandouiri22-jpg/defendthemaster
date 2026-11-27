@@ -60,7 +60,13 @@ local BURST_FROM, ROAR_FROM = 1, 0.5
 local TURN, SLIDE = 10, 12
 -- What of the bases it lies on besides the floor (the Masters' stairs, which it climbs to bite him, owner 2026-11-26),
 -- how far along its length it feels for them from its middle, each way, and how fast it rises or sinks to them.
-local CLIMBS, FEEL, CLIMB = { "dais" }, 0.4, 10
+local CLIMBS, FEEL, CLIMB = { "dais", "dais_blue" }, 0.4, 10
+-- The serpent lies on them part by part, as a snake does (owner, 2026-11-27: no part of it in the air): its base, where
+-- its neck rises, tilts with what is under it BASE_FEEL studs before and behind, at most BASE_TILT (radians), its neck
+-- kept upright; each joint of its coil bends up or down, at most DRAPE, so the next lies as high over what is under it
+-- (LINK_FEEL studs either way) as on flat ground; and its neck rises or sinks with what is under its head, at most
+-- NECK_RISE studs.
+local BASE_FEEL, BASE_TILT, LINK_FEEL, DRAPE, NECK_RISE = 4, math.rad(35), 1.5, math.rad(55), 6
 -- Its bar, as a hero's (HeroBars, owner 2026-11-26): the size, how high over its top, its colours (the earth's,
 -- neither team's) and how far off it shows.
 local BAR_WIDTH, BAR_HEIGHT, BAR_NAME, BAR_OVER, BAR_FAR = 132, 16, 18, 3, 75
@@ -89,6 +95,12 @@ type Segment = {
 	dark: BasePart,
 	glow: BasePart?,
 }
+-- A joint of the serpent's coil: the tip of the part it bends (the next joint, or the tail's end) in that part's frame,
+-- how high over the ground the tip lies on flat ground, and the ground under the tip now.
+type Link = { joint: Motor6D, tip: Vector3, rest: number, ground: number? }
+-- How the serpent lies on what is under it: the joint its coil and neck hang from, its coil's links from the base out,
+-- its neck's first joint, the joints from there to its head, and the ground under its head now.
+type Drape = { root: Motor6D, links: { Link }, neck: Motor6D?, head: { Motor6D }, ground: number? }
 type Show = {
 	beast: Model,
 	centre: Vector3,
@@ -111,8 +123,12 @@ type Show = {
 	land: Vector3,
 	burst: number,
 	top: number,
-	-- The floor or stairs it lies on now, easing to what is under it.
+	-- The floor or stairs it lies on now, easing to what is under it; what it lies on, and how the serpent drapes on it.
 	ground: number?,
+	under: RaycastParams?,
+	drape: Drape?,
+	-- How far its base tilts up (radians) with what is under it, easing there.
+	tilt: number?,
 	holder: Folder,
 	model: Model,
 	mesh: BasePart,
@@ -508,11 +524,11 @@ local function floorTop(at: Vector3): number
 	return if hit then hit.Position.Y else at.Y
 end
 
--- The highest of the floor and the stairs under its head, middle and tail, lying round `centre` along `look`.
-local function lyingTop(centre: Vector3, look: Vector3, length: number, fallback: number): number
+-- What it lies on: the floor and the bases' stairs.
+local function lyingOn(): RaycastParams?
 	local map = Workspace:FindFirstChild("Map")
 	if not map then
-		return fallback
+		return nil
 	end
 	local under = {}
 	local floor = map:FindFirstChild("Floor")
@@ -531,15 +547,111 @@ local function lyingTop(centre: Vector3, look: Vector3, length: number, fallback
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = under
+	return params
+end
+
+-- The highest of what it lies on at `at` and `feel` studs either way along `way`.
+local function groundAt(params: RaycastParams, at: Vector3, way: Vector3, feel: number, fallback: number): number
 	local top = -math.huge
-	for _, along in { -FEEL, 0, FEEL } do
-		local at = centre + look * length * along
-		local hit = Workspace:Raycast(Vector3.new(at.X, 60, at.Z), Vector3.new(0, -120, 0), params)
+	for _, along in { -feel, 0, feel } do
+		local spot = at + way * along
+		local hit = Workspace:Raycast(Vector3.new(spot.X, 60, spot.Z), Vector3.new(0, -120, 0), params)
 		if hit then
 			top = math.max(top, hit.Position.Y)
 		end
 	end
 	return if top > -math.huge then top else fallback
+end
+
+-- The serpent's coil and neck laid on what is under them, over the pose just shown, its base on `s.ground` and
+-- `sink` studs into it.
+local function drape(s: Show, dt: number, sink: number)
+	local d, params, root = s.drape, s.under, s.model.PrimaryPart
+	if not d or not params or not root then
+		return
+	end
+	local ease = 1 - math.exp(-CLIMB * dt)
+	local base = s.ground :: number
+	local function settle(old: number?, new: number): number
+		return if old then old + (new - old) * ease else new
+	end
+	local tilt = s.tilt or 0
+	local pitchAxis = s.look:Cross(Vector3.yAxis)
+	local seat = root.CFrame * d.root.C0
+	local held = seat * d.root.Transform
+	held = CFrame.new(held.Position) * CFrame.fromAxisAngle(pitchAxis, tilt) * held.Rotation
+	d.root.Transform = seat:Inverse() * held
+	local hung = held * d.root.C1:Inverse()
+	local parent = hung
+	for _, link in d.links do
+		local joint = link.joint
+		local hinge = parent * joint.C0
+		local turned = hinge * joint.Transform
+		local tip = turned * joint.C1:Inverse() * link.tip
+		local arm = tip - turned.Position
+		local flat = Vector3.new(arm.X, 0, arm.Z)
+		local along = if flat.Magnitude > 0.1 then flat.Unit else s.look
+		local ground = settle(link.ground, groundAt(params, tip, along, LINK_FEEL, base))
+		link.ground = ground
+		local length = arm.Magnitude
+		if flat.Magnitude > 0.1 and length > 0.1 then
+			local pitch = math.asin(math.clamp(arm.Y / length, -1, 1))
+			local wanted = math.asin(math.clamp((ground + link.rest - sink - turned.Position.Y) / length, -1, 1))
+			local bend = math.clamp(wanted - pitch, -DRAPE, DRAPE)
+			turned = CFrame.new(turned.Position)
+				* CFrame.fromAxisAngle(along:Cross(Vector3.yAxis), bend)
+				* turned.Rotation
+			joint.Transform = hinge:Inverse() * turned
+		end
+		parent = turned * joint.C1:Inverse()
+	end
+	local neck = d.neck
+	if neck then
+		local hinge = hung * neck.C0
+		local upright = hinge * neck.Transform
+		upright = CFrame.new(upright.Position) * CFrame.fromAxisAngle(pitchAxis, -tilt) * upright.Rotation
+		neck.Transform = hinge:Inverse() * upright
+		local head = upright * neck.C1:Inverse()
+		for _, joint in d.head do
+			head = head * joint.C0 * joint.Transform * joint.C1:Inverse()
+		end
+		local ground = settle(d.ground, groundAt(params, head.Position, s.look, LINK_FEEL, base))
+		d.ground = ground
+		local rise = math.clamp(ground - base, -NECK_RISE, NECK_RISE)
+		neck.Transform = CFrame.new(hinge:VectorToObjectSpace(Vector3.new(0, rise, 0))) * neck.Transform
+	end
+end
+
+-- How the serpent drapes (`drape`), from its rig at rest at the origin, `lift` over the ground.
+local function drapeOf(model: Model, joints: { [string]: Bone | Motor6D }, lift: number): Drape?
+	local root, hung = model.PrimaryPart, joints.Base
+	if not root or not hung or not hung:IsA("Motor6D") then
+		return nil
+	end
+	local function motor(name: string?): Motor6D?
+		local joint = if name then joints[name] else nil
+		return if joint and joint:IsA("Motor6D") then joint else nil
+	end
+	local links: { Link } = {}
+	local at = root.CFrame * hung.C0 * hung.C1:Inverse()
+	for i, name in SERPENT_COIL do
+		local joint = motor(name)
+		if not joint then
+			break
+		end
+		at = at * joint.C0 * joint.C1:Inverse()
+		local after = motor(SERPENT_COIL[i + 1])
+		local tip = if after then after.C0.Position else -joint.C1.Position
+		table.insert(links, { joint = joint, tip = tip, rest = (at * tip).Y + lift, ground = nil })
+	end
+	local head: { Motor6D } = {}
+	for _, name in { "Neck2", "Head" } do
+		local joint = motor(name)
+		if joint then
+			table.insert(head, joint)
+		end
+	end
+	return { root = hung, links = links, neck = motor("Neck1"), head = head, ground = nil }
 end
 
 -- The cracks running out from `at` over the floor's top `top`.
@@ -1116,7 +1228,7 @@ local function step(s: Show, dt: number)
 	local ram = beast:GetAttribute("Ram")
 	if type(ram) == "number" and ram ~= s.rammed and now >= ram + SETTINGS.Bite.Hit then
 		s.rammed = ram
-		local at = Vector3.new(s.centre.X, s.top, s.centre.Z) + s.look * (SETTINGS.Bite.Ahead + SETTINGS.Radius * 0.5)
+		local at = Vector3.new(s.centre.X, s.ground or s.top, s.centre.Z) + s.look * SETTINGS.Bite.Reach
 		sound(Assets.BeastBurst, at, 3, 1)
 		sound(Assets.RockBreak, at, 2)
 		shake(at, 2.2, 0.8)
@@ -1165,10 +1277,22 @@ local function step(s: Show, dt: number)
 	end
 	local face = CFrame.lookAt(Vector3.zero, -s.look * s.front)
 	local base = s.centre - face:VectorToWorldSpace(s.offset)
-	local below = lyingTop(s.centre, s.look, s.length, s.top)
-	s.ground = if s.ground then s.ground + (below - s.ground) * (1 - math.exp(-CLIMB * dt)) else below
+	local params = s.under
+	local below = s.top
+	local ease = 1 - math.exp(-CLIMB * dt)
+	if params and s.drape then
+		local ahead = groundAt(params, base + s.look * BASE_FEEL, s.look, 0, s.top)
+		local behind = groundAt(params, base - s.look * BASE_FEEL, s.look, 0, s.top)
+		below = math.max(groundAt(params, base, s.look, 0, s.top), (ahead + behind) / 2)
+		local tilt = math.clamp(math.atan2(ahead - behind, 2 * BASE_FEEL), -BASE_TILT, BASE_TILT)
+		s.tilt = if s.tilt then s.tilt + (tilt - s.tilt) * ease else tilt
+	elseif params then
+		below = groundAt(params, s.centre, s.look, s.length * FEEL, s.top)
+	end
+	s.ground = if s.ground then s.ground + (below - s.ground) * ease else below
 	local ground = s.ground :: number
 	s.model:PivotTo(CFrame.new(base.X, ground + s.lift - sink, base.Z) * face)
+	drape(s, dt, sink)
 	placeBar(s, ground, dt)
 	if t >= SETTINGS.Crater and not s.closed then
 		close(s)
@@ -1314,6 +1438,8 @@ local function begin(beast: Model)
 		rig = rig,
 		clips = clips,
 		lift = lift,
+		under = lyingOn(),
+		drape = if rig == "Serpent" then drapeOf(model, joints, lift) else nil,
 		length = size.Z,
 		front = front,
 		facing = CFrame.lookAt(Vector3.zero, -way * front),

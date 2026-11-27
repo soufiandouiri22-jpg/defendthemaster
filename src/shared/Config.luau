@@ -206,12 +206,17 @@ Config.Wardens = {
 -- studs of its coil's middle. Till someone strikes it, it slithers round in circles (`Roam`: `Radius` studs round, at
 -- `Speed` studs a second). It goes only for heroes who struck it, the last first: it holds on to one while he struck
 -- it within `Grudge` seconds or stays within `Aggro` studs, turns `Turn` radians a second towards him, slithers after
--- him at `Speed` studs a second and bites (`Bite`: every `Every` seconds, the Attack clip of `Length` seconds striking
--- `Hit` seconds in) every hero within `Radius` studs of the spot `Ahead` studs before its head for `Damage`. When no
+-- him at `Speed` studs a second and bites (`Bite`: every `Every` seconds, the Attack clip of `Length` seconds) where
+-- its head comes down, as measured in Play (owner, 2026-11-26: it has to strike with its head): `Hit` seconds in, its
+-- head `Reach` studs before its coil's middle, its fangs at the sand, `Radius` studs round taking in its head (9.5
+-- long); every hero there loses `Damage`. It strikes once he stands within `Aim` studs of there, so its head comes
+-- down on him and not before him. It goes where its head comes down on him: after him till he stands there,
+-- and, from one closer than its head, under its neck or in its coils, it jerks back in one slide till he stands there
+-- and strikes at once (owner, 2026-11-27); its head follows him round as it strikes. When no
 -- one is left it circles on where it is (owner, 2026-11-26: never back to its landing). Circling it keeps to the
 -- middle, within `Middle.X` studs of it along the line between the halves and `Middle.Z` studs off that line (a hunt
 -- may lead it out, and it comes back after), and it goes through nothing of the map that stands up from the floor:
--- circling it turns back there, hunting it slides round it. Left alone `Calm` seconds it
+-- circling it turns back there, hunting it turns and slithers round it. Left alone `Calm` seconds it
 -- heals `Heal` of its health a second. Dead, it falls with its Death clip and sinks into the sand, gone `Dying`
 -- seconds after.
 -- Slain, it leaves its key (`Key`, owner 2026-11-26, as League's Eye of the Herald) floating `Float` studs over where
@@ -220,7 +225,7 @@ Config.Wardens = {
 -- is gone. Its carrier lets the beast loose with `Key.Press` (`Release`): it bursts out of the ground beside him in
 -- `Rumble` seconds, flies `Leap` studs towards the enemy Master in `Flight` seconds, and `Wake` seconds after it landed
 -- charges him at `Speed` studs a second (turning `Turn` radians a second), through everything in its way. Its first
--- blow, a headbutt, strikes the Master for `Ram` of his most health once its head is within `Reach` studs of him;
+-- blow, a headbutt, strikes the Master for `Ram` of his most health once its head comes down on him (as its bite's);
 -- then it bites him for
 -- `Hit` every `Every` seconds. It fights for its carrier's team with `Health`: the enemy heroes and the Master
 -- (MasterService) can strike it, its own cannot, and from its headbutt on it loses `Decay` of its health a second,
@@ -228,7 +233,8 @@ Config.Wardens = {
 Config.Beast = {
 	-- 15% smaller than the 3.5 it had first (owner, 2026-11-26).
 	Scale = 2.975,
-	At = 600,
+	-- Eight minutes in, as League's Rift Herald first came (owner, 2026-11-27: ten was late).
+	At = 480,
 	From = 45,
 	To = 95,
 	Off = 10,
@@ -242,10 +248,14 @@ Config.Beast = {
 	Roar = 0.7,
 	Crater = 5,
 	Name = "Serpent",
+	-- Its painted portrait, the killer's in the kill feed when it fells a hero, made as the wardens' is from a sheet of
+	-- Edit views of it (Art/Portraits/concepts/serpent_sheet.png): staring at the camera, its eyes glowing yellow
+	-- (Art/Portraits/serpent.png = concepts/serpent_v2.png; owner, 2026-11-26). `Face` is the square round its head.
+	Portrait = { Image = "rbxassetid://92068458367551", Face = { 140, 40, 700 } },
 	Wake = 2.5,
-	-- As League's Rift Herald (owner, 2026-11-26): one hero brings it down in about half a minute, a whole team in
-	-- a few seconds, and it hurts without killing (6000 health and 220 a bite were far too much).
-	Health = 2600,
+	-- As League's Rift Herald (owner, 2026-11-26): one hero brings it down in about 40 seconds, a whole team in a few
+	-- seconds (6000 health and 220 a bite were far too much, 2600 and 55 too little: an archer lived 14 bites; now 8).
+	Health = 3600,
 	Radius = 13,
 	Turn = 2.5,
 	Speed = 16,
@@ -253,7 +263,9 @@ Config.Beast = {
 	Middle = { X = 110, Z = 32 },
 	Grudge = 8,
 	Aggro = 30,
-	Bite = { Every = 2.4, Length = 1.3, Hit = 0.62, Ahead = 12, Radius = 9.5, Damage = 55 },
+	-- Its head comes down 0.62 to 0.68 s into the Attack clip and lies there till 0.95 s, its middle 22.6 studs before
+	-- its coil's middle, its fangs 24.8 (Play, 2026-11-26).
+	Bite = { Every = 2.4, Length = 1.3, Hit = 0.68, Reach = 24, Radius = 5.5, Aim = 2.5, Damage = 100 },
 	Calm = 6,
 	Heal = 0.2,
 	Dying = 3.8,
@@ -287,7 +299,6 @@ Config.Beast = {
 		Speed = 75,
 		Turn = 6,
 		Health = 1600,
-		Reach = 9,
 		Ram = 0.4,
 		Hit = 250,
 		Every = 2.2,
